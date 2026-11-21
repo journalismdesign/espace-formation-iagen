@@ -13,6 +13,7 @@ Plateforme de formation de Gerald Holubowicz (journalism.design). Elle comprend 
 - Tout en français : interface, commentaires, messages d'erreur. Écriture inclusive au point médian.
 - Espaces insécables avant `: ; ? ! %`. Faire passer les textes affichés par `T()` (échappement et typographie) ou `fr()`.
 - Design : palette marine et bleu du deck (`--navy #0A2D4E`, `--blue #124F90`, accent jaune `--yel`), Montserrat et IBM Plex Mono **auto-hébergées** (@fontsource). Le design system Synth a été essayé puis **refusé** : ne pas le réappliquer sans demande.
+- Logo Samsa (organisme, blanc) : `src/assets/samsa-logo.png`, **toujours présent dans le bandeau bleu** (en-tête, slides d'entrée). Sur fond clair, il est teinté en marine par masque CSS (`samsaHtml(false)`). Un logo d'organisme déposé dans les réglages le remplace dans les blocs de logos, jamais dans le bandeau.
 - Sobriété : pas de dépendance lourde, pas de traceur, pas de ressource tierce au chargement.
 
 ## Parcours et pilotage (v3)
