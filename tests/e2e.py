@@ -24,22 +24,46 @@ async def main():
         b = await p.chromium.launch(executable_path=os.environ.get("CHROME") or None, args=["--no-sandbox"])
         ctx = await b.new_context(viewport={"width": 1366, "height": 860}, locale="fr-FR")
         tr = await ctx.new_page(); watch(tr, "formateur")
-        await tr.goto(URL); await tr.wait_for_selector("#gBtn")
+        await tr.goto(URL); await tr.wait_for_selector("#sForm")   # entrée stagiaire par défaut
+        await tr.goto(URL + "#/formateur"); await tr.wait_for_selector("#gBtn")
         await shot(tr, "01-connexion")
         await tr.click("#asTrainer"); await tr.wait_for_selector("text=Démarrer une session")
         await shot(tr, "02-sessions")
         await tr.click("table a"); await tr.wait_for_selector(".phases")
         sid = tr.url.split("/admin/s/")[1].split("/")[0]
+        # Réglages : horaires, émargement, support
+        await tr.goto(URL + f"#/admin/s/{sid}/reglages"); await tr.wait_for_selector("#regF")
+        await tr.fill("#gE", "17:30"); await tr.fill("#gEm", "https://exemple.fr/emargement-qualiopi")
+        await tr.wait_for_selector("#emPrev img"); await tr.click("#regF button[type=submit]"); await tr.wait_for_timeout(500)
+        await shot(tr, "02b-reglages")
+        await tr.goto(URL + f"#/admin/s/{sid}/avant"); await tr.wait_for_selector("#invF")
         await tr.fill("#invT", "alice@demo.fr"); await tr.click("#invF button"); await tr.wait_for_timeout(300)
+        await tr.goto(URL + "#/admin/reglages"); await tr.wait_for_selector("#bF"); await shot(tr, "02c-reglages-generaux")
 
-        # Stagiaire : arrive par le lien du QR code, se connecte, rejoint
+        # Stagiaire : slide de titre → prénom + e-mail → code → émargement → support → tableau de bord
         st = await ctx.new_page(); watch(st, "stagiaire")
-        await st.goto(URL + "#/join/DEMO42"); await st.wait_for_selector("#mForm")
-        await st.fill("#mail", "bob@demo.fr"); await st.click("#mForm button")
-        await st.wait_for_selector(".side"); await shot(st, "03-stagiaire-direct-attente")
+        await st.goto(URL + "#/join/DEMO42"); await st.wait_for_selector(".slide-page.title")
+        await shot(st, "03a-slide-titre")
+        await st.click("#go"); await st.wait_for_selector("#reqF")
+        await st.fill("#fn", "Bob"); await st.fill("#em", "bob@demo.fr"); await st.click("#reqF button")
+        await st.wait_for_selector(".demo-code b"); code = (await st.inner_text(".demo-code b")).strip()
+        await st.fill("#cd", "ZZZZZZ"); await st.click("#codeF button"); await st.wait_for_timeout(300)  # mauvais code refusé
+        assert await st.locator("#codeF").count() == 1
+        await st.fill("#cd", code); await st.click("#codeF button")
+        await st.wait_for_selector(".slide-qr"); await shot(st, "03b-emargement")
+        await st.click("#next"); await st.wait_for_selector(".lockbox"); await shot(st, "03c-support-verrouille")
+        await st.click("#next"); await st.wait_for_selector(".side"); await shot(st, "03-stagiaire-direct-attente")
 
-        # Formateur : Jour J, lance le sondage d'entrée
-        await tr.goto(URL + f"#/admin/s/{sid}/jour"); await tr.wait_for_selector(".acts")
+        # Formateur : Jour J, pilote la slide de titre puis une séquence et une page du support
+        await tr.goto(URL + f"#/admin/s/{sid}/jour"); await tr.wait_for_selector("#opening")
+        await tr.click("[data-view='title']"); await tr.wait_for_selector("#preview .titleslide")
+        await st.wait_for_selector("#liveCard h3:has-text('Bienvenue')", timeout=5000)
+        await tr.click("[data-mod='j1-comprendre']"); await tr.wait_for_selector("[data-page]")
+        await tr.click("[data-page] >> nth=2"); await tr.wait_for_selector("#preview iframe")
+        await st.wait_for_selector("#liveCard:has-text('page')", timeout=5000)
+        await shot(tr, "05a-formateur-pilotage"); await shot(st, "04a-stagiaire-sequence")
+        await st.wait_for_timeout(800); ptxt = await st.inner_text("#parcours")
+        assert "En ce moment" in ptxt or "EN CE MOMENT" in ptxt, "la séquence pilotée doit être signalée"
         await tr.click("[data-a='niveau']"); await tr.wait_for_timeout(500)
         await st.wait_for_selector("#liveIn .opt", timeout=5000)
         await st.click("#liveIn .opt >> nth=2"); await st.wait_for_timeout(600)

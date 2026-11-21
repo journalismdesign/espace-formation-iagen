@@ -17,9 +17,12 @@ create function auth.uid() returns uuid language sql stable as $$ select nullif(
 create function auth.jwt() returns jsonb language sql stable as $$ select jsonb_build_object('email', current_setting('test.email', true)) $$;
 grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid(), auth.jwt() to anon, authenticated;
+alter default privileges in schema public grant all on tables to anon, authenticated; -- comme Supabase
 `);
-try { await db.exec(readFileSync(new URL("../supabase/migrations/20261121000000_init.sql", import.meta.url), "utf8")); } catch (e) { console.error("Migration :", e.message, e.where||""); process.exit(1); }
-await db.exec(`grant select on all tables in schema public to authenticated;`); // défaut Supabase
+for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql"]) {
+  try { await db.exec(readFileSync(new URL("../supabase/migrations/" + f, import.meta.url), "utf8")); }
+  catch (e) { console.error("Migration", f, ":", e.message, e.where || ""); process.exit(1); }
+}
 ok(true, "migration appliquée");
 
 const T = "00000000-0000-0000-0000-00000000000a", A = "00000000-0000-0000-0000-00000000000b", B = "00000000-0000-0000-0000-00000000000c";
@@ -76,6 +79,32 @@ const pid = (await db.query(`select id from projects`)).rows[0].id;
 await db.query(`select public.comment_project('${pid}','Parfait, cadre bien les sources.')`);
 const dup = await db.query(`select public.duplicate_session('${sid}') id`);
 ok((await db.query(`select count(*)::int n from resources where session_id='${dup.rows[0].id}'`)).rows[0].n === 1, "duplication avec ressources");
+
+// v3 : support, logos, codes, page publique
+await db.exec(`reset role; update sessions set date = current_date + 1, end_time = '23:59', format = '1' where id = '${sid}';
+  insert into session_support values ('${sid}', 'https://drive.google.com/support.pdf');
+  insert into access_codes (session_id, email, code_hash, expires_at) values ('${sid}', 'bob@exemple.fr', 'x', now() + interval '1 day');`);
+await as(B, "bob@exemple.fr");
+let st = (await db.query(`select * from public.support_status('${sid}')`)).rows[0];
+ok(st.unlocked === false && st.url === null && st.configured === true, "support verrouillé : lien masqué au stagiaire");
+ok((await db.query(`select count(*)::int n from session_support`)).rows[0].n === 0, "le stagiaire ne lit pas la table du support");
+await fails(`select * from access_codes`, "les codes d'accès sont illisibles côté client");
+ok((await db.query(`select count(*)::int n from brands`)).rows[0].n === 3, "trois logos préenregistrés lisibles");
+await db.exec(`update brands set name = 'pirate' || name`);
+ok((await db.query(`select count(*)::int n from brands where name like 'pirate%'`)).rows[0].n === 0, "le stagiaire ne modifie pas les logos");
+await as(T, "formateur@exemple.fr");
+await db.exec(`update sessions set date = current_date - 1 where id = '${sid}'`); // formation passée → débloqué
+await as(B, "bob@exemple.fr");
+st = (await db.query(`select * from public.support_status('${sid}')`)).rows[0];
+ok(st.unlocked === true && st.url.includes("support.pdf"), "support débloqué une heure avant la fin");
+await db.exec(`reset role; set test.uid=''; set role anon;`);
+const pub = await db.query(`select * from public.session_public('${code}')`);
+ok(pub.rows.length === 1 && pub.rows[0].org_name === "Samsa", "slide d'ouverture lisible sans connexion");
+await as(T, "formateur@exemple.fr");
+await db.exec(`update sessions set status = 'closed' where id = '${sid}'`);
+await db.exec(`reset role;`);
+ok((await db.query(`select count(*)::int n from access_codes where session_id='${sid}'`)).rows[0].n === 0, "codes détruits à la clôture");
+ok((await db.query(`select count(*)::int n from public.session_public('${code}')`)).rows[0].n === 0, "session close invisible publiquement");
 
 // Anonyme : rien
 await db.exec(`reset role; set test.uid=''; set role anon;`);

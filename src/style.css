@@ -389,3 +389,80 @@ body.bare{background:var(--navy)}
   .sidemain{padding:18px 16px 70px}
   .scr-body{grid-template-columns:1fr}
 }
+
+/* =====================================================================
+   v3 · Entrée stagiaire en slides, logos, pilotage, écran
+   ===================================================================== */
+.slide-page{min-height:100vh;display:grid;place-items:center;padding:6vh 6vw;background:radial-gradient(120% 120% at 10% 0%,var(--blue) 0%,var(--navy) 60%);color:#fff;text-align:center}
+.slide-inner{max-width:880px;width:100%;display:flex;flex-direction:column;align-items:center;gap:14px}
+.slide-kick{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--yel)}
+.slide-title{font-size:clamp(34px,6vw,76px);font-weight:800;line-height:1.02;letter-spacing:-.02em}
+.slide-title.sm{font-size:clamp(28px,4.4vw,52px)}
+.slide-sub{font-size:clamp(16px,1.9vw,22px);color:#CFE0F3;margin:0;max-width:640px}
+.slide-date{font-size:clamp(17px,2.2vw,26px);font-weight:700;margin:6px 0 14px}
+.slide-form{display:flex;flex-direction:column;gap:6px;width:min(420px,100%);text-align:left;margin-top:6px}
+.slide-form label{font-size:13px;font-weight:700;color:#CFE0F3}
+.slide-form input{font-size:17px;padding:12px 14px;border-radius:10px;border:0;margin-bottom:8px;color:var(--dark)}
+.slide-form .btn{margin-top:6px}
+.code-input{font-size:26px!important;letter-spacing:.3em;text-transform:uppercase;text-align:center}
+.slide-qr{width:min(300px,70vw);background:#fff;padding:12px;border-radius:14px}
+.btn.light{background:var(--yel);border-color:var(--yel);color:var(--navy);font-weight:800}
+.btn.big{font-size:17px;padding:13px 24px;border-radius:12px}
+.linkbtn.light{color:#CFE0F3;text-decoration:underline;font-size:14px}
+.demo-code{background:var(--yel);color:var(--navy);padding:8px 14px;border-radius:8px;font-weight:600}
+.logos{display:flex;align-items:center;gap:12px;justify-content:center;flex-wrap:wrap}
+.logo-x{color:inherit;opacity:.6;font-size:18px}
+.logo-tile{display:inline-grid;place-items:center;background:#fff;border-radius:10px;padding:8px 12px;height:52px;min-width:52px;color:var(--navy);font-weight:800;font-size:14px;border:1px solid var(--line)}
+.logo-tile img{max-height:36px;max-width:140px;display:block}
+.logo-tile.lg{height:84px;padding:12px 18px;font-size:20px}
+.logo-tile.lg img{max-height:60px;max-width:220px}
+.logo-tile.xl{height:110px;padding:14px 22px;font-size:26px}
+.logo-tile.xl img{max-height:80px;max-width:280px}
+.logo-tile.sm{height:40px;padding:5px 9px;font-size:12px}
+.logo-tile.sm img{max-height:28px;max-width:100px}
+.side .logos{justify-content:flex-start;margin-bottom:12px}
+.lockbox{display:flex;gap:12px;align-items:flex-start;text-align:left;background:var(--light);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.lockbox.dark{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.25);color:#fff}
+.lock{font-size:22px}
+.mod.later{opacity:.82}
+/* Réglages */
+.radio{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:7px 12px;background:#fff;cursor:pointer;font-weight:600}
+.radio input{width:auto}
+.brand-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.brand-opt{display:flex;flex-direction:column;align-items:center;gap:4px;border:1px solid var(--line);border-radius:10px;padding:10px;cursor:pointer;background:#fff}
+.brand-opt input{position:absolute;opacity:0;pointer-events:none}
+.brand-opt:has(input:checked){border:2px solid var(--navy);background:var(--tint)}
+.brand-opt .logo-tile{height:48px;border:0}
+.thumb{max-height:48px;max-width:160px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.thumb.lg{max-height:180px}
+/* Pilotage */
+.modlist{display:flex;flex-direction:column;gap:6px}
+.modrow{border:1px solid var(--line);border-radius:8px;background:#fff}
+.modrow>button{display:flex;gap:10px;align-items:center;width:100%;text-align:left;background:none;border:0;padding:9px 10px;cursor:pointer;color:var(--navy)}
+.modrow.on{border:2px solid var(--navy);background:var(--tint)}
+.slidebar{display:flex;flex-wrap:wrap;gap:4px;padding:2px 10px 10px;align-items:center}
+.slidebar .chip{padding:3px 9px;font-family:"IBM Plex Mono",monospace;font-size:12px}
+.slidebar .chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+/* Écran projeté : vues pilotées */
+.screen.titleslide{justify-content:center;align-items:center;text-align:center;gap:1.4vh;background:radial-gradient(120% 120% at 10% 0%,var(--blue) 0%,var(--navy) 60%);color:#fff}
+.screen.titleslide .kick{color:var(--yel)}
+.screen.titleslide .scr-title{color:#fff;text-transform:none}
+.screen.titleslide .scr-sub{color:#CFE0F3}
+.scr-date{font-size:clamp(18px,2.4vw,34px);font-weight:700;margin:.4em 0}
+.title-join{display:flex;gap:18px;align-items:center;background:#fff;color:var(--navy);border-radius:14px;padding:14px 22px;margin-top:2vh;text-align:left;font-size:clamp(14px,1.4vw,20px)}
+.title-join img{width:clamp(90px,11vw,170px)}
+.screen.compact.titleslide{padding:22px}
+.screen.compact .title-join{padding:8px 12px;font-size:12px}
+.screen.compact .title-join img{width:70px}
+.screen.slidescreen{padding:0;background:#000;overflow:hidden}
+.screen.slidescreen iframe{border:0;width:100%;flex:1;min-height:90vh}
+.screen.compact.slidescreen{background:#fff}
+.screen.compact.slidescreen iframe{min-height:0;aspect-ratio:16/9;height:auto}
+.scr-bigqr{width:min(46vh,40vw);margin:2vh 0;border:1px solid var(--line);border-radius:12px;padding:10px;background:#fff}
+.screen.compact .scr-bigqr{width:140px}
+.scr-list{font-size:clamp(16px,1.8vw,28px);color:var(--dark);line-height:1.4}
+.screen.compact .scr-list{font-size:13px}
+body.bare main#view{max-width:none;padding:0;margin:0}
+input[type=url],input[type=email],input[type=date],input[type=time],input[type=number]{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:#fff}
+.slide-form input{border:0}
+.scr-top .logos{justify-content:flex-start;flex-wrap:nowrap}

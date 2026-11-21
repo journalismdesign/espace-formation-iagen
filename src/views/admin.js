@@ -11,18 +11,18 @@ export async function viewAdmin(root, _p, { api, go }) {
   const [sessions, counts] = await Promise.all([api.listSessions(), api.memberCounts()]);
   root.innerHTML = `
     <div class="pagehead"><div><div class="kicker-d">Back-office formateur</div><h1>Sessions</h1></div>
-      <button class="btn" id="newBtn">+ Démarrer une session</button></div>
+      <div class="head-actions"><a class="btn ghost" href="#/admin/reglages">Réglages généraux</a><button class="btn" id="newBtn">+ Démarrer une session</button></div></div>
     <form class="card" id="newForm" hidden style="margin-bottom:14px">
       <h3>Nouvelle session</h3>
       <div class="grid g2">
         <div><label class="f" for="nTitle">Intitulé</label><input type="text" id="nTitle" required maxlength="140" placeholder="Libération · Prendre en main les IA génératives"></div>
         <div><label class="f" for="nClient">Client ou rédaction</label><input type="text" id="nClient" maxlength="80" placeholder="Libération"></div>
-        <div><label class="f" for="nDate">Date (premier jour)</label><input type="date" id="nDate"></div>
+        <div><label class="f" for="nDate">Date (jour 1 · le jour 2 se règle ensuite)</label><input type="date" id="nDate"></div>
         <div><label class="f" for="nFmt">Format</label><select id="nFmt"><option value="1">Une journée</option><option value="2">Deux journées</option></select></div>
       </div>
       <label class="f" for="nInv">Inviter des stagiaires (une adresse par ligne, facultatif)</label>
       <textarea id="nInv" placeholder="prenom.nom@liberation.fr"></textarea>
-      <p class="small muted">${T("Chaque personne invitée retrouve la session en se connectant avec cette adresse (lien e-mail ou Google). Les autres la rejoignent avec le code ou le QR code.")}</p>
+      <p class="small muted">${T("Facultatif : les stagiaires entrent surtout par le lien ou le QR code de la session, avec leur prénom, leur e-mail et un code personnel reçu par e-mail.")}</p>
       <div style="display:flex;gap:8px"><button class="btn" type="submit">Créer la session</button><button class="btn ghost" type="button" id="nCancel">Annuler</button></div>
     </form>
     <div class="card table-card">
@@ -51,7 +51,7 @@ export async function viewAdmin(root, _p, { api, go }) {
     if (!s) return;
     const emails = parseEmails($("#nInv", root).value);
     if (emails.length) await guard(() => api.addInvites(s.id, emails));
-    go(`#/admin/s/${s.id}`);
+    go(`#/admin/s/${s.id}/reglages`);
   };
   $$("[data-del]", root).forEach((b) => (b.onclick = async () => {
     const s = sessions.find((x) => x.id === b.dataset.del);

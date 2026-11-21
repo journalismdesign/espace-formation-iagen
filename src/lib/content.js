@@ -69,13 +69,16 @@ export function renderQuiz(box, id, onScore) {
 
 /* ---------- Parcours de la journée ---------- */
 // progress = { done:{id:true}, quiz:{id:score} } ; onChange(progress) sauvegarde
-export function renderParcours(root, format, progress, onChange) {
-  let curDay = 1;
-  const list = modulesFor(format), t = totals(list), tot = t.comprendre + t.pratique + t.discussion;
+export function renderParcours(root, format, progress, onChange, opts = {}) {
+  const list0 = modulesFor(format);
+  const curMod = opts.currentId ? list0.find((m) => m.id === opts.currentId) : null;
+  let curDay = curMod?.day || 1;
+  const list = list0, t = totals(list), tot = t.comprendre + t.pratique + t.discussion;
   const pct = (k) => Math.round((t[k] / tot) * 100);
   const draw = () => {
     const mods = list.filter((m) => format !== "2" || m.day === curDay);
     const nm = new Date().getHours() * 60 + new Date().getMinutes();
+    const curIdx = curMod ? list.indexOf(curMod) : -1; // position pilotée par le formateur
     root.innerHTML = `
       <div class="card" style="margin-bottom:14px">
         <div style="display:flex;gap:18px;align-items:baseline;flex-wrap:wrap"><span class="big">${pct("pratique")}${NB}%</span><span class="muted">${T(`de pratique : ${fmtMin(t.pratique)} sur ${fmtMin(tot)} de formation, hors pauses`)}</span></div>
@@ -83,7 +86,7 @@ export function renderParcours(root, format, progress, onChange) {
         <div class="legend">${[["comprendre", "Comprendre", "var(--comp)"], ["pratique", "Pratique", "var(--prat)"], ["discussion", "Discussion libre", "var(--disc)"]].map(([k, l, c]) => `<span><b style="background:${c}"></b>${l} · ${fmtMin(t[k])}</span>`).join("")}</div>
       </div>
       ${format === "2" ? `<div class="days">${[1, 2].map((d) => `<button data-day="${d}" aria-pressed="${d === curDay}">Jour ${d} · ${d === 1 ? "Comprendre et Gemini Notebook" : "Les assistants et les méthodes"}</button>`).join("")}</div>` : ""}
-      <div class="tl">${mods.map((m) => modHtml(m, progress, nm)).join("")}</div>`;
+      <div class="tl">${mods.map((m) => modHtml(m, progress, nm, curIdx < 0 ? null : list.indexOf(m) - curIdx)).join("")}</div>`;
     $$("[data-day]", root).forEach((b) => (b.onclick = () => { curDay = +b.dataset.day; draw(); }));
     $$(".mod[data-id]", root).forEach((el) => {
       const head = $(".mhead", el), id = el.dataset.id;
@@ -102,18 +105,20 @@ export function renderParcours(root, format, progress, onChange) {
   };
   draw();
 }
-function modHtml(m, progress, nm) {
+// rel : position par rapport à la séquence en cours (null si le formateur n'a rien lancé)
+function modHtml(m, progress, nm, rel = null) {
   const dur = mins(m.t[1]) - mins(m.t[0]);
-  const isNow = nm >= mins(m.t[0]) && nm < mins(m.t[1]);
+  const isNow = rel === null ? nm >= mins(m.t[0]) && nm < mins(m.t[1]) : rel === 0;
+  const tag = rel === null || rel === 0 ? "" : rel > 0 ? `<span class="pill">À venir</span>` : "";
   if (m.type === "pause") return `<div class="mod" data-type="pause"><div class="time"><b>${hfr(m.t[0])}</b></div><div class="body"><div class="mhead"><div class="meta"><span class="pill pause">${m.titre}</span><span class="small muted">${fmtMin(dur)}</span></div></div></div></div>`;
   const done = !!progress.done?.[m.id];
-  return `<div class="mod${done ? " done" : ""}${isNow ? " now" : ""}" data-type="${m.type}" data-id="${m.id}">
+  return `<div class="mod${done ? " done" : ""}${isNow ? " now" : ""}${rel !== null && rel > 0 ? " later" : ""}" data-type="${m.type}" data-id="${m.id}">
     <div class="time"><b>${hfr(m.t[0])}</b>${hfr(m.t[1])}</div>
     <div class="body">
       <div class="mhead" role="button" tabindex="0" aria-expanded="false">
         <span class="check" role="checkbox" aria-checked="${done}" aria-label="Séquence terminée" tabindex="0">${done ? "✓" : ""}</span>
         <div style="flex:1">
-          <div class="meta"><span class="pill ${m.type}">${typeLabel(m.type)}</span>${m.tf ? `<span class="pill tf">Temps fort ${m.tf}</span>` : ""}<span class="small muted">${fmtMin(dur)}${m.exo ? ` · dont ${m.exo.duree}${NB}min d'exercice` : ""}</span>${isNow ? `<span class="pill" style="background:var(--yel)">En ce moment</span>` : ""}</div>
+          <div class="meta"><span class="pill ${m.type}">${typeLabel(m.type)}</span>${m.tf ? `<span class="pill tf">Temps fort ${m.tf}</span>` : ""}<span class="small muted">${fmtMin(dur)}${m.exo ? ` · dont ${m.exo.duree}${NB}min d'exercice` : ""}</span>${isNow ? `<span class="pill" style="background:var(--yel)">En ce moment</span>` : tag}</div>
           <h3>${T(m.titre)}</h3>
           ${m.pages ? `<div class="small muted">Support : pages ${T(m.pages)}</div>` : ""}
         </div>

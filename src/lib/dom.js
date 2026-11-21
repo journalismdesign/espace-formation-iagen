@@ -52,7 +52,7 @@ export function toast(msg, kind = "") {
 // Exécute une action asynchrone en affichant l'erreur éventuelle
 export async function guard(fn, okMsg) {
   try { const r = await fn(); if (okMsg) toast(okMsg, "ok"); return r; }
-  catch (e) { console.error(e); toast(e?.message || "Une erreur est survenue.", "ko"); return undefined; }
+  catch (e) { console.warn(e); toast(e?.message || "Une erreur est survenue.", "ko"); return undefined; }
 }
 
 export function download(name, text, type = "text/csv;charset=utf-8") {

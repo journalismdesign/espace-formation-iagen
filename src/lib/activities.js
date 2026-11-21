@@ -36,7 +36,12 @@ export const respKey = (act, live) => (act.type === "quiz" ? `${act.id}#${live.q
 // Question courante d'un quiz : [énoncé, options, bonne réponse, explication]
 export const quizQ = (act, live) => QUIZ[act.quiz]?.q[live.qi || 0];
 
-export const currentAct = (session) => (session?.live?.act ? session.activities.find((a) => a.id === session.live.act) : null);
+// Activité en cours : seulement quand l'écran est en mode « activité »
+export const currentAct = (session) => {
+  const l = session?.live || {};
+  if (!l.act || (l.view && l.view !== "activity")) return null;
+  return session.activities.find((a) => a.id === l.act) || null;
+};
 
 /* ---------- Saisie stagiaire ---------- */
 // Rend le formulaire de réponse ; onAnswer(value) est appelé à chaque envoi.

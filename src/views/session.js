@@ -7,10 +7,14 @@ import { renderParcours, parcoursPct, ficheById, ficheHtml, bindRefs, openPrompt
 import { currentAct, renderInput, renderResults, respKey } from "../lib/activities.js";
 import { renderCadrage } from "./cadrage.js";
 import { STATUS } from "./home.js";
+import { modulesFor } from "../lib/content.js";
+import { resolveBranding, logosHtml, datesFr, emargementQr } from "../lib/brand.js";
+import { supportBlock } from "./entry.js";
 
 const TABS = [
   ["direct", "Le jour J"], ["cadrage", "Mon cadrage"], ["ressources", "Ressources du jour"], ["fiches", "Fiches pratiques"],
   ["outils", "Outils d'exercice"], ["discussion", "Discussion"], ["assistant", "Assistant"],
+  ["support", "Support de formation"], ["emargement", "Émargement"],
 ];
 export const FICHE_CATS = [
   ["comprendre", "Comprendre", ["interface", "configuration"]],
@@ -30,12 +34,14 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   const membership = await api.myMembership(sid).catch(() => null);
   const trainerPreview = me.role === "trainer" && !membership;
   const project = await api.myProject(sid).catch(() => null);
-  const live = () => session.status === "live" && !!session.live?.act;
+  const live = () => session.status === "live" && !!(session.live?.act || session.live?.view || session.live?.module);
+  const br = await resolveBranding(api, session);
 
   root.classList.add("withside");
   root.innerHTML = `
     <aside class="side">
-      <div class="side-head"><span class="logo">IA</span><div><b>${T(session.title)}</b><div class="small muted">${T(dateFr(session.date))}</div></div></div>
+      ${logosHtml(br, "sm")}
+      <div class="side-head"><div><b>${T(session.title)}</b><div class="small muted">${T(datesFr(session))}</div></div></div>
       <div class="side-live${live() ? " on" : ""}" id="sideLive"><span class="dot${live() ? " on" : ""}"></span>${live() ? "En direct" : STATUS[session.status]}</div>
       <nav class="side-nav">${TABS.filter(([k]) => !["direct", "cadrage"].includes(k)).map(([k, l]) => `<a href="#/s/${sid}/${k}"${k === tab ? ' aria-current="page"' : ""}>${l}<span>›</span></a>`).join("")}</nav>
       <div class="side-label">Le parcours</div>
@@ -67,6 +73,8 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   else if (tab === "outils") { body.innerHTML = `<div class="pagehead"><div><h1>Outils d'exercice</h1><p class="muted">${T("De quoi s'entraîner pendant les temps de pratique, et après. Rien de ce que vous tapez ici ne quitte votre navigateur.")}</p></div></div>${toolsHtml()}`; bindTools(body); }
   else if (tab === "discussion") await tabDiscussion();
   else if (tab === "assistant") tabAssistant();
+  else if (tab === "support") await tabSupport();
+  else if (tab === "emargement") await tabEmargement();
 
   return () => { cleanups.forEach((f) => f && f()); root.classList.remove("withside"); };
 
@@ -80,15 +88,37 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
       <p class="muted small" style="margin-top:0">${T(`Cochez les séquences au fil de la journée. Progression : `)}<b id="pp">${parcoursPct(session.format, progress)}${NB}%</b></p>
       <div id="parcours"></div>`;
     const save = debounce((p) => membership && api.saveProgress(sid, p).catch(() => {}), 600);
-    renderParcours($("#parcours", body), session.format, progress, (p) => { $("#pp", body).textContent = parcoursPct(session.format, p) + NB + "%"; save(p); });
+    let lastMod;
+    const drawParcours = () => {
+      if (lastMod === (session.live?.module || null)) return; // ne redessine que si la séquence change
+      lastMod = session.live?.module || null;
+      renderParcours($("#parcours", body), session.format, progress, (p) => { $("#pp", body).textContent = parcoursPct(session.format, p) + NB + "%"; save(p); }, { currentId: lastMod });
+    };
+    drawParcours();
+    onSession.add(drawParcours);
 
     let poll = null, lastKey = null;
     const drawLive = async () => {
       const card = $("#liveCard", body); if (!card) return;
       const act = currentAct(session);
       clearInterval(poll);
-      if (session.status !== "live" || !act) {
-        card.innerHTML = `<div class="kicker-d">En direct</div><p class="empty" style="margin:8px 0 0">${session.status === "closed" ? "La session est close. Le déroulé et les ressources restent consultables." : "En attente d'une activité lancée par le formateur. Gardez cette page ouverte."}</p>`;
+      const L = session.live || {};
+      const mod = L.module ? modulesFor(session.format).find((m) => m.id === L.module) : null;
+      const modLine = mod ? `<div class="small muted" style="margin-top:4px">En ce moment : <b>${T(mod.titre)}</b></div>` : "";
+      if (session.status !== "live" || (!act && !L.view)) {
+        card.innerHTML = `<div class="kicker-d">En direct</div>${modLine}<p class="empty" style="margin:8px 0 0">${session.status === "closed" ? "La session est close. Le déroulé et les ressources restent consultables." : "Les sondages, quiz et consignes s'afficheront ici quand le formateur les lancera. Gardez cette page ouverte."}</p>`;
+        return;
+      }
+      if (!act) {
+        let h = "";
+        if (L.view === "title") h = `<h3>Bienvenue</h3><p class="muted">${T("La formation commence. Le déroulé de la journée est juste en dessous.")}</p>`;
+        else if (L.view === "emargement") {
+          const qr = await emargementQr(session);
+          h = `<h3>Émargement</h3>${qr ? `<img src="${qr}" alt="QR code d'émargement" style="width:180px;max-width:60%">` : ""}${session.emargement_url ? `<p><a class="btn" href="${esc(session.emargement_url)}" target="_blank" rel="noopener noreferrer">Émarger maintenant ↗</a></p>` : `<p class="muted">Suivez les indications du formateur.</p>`}`;
+        } else if (L.view === "support") h = `<h3>Le support de la formation</h3>${supportBlock(await api.supportStatus(sid).catch(() => ({})))}`;
+        else if (L.view === "slide") h = `<h3>${T(mod?.titre || "Présentation")}</h3><p class="muted">${T(`Le formateur présente la page ${L.slide} du support.`)}</p>`;
+        else h = `<h3>${T(mod?.titre || "")}</h3>${mod?.obj ? `<ul class="small">${mod.obj.map((x) => `<li>${T(x)}</li>`).join("")}</ul>` : ""}`;
+        card.innerHTML = `<div class="kicker-d"><span class="dot on"></span> En direct</div>${h}`;
         return;
       }
       const key = respKey(act, session.live);
@@ -227,6 +257,25 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
     };
     await draw();
     cleanups.push(api.watch(sid, debounce((e) => { if (e.table === "posts" || e.table === "*") { if (!$("#rBody", body)?.value) draw(); } }, 300)));
+  }
+
+  /* ---------------- Support ---------------- */
+  async function tabSupport() {
+    const draw = async () => {
+      const st = await api.supportStatus(sid).catch(() => ({ configured: false }));
+      body.innerHTML = `<div class="pagehead"><div><div class="kicker-d">${T(session.title)}</div><h1>Support de formation</h1></div></div><div class="card" style="max-width:720px">${supportBlock(st)}</div>`;
+    };
+    await draw();
+    const t = setInterval(draw, 60000); // le déblocage se fait à l'heure dite
+    cleanups.push(() => clearInterval(t));
+  }
+
+  /* ---------------- Émargement ---------------- */
+  async function tabEmargement() {
+    const qr = await emargementQr(session);
+    body.innerHTML = `<div class="pagehead"><div><div class="kicker-d">${T(session.title)}</div><h1>Émargement</h1><p class="muted">${T("Signez la feuille de présence de chaque demi-journée avec l'outil de l'organisme de formation.")}</p></div></div>
+      <div class="card" style="max-width:520px;text-align:center">${qr ? `<img src="${qr}" alt="QR code d'émargement" style="width:260px;max-width:100%">` : `<p class="muted">Le formateur n'a pas encore ajouté le lien d'émargement.</p>`}
+      ${session.emargement_url ? `<p><a class="btn" href="${esc(session.emargement_url)}" target="_blank" rel="noopener noreferrer">Ouvrir le lien d'émargement ↗</a></p>` : ""}</div>`;
   }
 
   /* ---------------- Assistant ---------------- */

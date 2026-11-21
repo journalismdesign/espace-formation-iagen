@@ -9,8 +9,47 @@ export function createSupabaseApi(url, anonKey) {
   const redirect = () => location.origin + location.pathname;
   let profileCache = null;
 
+  const invoke = async (fn, body) => {
+    const { data, error } = await sb.functions.invoke(fn, { body });
+    if (error) {
+      let msg = error.message;
+      try { const b = await error.context?.json?.(); if (b?.error) msg = b.error; } catch {}
+      throw new Error(msg.charAt(0).toUpperCase() + msg.slice(1) + ".");
+    }
+    return data;
+  };
+
   const api = {
     mode: "supabase",
+
+    /* ---------- Accès stagiaire par code personnel (fonction Edge « access ») ---------- */
+    async sessionPublic(code) { return ok(await sb.rpc("session_public", { p_code: code }))?.[0] || null; },
+    async requestAccess(sid, first_name, email) { return invoke("access", { action: "request", session_id: sid, first_name, email }); },
+    async verifyAccess(sid, email, code) {
+      const { token_hash } = await invoke("access", { action: "verify", session_id: sid, email, code });
+      let r = await sb.auth.verifyOtp({ token_hash, type: "email" });
+      if (r.error) r = await sb.auth.verifyOtp({ token_hash, type: "magiclink" });
+      if (r.error) throw new Error("Ouverture de session impossible : " + r.error.message);
+      profileCache = null;
+      return true;
+    },
+
+    /* ---------- Identité visuelle et réglages ---------- */
+    async listBrands() { return ok(await sb.from("brands").select("*").order("sort").order("name")); },
+    async saveBrand(b) {
+      if (b.id) return ok(await sb.from("brands").update({ name: b.name, logo: b.logo ?? null }).eq("id", b.id).select().single());
+      return ok(await sb.from("brands").insert({ name: b.name, logo: b.logo ?? null }).select().single());
+    },
+    async deleteBrand(id) { ok(await sb.from("brands").delete().eq("id", id)); },
+    async getSettings() { return Object.fromEntries(ok(await sb.from("app_settings").select("*")).map((r) => [r.key, r.value])); },
+    async saveSetting(key, value) { ok(await sb.from("app_settings").upsert({ key, value })); },
+
+    /* ---------- Support de formation ---------- */
+    async supportStatus(sid) { return ok(await sb.rpc("support_status", { p_session: sid }))?.[0] || { unlocked: false, configured: false }; },
+    async setSupport(sid, url) {
+      if (!url) ok(await sb.from("session_support").delete().eq("session_id", sid));
+      else ok(await sb.from("session_support").upsert({ session_id: sid, url }));
+    },
 
     /* ---------- Authentification ---------- */
     async currentUser() {
@@ -136,13 +175,8 @@ export function createSupabaseApi(url, anonKey) {
 
     /* ---------- IA (fonction Edge « assistant ») ---------- */
     async ai(mode, sid, extra = {}) {
-      const { data, error } = await sb.functions.invoke("assistant", { body: { mode, session_id: sid, ...extra } });
-      if (error) {
-        let msg = error.message;
-        try { const b = await error.context?.json?.(); if (b?.error) msg = b.error; } catch {}
-        throw new Error("Assistant : " + msg);
-      }
-      return data.text;
+      try { return (await invoke("assistant", { mode, session_id: sid, ...extra })).text; }
+      catch (e) { throw new Error("Assistant : " + e.message); }
     },
   };
   return api;

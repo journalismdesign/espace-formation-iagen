@@ -5,7 +5,21 @@ Plateforme de formation en deux faces :
 - **Back-office formateur** : sessions, invitations, QR code, suivi des cadrages avec retour écrit, animation du jour J (nuage de mots, sondages, quiz, vote, mur des projets) avec écran projeté, émargement, bilan CSV, duplication, ressources et accès par session.
 - **Espace stagiaire** : une session par stagiaire invité·e (ou rejointe par code), « À faire maintenant », préparation, cadrage du cas d'usage en cinq étapes (pistes et analyse produites par l'IA), direct, déroulé avec quiz, fiches pratiques, glossaire, prompts, outils R·M·C·T·F et S·V·E, discussion, assistant d'apprentissage.
 
-Connexion **par lien magique envoyé par e-mail** ou **par Google**. Pas de mot de passe.
+**Stagiaires** : ils entrent par le lien ou le QR code de la session. Le parcours d'entrée s'affiche en slides plein écran :
+1. titre de la formation (logos de l'entreprise et de l'organisme, une ou deux dates) ;
+2. connexion avec le prénom et l'e-mail : un **code personnel** est envoyé par e-mail ;
+3. émargement (QR code de l'organisme) ;
+4. support, téléchargeable une heure avant la fin.
+
+Le code fonctionne sur tous les appareils jusqu'au dernier jour, 23 h 59, puis il est détruit, ou dès la clôture de la session.
+
+**Formateur·ices** : connexion par lien magique ou par Google sur `#/formateur`.
+
+**Pilotage depuis le Jour J** : le formateur choisit ce que montrent l'écran projeté et l'espace des stagiaires.
+- Ouverture en discussion libre : slide de titre, émargement, support.
+- Séquence en cours du déroulé.
+- Pages du support Google Slides pendant les séquences « Comprendre ».
+- Activités en direct.
 
 ## Démarrer en mode démonstration (sans rien configurer)
 
@@ -14,7 +28,11 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-Sans fichier `.env`, l'application tourne entièrement dans le navigateur (localStorage). Boutons « Entrer comme formateur / stagiaire » sur la page de connexion, session de démonstration avec le code `DEMO42`. Ouvrez un onglet formateur et un onglet stagiaire pour tester le direct. L'écran projeté doit être ouvert depuis le back-office (bouton « Ouvrir l'écran projeté »).
+Sans fichier `.env`, l'application tourne entièrement dans le navigateur (localStorage).
+
+- Côté formateur : ouvrez `#/formateur`, puis cliquez sur « Entrer comme formateur ».
+- Côté stagiaire : dans un autre onglet, ouvrez `#/join/DEMO42`. Le code d'accès s'affiche à l'écran au lieu d'être envoyé.
+- L'écran projeté s'ouvre depuis le back-office (Jour J → « Ouvrir l'écran projeté »).
 
 ## Mettre en production avec Supabase
 
@@ -33,19 +51,28 @@ Supabase fournit l'authentification, la base Postgres, le temps réel et les fon
    - *Google* : créer un identifiant OAuth « Application Web » dans Google Cloud Console (APIs & Services → Credentials). L'URI de redirection autorisée est `https://<projet>.supabase.co/auth/v1/callback`. Collez ensuite le Client ID et le secret dans Supabase.
    - *URL Configuration* : *Site URL* est l'adresse publique du site. Ajoutez-la, avec `http://localhost:5173`, dans *Redirect URLs*.
 5. **Variables du site** : copier `.env.example` en `.env` et renseigner `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` (Project Settings → API). La clé *anon* est publique par conception : les droits sont dans la base (RLS).
-6. **Assistant IA** (pistes, analyse du cadrage, assistant d'apprentissage) :
+6. **Codes d'accès des stagiaires** (fonction `access`). L'envoi passe par Brevo (société française, offre gratuite de 300 e-mails par jour). Créez une clé d'API et validez l'adresse d'expédition, puis :
+   ```bash
+   supabase functions deploy access --no-verify-jwt
+   supabase secrets set BREVO_API_KEY=xkeysib-... MAIL_FROM=formation@journalism.design MAIL_FROM_NAME="Formation IA générative" CODE_PEPPER=$(openssl rand -hex 32)
+   ```
+   Exécutez aussi `supabase/migrations/20261122000000_v3_acces_pilotage.sql`. Activez pg_cron (Database → Extensions) pour la purge horaire des codes expirés. Sans pg_cron, les codes expirés sont refusés et purgés à chaque demande.
+7. **Logos** : dans Back-office → Réglages généraux, déposez une fois pour toutes les logos de Radio France, France Télévisions, Libération et de votre organisme. Utilisez les fichiers officiels fournis par les clients.
+8. **Assistant IA** (pistes, analyse du cadrage, assistant d'apprentissage) :
    ```bash
    supabase functions deploy assistant
    supabase secrets set ANTHROPIC_API_KEY=sk-ant-...      # obligatoire
    supabase secrets set AI_MODEL=claude-sonnet-5-5 AI_DAILY_LIMIT=60 ALLOWED_ORIGIN=https://votre-site.fr
    ```
    La clé ne quitte jamais le serveur. Chaque appel est authentifié et vérifie l'accès à la session. Il est plafonné par jour et par personne (`AI_DAILY_LIMIT`), et les pistes du cadrage sont limitées à trois générations. Sans la fonction, l'assistant bascule sur une recherche locale dans les ressources.
-7. **Construire et héberger** : `npm run build`, puis publier le dossier `dist/` sur n'importe quel hébergement statique (Netlify, Vercel, GitHub Pages, OVH…). Le routage par ancre (`#/…`) ne demande aucune règle de réécriture.
+9. **Construire et héberger** : `npm run build`, puis publier le dossier `dist/` sur n'importe quel hébergement statique (Netlify, Vercel, GitHub Pages, OVH…). Le routage par ancre (`#/…`) ne demande aucune règle de réécriture.
 
 ## Données et droits
 
 Toutes les règles sont dans la base (Row Level Security), testées par `npm run test:sql` :
 
+- les codes d'accès ne sont stockés que sous forme d'empreinte (SHA-256 + poivre secret) et ne sont lisibles par aucun client ; 8 essais au plus ;
+- le lien du support n'est communiqué aux stagiaires qu'une fois débloqué (`support_status`) ;
 - un·e stagiaire ne voit que ses sessions, son cadrage, ses propres réponses et la discussion de ses sessions ;
 - les résultats collectifs (sondages, quiz, nuages) ne sortent que sous forme agrégée (`live_results`), jamais nominative ;
 - impossible pour un·e stagiaire de se promouvoir formateur, de s'émarger ou d'écrire le retour du formateur (droits par colonne) ;

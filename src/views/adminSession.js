@@ -9,8 +9,11 @@ import { openSheet } from "../lib/content.js";
 import { joinUrl, qr, showQr, parseEmails } from "./admin.js";
 import { STATUS } from "./home.js";
 import { STEPS, SENSIB } from "./cadrageModel.js";
+import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml } from "../lib/brand.js";
+import { modulesFor, typeLabel } from "../lib/content.js";
+import { parsePages, slideEmbedUrl, deckId } from "../deck.js";
 
-const PHASES = [["avant", "Avant — inscription et cadrage"], ["jour", "Jour J — animation"], ["apres", "Après — suivi"]];
+const PHASES = [["reglages", "Réglages"], ["avant", "Avant — inscription et cadrage"], ["jour", "Jour J — pilotage"], ["apres", "Après — suivi"]];
 const firstName = (r) => (r.full_name || r.email.split("@")[0]).split(" ")[0];
 
 // Données de l'écran projeté (réponses agrégées, participants, projets)
@@ -22,7 +25,11 @@ export async function loadScreenData(api, session) {
     act?.type === "projects" ? api.listProjects(session.id) : [],
   ]);
   const byUser = Object.fromEntries(roster.map((r) => [r.user_id, r]));
+  const view = session.live?.view;
   return {
+    branding: await resolveBranding(api, session),
+    emQr: view === "emargement" ? await emargementQr(session, 700) : null,
+    support: view === "support" ? await api.supportStatus(session.id).catch(() => null) : null,
     rows, participants: roster.length,
     projects: projects.filter((p) => p.status === "validated").map((p) => ({ titre: p.data?.retenu?.titre || "Sans titre", description: p.data?.retenu?.description, auteur: byUser[p.user_id] ? firstName(byUser[p.user_id]) : "" })),
   };
@@ -39,7 +46,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     <p><a href="#/admin">← Sessions</a></p>
     <div class="pagehead"><div>
       <h1 style="margin:0">${T(session.title)}</h1>
-      <p class="muted" style="margin:4px 0">${T(session.formation)} · ${T(dateFr(session.date))} · code <b class="mono">${esc(session.code)}</b></p>
+      <p class="muted" style="margin:4px 0">${T(session.formation)} · ${T(datesFr(session))} · code <b class="mono">${esc(session.code)}</b></p>
       <div class="chips"><span class="state ${session.status}" id="stateP">${STATUS[session.status]}</span><span class="pill" id="rtP"><span class="dot on"></span>Temps réel</span></div>
     </div>
     <div class="head-actions"><a class="btn ghost sm" href="#/s/${sid}" title="Voir l'espace tel que le voient les stagiaires">Voir côté stagiaire</a>
@@ -54,10 +61,102 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
 
   const box = $("#phase", root);
   const cleanups = [];
-  if (phase === "avant") await phaseAvant();
+  if (phase === "reglages") await phaseReglages();
+  else if (phase === "avant") await phaseAvant();
   else if (phase === "jour") await phaseJour();
   else await phaseApres();
   return () => cleanups.forEach((f) => f());
+
+  /* =================================================================
+     RÉGLAGES : format, dates, horaires, logo, support, émargement, slides
+     ================================================================= */
+  async function phaseReglages() {
+    const [brands, sup] = await Promise.all([api.listBrands(), api.supportStatus(sid).catch(() => ({}))]);
+    let clientLogo = session.client_logo || null, emQr = session.emargement_qr || null;
+    box.innerHTML = `
+    <form id="regF" class="grid adm2">
+      <div>
+        <div class="card"><h3>La formation</h3>
+          <label class="f" for="gT">Titre affiché aux stagiaires</label><input type="text" id="gT" required maxlength="140" value="${esc(session.title)}">
+          <label class="f" for="gF">Intitulé de la formation</label><input type="text" id="gF" maxlength="140" value="${esc(session.formation)}">
+          <label class="f">Format</label>
+          <div class="chips" id="gFmt">${[["1", "Une journée"], ["2", "Deux journées"]].map(([v, l]) => `<label class="radio"><input type="radio" name="fmt" value="${v}"${session.format === v ? " checked" : ""}> ${l}</label>`).join("")}</div>
+          <p class="small muted">${T("Le format détermine le déroulé visible côté stagiaire : en une journée, seul le programme d'une journée est accessible.")}</p>
+          <div class="grid g2">
+            <div><label class="f" for="gD1">Date (jour 1)</label><input type="date" id="gD1" value="${esc(session.date || "")}"></div>
+            <div id="d2wrap"><label class="f" for="gD2">Date (jour 2)</label><input type="date" id="gD2" value="${esc(session.date2 || "")}"></div>
+            <div><label class="f" for="gS">Début</label><input type="time" id="gS" value="${esc(String(session.start_time || "09:30").slice(0, 5))}"></div>
+            <div><label class="f" for="gE">Fin</label><input type="time" id="gE" value="${esc(String(session.end_time || "17:30").slice(0, 5))}"></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:14px"><h3>Entreprise cliente</h3>
+          <div class="brand-pick" id="gBrand">
+            ${brands.map((b) => `<label class="brand-opt"><input type="radio" name="brand" value="${b.id}"${session.brand_id === b.id ? " checked" : ""}><span class="logo-tile">${b.logo ? `<img src="${esc(b.logo)}" alt="">` : T(b.name)}</span><small>${T(b.name)}</small></label>`).join("")}
+            <label class="brand-opt"><input type="radio" name="brand" value=""${!session.brand_id ? " checked" : ""}><span class="logo-tile text">—</span><small>Autre</small></label>
+          </div>
+          <label class="f" for="gC">Nom affiché (si « Autre » ou pour préciser un service)</label><input type="text" id="gC" maxlength="80" value="${esc(session.client || "")}">
+          <label class="f">Logo propre à cette session (facultatif, prioritaire)</label>
+          <div style="display:flex;gap:10px;align-items:center"><input type="file" id="gL" accept="image/*"><span id="gLprev">${clientLogo ? `<img src="${clientLogo}" alt="" class="thumb">` : ""}</span>${clientLogo ? `<button type="button" class="linkbtn small" id="gLdel">Retirer</button>` : ""}</div>
+          <p class="small muted">${T("Les logos de Radio France, France Télévisions et Libération se déposent une fois pour toutes dans ")}<a href="#/admin/reglages">Réglages généraux</a>.</p>
+        </div>
+      </div>
+      <div>
+        <div class="card"><h3>Émargement</h3>
+          <label class="f" for="gEm">Lien de l'outil d'émargement</label><input type="url" id="gEm" placeholder="https://…" value="${esc(session.emargement_url || "")}">
+          <label class="f">ou image du QR code fourni par l'organisme</label><input type="file" id="gEq" accept="image/*">
+          <div id="emPrev" style="margin-top:10px"></div>
+        </div>
+        <div class="card" style="margin-top:14px"><h3>Support à télécharger</h3>
+          <label class="f" for="gSu">Lien du support (PDF sur Drive, etc.)</label><input type="url" id="gSu" placeholder="https://…">
+          <p class="small muted" id="supInfo"></p>
+          <label class="f inline"><input type="checkbox" id="gSuF"${session.support_unlocked ? " checked" : ""}> Débloquer dès maintenant</label>
+        </div>
+        <div class="card" style="margin-top:14px"><h3>Slides projetées</h3>
+          <label class="f" for="gSl">Présentation Google Slides</label><input type="url" id="gSl" placeholder="https://docs.google.com/presentation/d/…" value="${esc(session.slides_url || "")}">
+          <p class="small muted">${T("Appelées pendant les séquences « Comprendre » depuis l'onglet Jour J. L'écran projeté doit être ouvert dans un navigateur connecté à un compte Google qui a accès à la présentation : inutile de la rendre publique.")}</p>
+        </div>
+        <button class="btn" type="submit" style="margin-top:14px;width:100%">Enregistrer les réglages</button>
+      </div>
+    </form>`;
+    const fmt = () => box.querySelector('input[name="fmt"]:checked').value;
+    const syncD2 = () => ($("#d2wrap", box).style.visibility = fmt() === "2" ? "visible" : "hidden");
+    box.querySelectorAll('input[name="fmt"]').forEach((r) => (r.onchange = syncD2)); syncD2();
+    const drawEm = async () => {
+      const qrUrl2 = await emargementQr({ emargement_qr: emQr, emargement_url: $("#gEm", box).value.trim() }, 600);
+      $("#emPrev", box).innerHTML = qrUrl2 ? `<img src="${qrUrl2}" alt="QR d'émargement" class="thumb lg"><div class="chips" style="margin-top:6px"><a class="btn sm ghost" href="${qrUrl2}" download="emargement-${esc(session.code)}.png">Télécharger le QR (PNG)</a>${emQr ? `<button type="button" class="linkbtn small" id="emDel">Retirer l'image</button>` : ""}</div>` : `<p class="small muted">Aucun émargement configuré.</p>`;
+      $("#emDel", box)?.addEventListener("click", () => { emQr = null; drawEm(); });
+    };
+    $("#gEm", box).oninput = debounce(drawEm, 400); drawEm();
+    $("#gEq", box).onchange = async (e) => { const f = e.target.files[0]; if (f) { emQr = await guard(() => fileToDataUrl(f, 800)) || emQr; drawEm(); } };
+    $("#gL", box).onchange = async (e) => { const f = e.target.files[0]; if (f) { clientLogo = await guard(() => fileToDataUrl(f)) || clientLogo; $("#gLprev", box).innerHTML = clientLogo ? `<img src="${clientLogo}" alt="" class="thumb">` : ""; } };
+    $("#gLdel", box)?.addEventListener("click", () => { clientLogo = null; $("#gLprev", box).innerHTML = ""; });
+    if (sup.url) $("#gSu", box).value = sup.url;
+    const supInfo = (st) => (st.unlock_at ? T(`Téléchargeable par les stagiaires à partir du ${new Date(st.unlock_at).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "full", timeStyle: "short" })} (une heure avant la fin). La page Support reste visible dans leur menu.`) : T("Renseignez la date et l'heure de fin pour programmer le déblocage."));
+    $("#supInfo", box).innerHTML = supInfo(sup);
+    $("#regF", box).onsubmit = async (e) => {
+      e.preventDefault();
+      const format = fmt();
+      if (format === "2" && !$("#gD2", box).value) return toast("Indiquez la date du jour 2.", "ko");
+      const patch = {
+        title: $("#gT", box).value.trim(), formation: $("#gF", box).value.trim() || "Prendre en main les IA génératives",
+        format, date: $("#gD1", box).value || null, date2: format === "2" ? $("#gD2", box).value || null : null,
+        start_time: $("#gS", box).value || "09:30", end_time: $("#gE", box).value || "17:30",
+        brand_id: box.querySelector('input[name="brand"]:checked')?.value || null, client: $("#gC", box).value.trim(), client_logo: clientLogo,
+        emargement_url: $("#gEm", box).value.trim() || null, emargement_qr: emQr,
+        slides_url: $("#gSl", box).value.trim() || null, support_unlocked: $("#gSuF", box).checked,
+      };
+      if (patch.slides_url && !deckId(patch.slides_url)) return toast("Lien Google Slides non reconnu.", "ko");
+      const fmtChanged = format !== session.format;
+      if (fmtChanged) patch.activities = defaultActivities(format);
+      const saved = await guard(() => api.updateSession(sid, patch));
+      if (!saved) return;
+      session = saved;
+      await guard(() => api.setSupport(sid, $("#gSu", box).value.trim() || null));
+      const st = await api.supportStatus(sid).catch(() => ({}));
+      $("#supInfo", box).innerHTML = supInfo(st);
+      toast(fmtChanged ? "Réglages enregistrés : déroulé et activités adaptés au nouveau format." : "Réglages enregistrés.", "ok");
+    };
+  }
 
   /* =================================================================
      AVANT
@@ -88,12 +187,6 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         <div>
           <div class="card qrcard"><img src="${qrUrl}" alt="QR code de la session"><div class="small" style="margin:6px 0">Lien à transmettre :</div><div class="mono small linkbox" id="jl">${esc(joinUrl(session.code))}</div>
             <div class="chips" style="justify-content:center;margin-top:8px"><button class="btn sm ghost" id="cpL">Copier le lien</button><button class="btn sm ghost" id="pjQ">Projeter le QR code</button></div></div>
-          <form class="card" id="infoF" style="margin-top:14px"><h3>Informations</h3>
-            <label class="f">Intitulé</label><input type="text" id="iT" value="${esc(session.title)}" required>
-            <label class="f">Client ou rédaction</label><input type="text" id="iC" value="${esc(session.client || "")}">
-            <label class="f">Date</label><input type="date" id="iD" value="${esc(session.date || "")}">
-            <label class="f">Format</label><select id="iF"><option value="1"${session.format === "1" ? " selected" : ""}>Une journée</option><option value="2"${session.format === "2" ? " selected" : ""}>Deux journées</option></select>
-            <button class="btn sm" type="submit" style="margin-top:10px">Enregistrer</button></form>
         </div>
       </div>`;
       $("#invF", box).onsubmit = async (e) => { e.preventDefault(); const em = parseEmails($("#invT", box).value); if (!em.length) return toast("Aucune adresse valide.", "ko"); await guard(() => api.addInvites(sid, em), `${em.length} invitation(s) ajoutée(s).`); draw(); };
@@ -102,13 +195,6 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       $$("[data-proj]", box).forEach((b) => (b.onclick = () => openProject(b.dataset.proj, roster, draw)));
       $("#cpL", box).onclick = (e) => copyText(joinUrl(session.code), e.target);
       $("#pjQ", box).onclick = async () => showQr(session, await qr(joinUrl(session.code), 900));
-      $("#infoF", box).onsubmit = async (e) => {
-        e.preventDefault();
-        const format = $("#iF", box).value;
-        const patch = { title: $("#iT", box).value.trim(), client: $("#iC", box).value.trim(), date: $("#iD", box).value || null, format };
-        if (format !== session.format && confirm("Adapter la séquence d'activités du jour J au nouveau format ?")) patch.activities = defaultActivities(format);
-        session = await guard(() => api.updateSession(sid, patch), "Informations enregistrées.") || session;
-      };
     };
     await draw();
     cleanups.push(api.watch(sid, debounce((e) => { if (["session_members", "projects", "*"].includes(e.table) && !box.contains(document.activeElement)) draw(); }, 600)));
@@ -139,8 +225,13 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     box.innerHTML = `
       <div class="grid adm2">
         <div class="card">
-          <h3>Activités</h3>
+          <h3>Pilotage</h3>
           <p class="small muted" id="hint" style="margin-top:0"></p>
+          <div class="kicker-d" style="margin:10px 0 6px">Ouverture · discussion libre</div>
+          <div class="acts" id="opening"></div>
+          <div class="kicker-d" style="margin:16px 0 6px">Déroulé · ce que voient les stagiaires et l'écran</div>
+          <div id="modules"></div>
+          <div class="kicker-d" style="margin:16px 0 6px">Activités en direct</div>
           <div class="acts" id="acts"></div>
           <div id="ctrl" style="margin:12px 0"></div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><div class="kicker-d">Écran projeté</div><button class="linkbtn small" id="openScr">▭ Ouvrir l'écran projeté</button></div>
@@ -162,8 +253,11 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       session = await guard(() => api.updateSession(sid, { status: "live", live, ...extra })) || session;
       draw();
     };
+    const keep = () => ({ module: session.live?.module || null }); // la séquence en cours reste affichée côté stagiaires
+    const show = (view, extra = {}) => setLive({ ...keep(), view, ...extra, started_at: new Date().toISOString() });
+    let modDay = 1;
     const launch = async (act) => {
-      const live = { act: act.id, qi: 0, reveal: false, started_at: new Date().toISOString() };
+      const live = { ...keep(), view: "activity", act: act.id, qi: 0, reveal: false, started_at: new Date().toISOString() };
       if (act.type === "vote") {
         const [ps, roster] = await Promise.all([api.listProjects(sid), api.roster(sid)]);
         const by = Object.fromEntries(roster.map((r) => [r.user_id, r]));
@@ -179,7 +273,33 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     const draw = async () => {
       session = (await api.getSession(sid)) || session;
       const act = currentAct(session), live = session.live || {};
-      $("#hint", box).textContent = session.status === "live" ? "La salle est ouverte. Cliquez sur une activité pour la lancer chez les participant·es et sur l'écran projeté." : "La salle est fermée : lancer une activité l'ouvrira.";
+      $("#hint", box).textContent = session.status === "live" ? "La salle est ouverte. Chaque clic change l'écran projeté et ce que voient les stagiaires dans leur espace." : "La salle est fermée : le premier clic l'ouvrira.";
+      const V = session.status === "live" ? live.view : null;
+      $("#opening", box).innerHTML = [["title", "Slide de titre", "Titre, logos, dates, QR"], ["emargement", "Émargement", session.emargement_url || session.emargement_qr ? "QR de l'organisme" : "À configurer"], ["support", "Support", "Annonce du téléchargement"], ["", "Écran d'attente", "Rien de projeté"]]
+        .map(([v, l, sub]) => `<button class="act${(V || "") === v && !act ? " on" : ""}" data-view="${v}"><span>${v ? "▣" : "□"}</span>${l}<small>${T(sub)}</small></button>`).join("");
+      $$("[data-view]", box).forEach((b) => (b.onclick = () => (b.dataset.view ? show(b.dataset.view) : setLive({ ...keep(), view: null }))));
+      // Déroulé : séquence courante + slides Drive des séquences qui en ont
+      const mods = modulesFor(session.format).filter((m) => m.type !== "pause");
+      const cur = mods.find((m) => m.id === live.module);
+      if (cur?.day) modDay = cur.day;
+      const shown = mods.filter((m) => session.format !== "2" || (m.day || 1) === modDay);
+      $("#modules", box).innerHTML = `${session.format === "2" ? `<div class="days" style="margin:0 0 8px">${[1, 2].map((d) => `<button type="button" data-mday="${d}" aria-pressed="${d === modDay}">Jour ${d}</button>`).join("")}</div>` : ""}
+        <div class="modlist">${shown.map((m) => {
+          const on = m.id === live.module, pages = parsePages(m.pages);
+          return `<div class="modrow${on ? " on" : ""}"><button type="button" data-mod="${m.id}"><span class="mono small">${m.t[0].replace(":", " h ")}</span><span class="pill ${m.type}">${T(typeLabel(m.type))}</span><b>${T(m.titre)}</b></button>
+            ${on && pages.length && session.slides_url ? `<div class="slidebar"><button type="button" class="iconbtn" data-sl="prev" aria-label="Page précédente">←</button>${pages.map((p) => `<button type="button" class="chip${V === "slide" && live.slide === p ? " on" : ""}" data-page="${p}">${p}</button>`).join("")}<button type="button" class="iconbtn" data-sl="next" aria-label="Page suivante">→</button></div>` : ""}
+            ${on && pages.length && !session.slides_url ? `<div class="small muted" style="padding:4px 8px">Pages ${T(m.pages)} · associez la présentation dans l'onglet Réglages pour les projeter.</div>` : ""}</div>`;
+        }).join("")}</div>`;
+      $$("[data-mday]", box).forEach((b) => (b.onclick = () => { modDay = +b.dataset.mday; draw(); }));
+      $$("[data-mod]", box).forEach((b) => (b.onclick = () => setLive({ module: b.dataset.mod, view: "module", started_at: new Date().toISOString() })));
+      const pages = cur ? parsePages(cur.pages) : [];
+      const goPage = (p) => setLive({ module: cur.id, view: "slide", slide: p, started_at: new Date().toISOString() });
+      $$("[data-page]", box).forEach((b) => (b.onclick = () => goPage(+b.dataset.page)));
+      $$("[data-sl]", box).forEach((b) => (b.onclick = () => {
+        const i = V === "slide" ? pages.indexOf(live.slide) : -1;
+        const j = b.dataset.sl === "next" ? Math.min(pages.length - 1, i + 1) : Math.max(0, i - 1);
+        goPage(pages[j]);
+      }));
       $("#acts", box).innerHTML = session.activities.map((a, i) => `<button class="act${act?.id === a.id ? " on" : ""}" data-a="${esc(a.id)}"><span>${i + 1}</span>${T(a.titre)}<small>${ACT_TYPES[a.type]}</small></button>`).join("");
       $$("[data-a]", box).forEach((b) => (b.onclick = () => launch(session.activities.find((a) => a.id === b.dataset.a))));
       let c = "";
@@ -200,7 +320,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       $$("[data-q]", box).forEach((b) => (b.onclick = () => setLive({ ...live, qi: (live.qi || 0) + +b.dataset.q, reveal: false })));
       $("[data-rev]", box)?.addEventListener("click", () => setLive({ ...live, reveal: true }));
       $("[data-next]", box)?.addEventListener("click", () => launch(session.activities[session.activities.findIndex((a) => a.id === act.id) + 1]));
-      $("[data-stop]", box)?.addEventListener("click", () => setLive({}));
+      $("[data-stop]", box)?.addEventListener("click", () => setLive({ ...keep(), view: live.module ? "module" : null }));
       const sd = await loadScreenData(api, session);
       $("#preview", box).innerHTML = screenHtml({ ...sd, session, qrUrl }, true);
       const roster = await api.roster(sid);

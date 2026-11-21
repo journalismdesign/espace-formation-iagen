@@ -2,6 +2,7 @@
    préparation, le parcours, les discussions et toutes les sessions. */
 import { $, $$, T, esc, dateFr, guard, NB } from "../lib/dom.js";
 import { preparation } from "./cadrageModel.js";
+import { datesFr } from "../lib/brand.js";
 
 export const STATUS = { draft: "À venir", live: "En direct", closed: "Terminée" };
 
@@ -19,7 +20,7 @@ export async function viewHome(root, _p, { api, me, go }) {
       <div class="kicker-d">À faire maintenant</div>
       <h2 style="margin:6px 0 0">${next.status === "live" ? "Suivre la formation" : "Préparer ma session"}</h2>
       <h3 class="muted" style="margin:2px 0 4px">${T(next.title)}</h3>
-      <p class="small muted" style="margin:0 0 12px">${T(dateFr(next.date))}</p>
+      <p class="small muted" style="margin:0 0 12px">${T(datesFr(next))}</p>
       ${prep.items.map((i) => `<div class="todo-item"><span class="ring${i.done ? " on" : ""}">${i.done ? "✓" : ""}</span><div><b>${T(i.label)}</b><div class="small muted">${T(i.sub)}</div></div>
         ${i.done ? `<span class="small"><b>Terminé</b></span>` : `<a class="small" href="${i.k === "profil" ? "#/profil" : `#/s/${next.id}/cadrage`}">${i.started ? "Continuer" : "Commencer"}</a>`}</div>`).join("")}
       <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">

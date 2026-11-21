@@ -3,7 +3,7 @@
    compte (sessionStorage) : ouvrez un onglet formateur et un onglet
    stagiaire pour tester le direct. Aucune donnée ne quitte la machine. */
 
-const KEY = "iagen-demo-db-v2";
+const KEY = "iagen-demo-db-v3";
 const USER_KEY = "iagen-demo-user";
 const bc = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("iagen-demo") : null;
 const uid = () => crypto.randomUUID();
@@ -15,13 +15,19 @@ function load() {
   try { const raw = localStorage.getItem(KEY); if (raw) return JSON.parse(raw); } catch {}
   return null;
 }
+export const SESSION_DEFAULTS = { date2: null, start_time: "09:30", end_time: "17:30", brand_id: null, client_logo: null,
+  slides_url: "https://docs.google.com/presentation/d/1G-exjcmMujp3XtEAOMCyzR9Plk3OzgS1qnVdTI0rJkg/edit", emargement_url: "", emargement_qr: null, support_unlocked: false };
+
 function seed(defaultActivities) {
   const sid = uid();
+  const brands = [["Radio France", 1], ["France Télévisions", 2], ["Libération", 3]].map(([name, sort]) => ({ id: uid(), name, logo: null, sort }));
   const db = {
+    brands, settings: { org_name: "Samsa", org_logo: null }, support: { [sid]: "https://exemple.fr/support-formation.pdf" }, codes: [],
     profiles: [], sessions: [{
-      id: sid, title: "Libération · Prendre en main les IA génératives", formation: "Prendre en main les IA génératives",
-      client: "Libération", date: new Date(Date.now() + 86400000 * 10).toISOString().slice(0, 10), format: "1",
+      ...SESSION_DEFAULTS, id: sid, title: "Prendre en main les IA génératives", formation: "Prendre en main les IA génératives",
+      client: "", brand_id: brands[2].id, date: new Date(Date.now() + 86400000 * 10).toISOString().slice(0, 10), format: "1",
       code: "DEMO42", status: "live", activities: defaultActivities("1"), live: {}, created_at: now(),
+      emargement_url: "https://exemple.fr/emargement",
     }],
     members: [], invites: [], resources: [
       { id: uid(), session_id: sid, title: "Gemini Notebook", url: "https://notebooklm.google.com", created_at: now() },
@@ -58,8 +64,68 @@ export function createDemoApi({ defaultActivities }) {
   const canSee = (sid) => isTrainer() || isMember(sid);
   const nameOf = (id) => { const p = prof(id); return p ? (p.full_name || p.email.split("@")[0]) : "?"; };
 
+  const lastDay = (x) => (x.format === "2" && x.date2) || x.date;
+  const pub = (x) => {
+    const b = db.brands.find((y) => y.id === x.brand_id);
+    return { id: x.id, title: x.title, formation: x.formation, client: x.client || b?.name || "", date: x.date, date2: x.format === "2" ? x.date2 : null,
+      start_time: x.start_time, end_time: x.end_time, format: x.format, status: x.status, client_logo: x.client_logo || b?.logo || null,
+      org_name: db.settings.org_name, org_logo: db.settings.org_logo };
+  };
+
   const api = {
     mode: "demo",
+
+    // Accès par code : en démonstration, le code s'affiche à l'écran au lieu d'être envoyé
+    async sessionPublic(code) { const x = db.sessions.find((y) => y.code === String(code).trim().toUpperCase() && y.status !== "closed"); return x ? pub(x) : null; },
+    async requestAccess(sid, first, email) {
+      email = email.trim().toLowerCase();
+      const x = db.sessions.find((y) => y.id === sid);
+      if (!x || x.status === "closed") throw new Error("Session inconnue ou close.");
+      if (!first.trim()) throw new Error("Indiquez votre prénom.");
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Adresse e-mail invalide.");
+      let p = db.profiles.find((y) => y.email === email);
+      if (!p) { p = { id: uid(), email, full_name: first.trim(), role: email === DEMO_TRAINER ? "trainer" : "trainee", metier: null, niveau: null, outils: [], created_at: now() }; db.profiles.push(p); }
+      else if (!p.full_name) p.full_name = first.trim();
+      if (!db.members.some((m) => m.session_id === sid && m.user_id === p.id)) db.members.push({ session_id: sid, user_id: p.id, joined_at: now(), attended: false, progress: {} });
+      const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+      const code = Array.from(crypto.getRandomValues(new Uint8Array(6)), (v) => A[v % A.length]).join("");
+      const exp = new Date((lastDay(x) || new Date().toISOString().slice(0, 10)) + "T23:59:00").toISOString();
+      db.codes = db.codes.filter((c) => !(c.session_id === sid && c.email === email));
+      db.codes.push({ session_id: sid, email, code, expires_at: exp, attempts: 0 });
+      commit();
+      return { sent: true, expires_at: exp, demoCode: code };
+    },
+    async verifyAccess(sid, email, code) {
+      email = email.trim().toLowerCase();
+      const c = db.codes.find((y) => y.session_id === sid && y.email === email);
+      if (!c || new Date(c.expires_at) < new Date()) throw new Error("Aucun code valide pour cette adresse : demandez-en un nouveau.");
+      if (c.attempts >= 8) throw new Error("Trop d'essais : demandez un nouveau code.");
+      if (c.code !== String(code).trim().toUpperCase()) { c.attempts++; commit(); throw new Error(`Code incorrect (${8 - c.attempts} essai(s) restant(s)).`); }
+      c.attempts = 0; commit();
+      const p = db.profiles.find((y) => y.email === email);
+      setUser({ id: p.id, email }); authCb(user());
+      return true;
+    },
+
+    async listBrands() { return [...db.brands].sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name)); },
+    async saveBrand(b) {
+      needTrainer();
+      if (b.id) { const x = db.brands.find((y) => y.id === b.id); x.name = b.name; x.logo = b.logo ?? null; commit(); return x; }
+      const x = { id: uid(), name: b.name, logo: b.logo ?? null, sort: 100 }; db.brands.push(x); commit(); return x;
+    },
+    async deleteBrand(id) { needTrainer(); db.brands = db.brands.filter((y) => y.id !== id); commit(); },
+    async getSettings() { return { ...db.settings }; },
+    async saveSetting(k, v) { needTrainer(); db.settings[k] = v; commit(); },
+
+    async supportStatus(sid) {
+      if (!canSee(sid)) throw new Error("Accès refusé.");
+      const x = db.sessions.find((y) => y.id === sid), d = lastDay(x);
+      const at = d ? new Date(new Date(`${d}T${x.end_time || "17:30"}:00`).getTime() - 3600000).toISOString() : null;
+      const unlocked = !!x.support_unlocked || (!!at && Date.now() >= new Date(at).getTime());
+      const url = db.support[sid] || null;
+      return { unlocked, unlock_at: at, url: unlocked || isTrainer() ? url : null, configured: !!url };
+    },
+    async setSupport(sid, url) { needTrainer(); if (url) db.support[sid] = url; else delete db.support[sid]; commit(); },
 
     async currentUser() { return user(); },
     onAuthChange(cb) { authCb = cb; },
@@ -95,10 +161,14 @@ export function createDemoApi({ defaultActivities }) {
     async getSession(id) { return canSee(id) ? db.sessions.find((s) => s.id === id) || null : null; },
     async createSession(s) {
       needTrainer();
-      const row = { id: uid(), formation: "Prendre en main les IA génératives", client: "", date: null, format: "1", code: code6(), status: "draft", activities: [], live: {}, created_at: now(), ...s };
+      const row = { ...SESSION_DEFAULTS, id: uid(), formation: "Prendre en main les IA génératives", client: "", date: null, format: "1", code: code6(), status: "draft", activities: [], live: {}, created_at: now(), ...s };
       db.sessions.push(row); commit(); return row;
     },
-    async updateSession(id, patch) { needTrainer(); const s = db.sessions.find((x) => x.id === id); Object.assign(s, patch); commit(); return s; },
+    async updateSession(id, patch) {
+      needTrainer(); const s = db.sessions.find((x) => x.id === id); Object.assign(s, patch);
+      if (s.status === "closed") db.codes = db.codes.filter((c) => c.session_id !== id); // codes détruits à la clôture
+      commit(); return s;
+    },
     async deleteSession(id) {
       needTrainer();
       db.sessions = db.sessions.filter((s) => s.id !== id);
@@ -108,7 +178,9 @@ export function createDemoApi({ defaultActivities }) {
     async duplicateSession(id) {
       needTrainer();
       const s = db.sessions.find((x) => x.id === id);
-      const n = await api.createSession({ title: s.title + " (copie)", formation: s.formation, client: s.client, format: s.format, activities: s.activities });
+      const n = await api.createSession({ title: s.title + " (copie)", formation: s.formation, client: s.client, format: s.format, activities: s.activities,
+        brand_id: s.brand_id, client_logo: s.client_logo, slides_url: s.slides_url, start_time: s.start_time, end_time: s.end_time, emargement_url: s.emargement_url, emargement_qr: s.emargement_qr });
+      if (db.support[id]) db.support[n.id] = db.support[id];
       db.resources.filter((r) => r.session_id === id).forEach((r) => db.resources.push({ ...r, id: uid(), session_id: n.id }));
       db.secrets.filter((r) => r.session_id === id).forEach((r) => db.secrets.push({ ...r, id: uid(), session_id: n.id, value: "" }));
       commit(); return n.id;
