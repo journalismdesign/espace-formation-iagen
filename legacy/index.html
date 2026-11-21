@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prendre en main les IA génératives · Espace stagiaire</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---------- Palette reprise du support de formation ---------- */
+:root{
+  --navy:#0A2D4E; --blue:#124F90; --sky:#2F7FD0; --muted:#4A6A95; --dark:#1D2B3A;
+  --light:#F2F4F7; --tint:#E3EBF5; --line:#C9D2DF; --yel:#FFE94D; --yelt:#FFF5BF;
+  --ok:#1E7A4C; --oktint:#E2F3EA; --ko:#B3261E; --kotint:#FBE6E4;
+  --comp:#0A2D4E; --prat:#2F7FD0; --disc:#C98A00; --pause:#B8C2D0;
+  --r:10px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--light);color:var(--dark);font-family:Montserrat,system-ui,sans-serif;font-size:15px;line-height:1.5}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--blue)}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+/* ---------- En-tête ---------- */
+header{background:var(--navy);color:#fff;padding:18px 20px 0}
+.hwrap{max-width:1180px;margin:0 auto}
+.htop{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between}
+.kicker{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9FC2EA}
+h1{margin:2px 0 0;font-size:24px;font-weight:800;letter-spacing:-.01em}
+.fmt{display:flex;gap:6px;align-items:center;font-size:13px}
+.seg{display:inline-flex;background:rgba(255,255,255,.12);border-radius:999px;padding:3px}
+.seg button{border:0;background:none;color:#fff;padding:6px 14px;border-radius:999px;cursor:pointer;font-weight:600}
+.seg button[aria-pressed=true]{background:#fff;color:var(--navy)}
+.prog{min-width:220px}
+.prog .bar{height:8px;background:rgba(255,255,255,.18);border-radius:99px;overflow:hidden;margin-top:6px}
+.prog .bar i{display:block;height:100%;background:var(--yel);width:0;transition:width .3s}
+nav{display:flex;gap:4px;margin-top:16px;overflow-x:auto}
+nav a{color:#CFE0F3;text-decoration:none;padding:10px 14px;font-weight:600;font-size:14px;border-radius:8px 8px 0 0;white-space:nowrap}
+nav a[aria-current=page]{background:var(--light);color:var(--navy)}
+main{max-width:1180px;margin:0 auto;padding:22px 20px 80px}
+section[data-view]{display:none}
+section[data-view].on{display:block}
+h2{font-size:20px;margin:0 0 4px;color:var(--navy);font-weight:800}
+h3{font-size:16px;margin:0 0 6px;color:var(--navy)}
+.lead{color:var(--muted);margin:0 0 18px;max-width:760px}
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:var(--tint);color:var(--navy)}
+.pill.comprendre{background:#DDE4EE;color:var(--comp)}
+.pill.pratique{background:#DCEBFA;color:#0F4F92}
+.pill.discussion{background:#FBEFCF;color:#7A5300}
+.pill.pause{background:#EEF1F5;color:#5B6B80}
+.pill.tf{background:var(--yel);color:var(--navy)}
+.btn{border:1px solid var(--blue);background:var(--blue);color:#fff;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer;font-size:14px}
+.btn.ghost{background:#fff;color:var(--blue)}
+.btn.sm{padding:5px 10px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:default}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+input[type=text],input[type=search],textarea,select{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:#fff}
+textarea{min-height:70px;resize:vertical}
+label.f{display:block;font-weight:600;font-size:13px;margin:10px 0 4px;color:var(--navy)}
+/* ---------- Répartition du temps ---------- */
+.split{display:flex;height:16px;border-radius:99px;overflow:hidden;margin:10px 0 8px;background:#eee}
+.split span{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px}
+.legend b{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.big{font-size:30px;font-weight:800;color:var(--navy);line-height:1}
+/* ---------- Parcours ---------- */
+.days{display:flex;gap:8px;margin:18px 0 12px}
+.days button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer;color:var(--navy)}
+.days button[aria-pressed=true]{background:var(--navy);color:#fff;border-color:var(--navy)}
+.tl{position:relative;margin-left:8px}
+.mod{display:grid;grid-template-columns:92px 1fr;gap:0 16px;position:relative}
+.mod .time{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted);padding-top:16px;text-align:right}
+.mod .time b{display:block;color:var(--navy);font-size:15px}
+.mod .body{border-left:4px solid var(--line);padding:10px 0 14px 18px}
+.mod[data-type=comprendre] .body{border-color:var(--comp)}
+.mod[data-type=pratique] .body{border-color:var(--prat)}
+.mod[data-type=discussion] .body{border-color:var(--disc)}
+.mod[data-type=pause] .body{border-color:var(--pause);border-left-style:dashed}
+.mhead{display:flex;gap:10px;align-items:flex-start;cursor:pointer;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.mod[data-type=pause] .mhead{background:transparent;border-style:dashed;cursor:default}
+.mhead h3{margin:4px 0 0;font-size:16px}
+.mhead .meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.mhead .chev{margin-left:auto;color:var(--muted);transition:transform .2s;padding-top:4px}
+.mod.open .chev{transform:rotate(90deg)}
+.mod.done .mhead{background:#F6FBF8;border-color:#BFE3CF}
+.mod.now .mhead{box-shadow:0 0 0 3px var(--yel)}
+.check{width:22px;height:22px;border-radius:6px;border:2px solid var(--line);background:#fff;flex:none;margin-top:2px;cursor:pointer;display:grid;place-items:center;color:#fff;font-size:14px}
+.mod.done .check{background:var(--ok);border-color:var(--ok)}
+.mdetail{display:none;background:#fff;border:1px solid var(--line);border-top:0;border-radius:0 0 var(--r) var(--r);padding:16px;margin-top:-6px}
+.mod.open .mdetail{display:block}
+.mod.open .mhead{border-radius:var(--r) var(--r) 0 0}
+.blk{margin:0 0 16px}
+.blk h4{margin:0 0 6px;font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.blk ul,.blk ol{margin:0;padding-left:20px}
+.blk li{margin:3px 0}
+.exo{background:var(--tint);border-radius:var(--r);padding:14px}
+.exo ol{counter-reset:s;list-style:none;padding:0}
+.exo ol li{counter-increment:s;padding-left:30px;position:relative;margin:7px 0}
+.exo ol li:before{content:counter(s);position:absolute;left:0;top:0;width:22px;height:22px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center}
+.disc{background:var(--yelt);border-radius:var(--r);padding:14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 11px;font-size:13px;cursor:pointer;color:var(--blue);font-weight:600}
+.chip:hover{border-color:var(--blue)}
+/* ---------- Quiz ---------- */
+.quiz{border:1px solid var(--line);border-radius:var(--r);padding:16px;background:#fff}
+.qq{margin:0 0 14px}
+.qq p{font-weight:600;margin:0 0 8px}
+.opt{display:block;width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:8px;padding:9px 12px;margin:5px 0;cursor:pointer}
+.opt:hover{border-color:var(--blue)}
+.opt.ok{background:var(--oktint);border-color:var(--ok)}
+.opt.ko{background:var(--kotint);border-color:var(--ko)}
+.expl{font-size:13.5px;margin-top:6px;padding:8px 10px;border-radius:6px;background:var(--light)}
+.score{font-weight:800;color:var(--navy)}
+/* ---------- Ressources ---------- */
+.subnav{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0}
+.subnav button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 14px;font-weight:600;cursor:pointer;color:var(--navy);font-size:14px}
+.subnav button[aria-pressed=true]{background:var(--blue);border-color:var(--blue);color:#fff}
+.fcard{cursor:pointer;transition:border-color .15s}
+.fcard:hover{border-color:var(--blue)}
+.fcard .ico{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:12px;color:#fff;background:var(--navy);border-radius:6px;padding:3px 7px;display:inline-block;margin-bottom:8px}
+.gl{border-bottom:1px solid var(--line);padding:11px 0}
+.gl dt{font-weight:700;color:var(--navy)}
+.gl dd{margin:3px 0 0}
+.prompt{white-space:pre-wrap;font-family:"IBM Plex Mono",monospace;font-size:12.5px;background:var(--light);border:1px solid var(--line);border-radius:8px;padding:12px;margin:8px 0;max-height:320px;overflow:auto}
+/* ---------- Fiche (panneau) ---------- */
+.overlay{position:fixed;inset:0;background:rgba(10,45,78,.45);display:none;z-index:40}
+.overlay.on{display:block}
+.sheet{position:fixed;top:0;right:0;bottom:0;width:min(640px,100%);background:#fff;z-index:41;transform:translateX(100%);transition:transform .25s;overflow:auto;padding:24px 26px 60px}
+.sheet.on{transform:none}
+.sheet .x{position:sticky;top:0;float:right;border:0;background:var(--light);border-radius:50%;width:34px;height:34px;cursor:pointer;font-size:18px}
+.sheet h2{font-size:22px;margin-top:6px}
+.sheet .sec{margin:16px 0}
+.sheet .sec h4{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.warn{background:var(--kotint);border-left:4px solid var(--ko);padding:10px 12px;border-radius:6px}
+/* ---------- Outils ---------- */
+.letter{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:7px;background:var(--navy);color:#fff;font-weight:800;margin-right:8px}
+.cc{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.cc button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;font-weight:600;font-size:13px}
+.cc .jam.sel{background:var(--kotint);border-color:var(--ko)}
+.cc .pre.sel{background:var(--yelt);border-color:var(--disc)}
+.cc .san.sel{background:var(--oktint);border-color:var(--ok)}
+.ccitem{padding:10px 0;border-bottom:1px solid var(--line)}
+/* ---------- Minuteur flottant ---------- */
+#timerBox{position:fixed;left:16px;bottom:16px;background:var(--navy);color:#fff;border-radius:12px;padding:10px 14px;display:none;z-index:30;align-items:center;gap:12px;box-shadow:0 6px 20px rgba(0,0,0,.2)}
+#timerBox.on{display:flex}
+#timerBox .t{font-family:"IBM Plex Mono",monospace;font-size:22px;font-weight:500}
+#timerBox button{background:rgba(255,255,255,.15);border:0;color:#fff;border-radius:6px;padding:4px 8px;cursor:pointer}
+/* ---------- En direct ---------- */
+.live{border:2px solid var(--navy)}
+.bars .row{display:grid;grid-template-columns:minmax(120px,1fr) 3fr 40px;gap:10px;align-items:center;margin:7px 0}
+.bars .track{height:22px;background:var(--light);border-radius:6px;overflow:hidden}
+.bars .track i{display:block;height:100%;background:var(--sky);transition:width .3s}
+.cloud{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;justify-content:center;padding:18px;min-height:120px}
+.cloud span{color:var(--navy);font-weight:700;line-height:1.1}
+.proj{position:fixed;inset:0;background:#fff;z-index:60;display:none;padding:5vh 6vw;overflow:auto}
+.proj.on{display:block}
+.proj h2{font-size:clamp(26px,4vw,48px)}
+.proj .bars .row{grid-template-columns:minmax(160px,1fr) 3fr 60px;font-size:clamp(16px,2vw,26px)}
+.proj .bars .track{height:40px}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;background:#aaa;margin-right:6px}
+.dot.on{background:var(--ok)}
+/* ---------- Assistant ---------- */
+#fab{position:fixed;right:18px;bottom:18px;background:var(--yel);color:var(--navy);border:0;border-radius:999px;padding:12px 18px;font-weight:800;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.18);z-index:35}
+.chat{display:flex;flex-direction:column;gap:10px;min-height:280px}
+.msg{max-width:88%;padding:10px 13px;border-radius:12px;white-space:pre-wrap}
+.msg.u{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:3px}
+.msg.a{align-self:flex-start;background:#fff;border:1px solid var(--line);border-bottom-left-radius:3px}
+.msg.a a.ref{display:inline-block;background:var(--tint);border-radius:5px;padding:0 6px;text-decoration:none;font-weight:600;font-size:13px;margin:1px 2px}
+.askrow{display:flex;gap:8px;margin-top:10px}
+.askrow input{flex:1}
+.sugg{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.res{padding:10px 0;border-bottom:1px solid var(--line)}
+.res:last-child{border-bottom:0}
+.empty{color:var(--muted);font-style:italic}
+footer{max-width:1180px;margin:0 auto;padding:0 20px 40px;color:var(--muted);font-size:12.5px}
+@media (max-width:640px){
+  .mod{grid-template-columns:62px 1fr;gap:0 10px}
+  h1{font-size:20px}
+  .bars .row{grid-template-columns:1fr 2fr 34px}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="hwrap">
+    <div class="htop">
+      <div>
+        <div class="kicker">Espace stagiaire · Journalisme &amp; IA · 2026</div>
+        <h1>Prendre en main les IA génératives</h1>
+      </div>
+      <div class="fmt">
+        <span>Format</span>
+        <div class="seg" role="group" aria-label="Format de la formation">
+          <button data-fmt="1" aria-pressed="true">1 journée</button>
+          <button data-fmt="2" aria-pressed="false">2 journées</button>
+        </div>
+      </div>
+      <div class="prog">
+        <div class="small">Ma progression · <b id="progTxt">0 %</b></div>
+        <div class="bar"><i id="progBar"></i></div>
+      </div>
+    </div>
+    <nav id="nav">
+      <a href="#parcours" data-v="parcours">Parcours</a>
+      <a href="#ressources" data-v="ressources">Ressources</a>
+      <a href="#outils" data-v="outils">Outils</a>
+      <a href="#direct" data-v="direct">En direct</a>
+      <a href="#assistant" data-v="assistant">Assistant</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ======================= PARCOURS ======================= -->
+  <section data-view="parcours">
+    <h2>Le parcours</h2>
+    <p class="lead">Chaque séquence renvoie aux pages du support projeté. Cochez-la quand elle est faite : votre progression reste enregistrée dans ce navigateur.</p>
+    <div class="grid g2">
+      <div class="card">
+        <div class="kicker" style="color:var(--muted)">Répartition du temps</div>
+        <div style="display:flex;gap:18px;align-items:baseline;margin-top:6px">
+          <div class="big" id="pratPct">–</div>
+          <div class="muted small" id="pratTxt"></div>
+        </div>
+        <div class="split" id="split"></div>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="card">
+        <div class="kicker" style="color:var(--muted)">Deux temps forts pratiques</div>
+        <ol class="small" style="margin:8px 0 0;padding-left:18px">
+          <li><b>Temps fort 1 · Gemini Notebook (ex-NotebookLM)</b> : un assistant qui ne lit que vos sources. Apprendre à contrôler une IA.</li>
+          <li><b>Temps fort 2 · Les assistants</b> : ChatGPT, Claude, Gemini, Mistral, puis les méthodes R·M·C·T·F (une demande) et S·V·E (un travail suivi).</li>
+        </ol>
+        <p class="small muted" style="margin:10px 0 0">Les temps de discussion libre sont signalés en jaune dans le déroulé.</p>
+      </div>
+    </div>
+    <div class="days" id="days"></div>
+    <div class="tl" id="timeline"></div>
+  </section>
+
+  <!-- ======================= RESSOURCES ======================= -->
+  <section data-view="ressources">
+    <h2>Ressources</h2>
+    <p class="lead">Fiches pratiques, glossaire, prompts prêts à adapter et exemples tirés de rédactions. Tout reste consultable après la formation.</p>
+    <input type="search" id="resSearch" placeholder="Chercher : connecteur, MCP, projet, résumé audio, code couleur…" aria-label="Chercher dans les ressources">
+    <div class="subnav" id="resNav">
+      <button data-r="fiches" aria-pressed="true">Fiches pratiques</button>
+      <button data-r="glossaire" aria-pressed="false">Glossaire</button>
+      <button data-r="prompts" aria-pressed="false">Prompts à adapter</button>
+      <button data-r="exemples" aria-pressed="false">Exemples de rédactions</button>
+    </div>
+    <div id="resBody"></div>
+  </section>
+
+  <!-- ======================= OUTILS ======================= -->
+  <section data-view="outils">
+    <h2>Outils d'exercice</h2>
+    <p class="lead">De quoi s'entraîner pendant les temps de pratique, et après. Rien de ce que vous tapez ici ne quitte votre navigateur.</p>
+    <div class="grid g2">
+      <div class="card" id="toolRmctf">
+        <h3>Constructeur R·M·C·T·F</h3>
+        <p class="small muted" style="margin-top:0">Méthode d'initiation, pour une demande ponctuelle (p. 101). Remplissez, puis copiez le prompt.</p>
+        <label class="f"><span class="letter">R</span>Rôle · qui doit répondre ?</label>
+        <input type="text" data-k="R" placeholder="Tu es secrétaire de rédaction d'une rédaction publique d'information.">
+        <label class="f"><span class="letter">M</span>Mission · pour quoi faire ?</label>
+        <input type="text" data-k="M" placeholder="Aider un·e journaliste à s'approprier un rapport avant une interview.">
+        <label class="f"><span class="letter">C</span>Contexte · ce que l'IA ne peut pas deviner</label>
+        <textarea data-k="C" placeholder="Public, source, date, contraintes, ce qui a déjà été fait. « Appuie-toi uniquement sur le texte fourni. »"></textarea>
+        <label class="f"><span class="letter">T</span>Tâche · l'action précise, avec un verbe</label>
+        <input type="text" data-k="T" placeholder="Extrais les 5 chiffres clés et signale ce qui est contestable.">
+        <label class="f"><span class="letter">F</span>Format · la forme attendue</label>
+        <input type="text" data-k="F" placeholder="5 puces de 25 mots maximum ; un tableau Chiffre | Ce qu'il mesure | Page.">
+        <label class="f" style="display:flex;gap:8px;align-items:center;font-weight:500"><input type="checkbox" id="rDoubt" checked style="width:auto"> Ajouter « Si tu ne sais pas, dis-le. N'invente ni chiffre, ni citation, ni source. »</label>
+        <label class="f" style="display:flex;gap:8px;align-items:center;font-weight:500"><input type="checkbox" id="rInv" style="width:auto"> Prompt inversé : « Avant de répondre, pose-moi les questions dont tu as besoin. »</label>
+        <div class="prompt" id="rOut"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn sm" data-copy="rOut">Copier le prompt</button>
+          <span class="small muted" id="rCheck"></span>
+        </div>
+      </div>
+
+      <div class="card" id="toolSve">
+        <h3>Kit S·V·E pour un travail suivi</h3>
+        <p class="small muted" style="margin-top:0">Spécification, vérification, environnement (p. 104 à 109). Donnez votre sujet : le kit prépare les prompts d'ouverture, de contrôle et de clôture.</p>
+        <label class="f">Votre sujet au long cours</label>
+        <input type="text" id="sveSubj" placeholder="La fermeture des maternités en région">
+        <label class="f">Votre rédaction et votre support</label>
+        <input type="text" id="sveRed" placeholder="Rédaction web d'un quotidien régional">
+        <div class="subnav" id="sveNav" style="margin-bottom:4px">
+          <button data-s="S" aria-pressed="true">S · Spec par interview</button>
+          <button data-s="V" aria-pressed="false">V · Critères d'abord</button>
+          <button data-s="E" aria-pressed="false">E · Instructions du projet</button>
+          <button data-s="N" aria-pressed="false">Note de décisions</button>
+        </div>
+        <div class="prompt" id="sveOut"></div>
+        <button class="btn sm" data-copy="sveOut">Copier le prompt</button>
+      </div>
+
+      <div class="card">
+        <h3>Jeu : le code couleur de la rédaction</h3>
+        <p class="small muted" style="margin-top:0">Pour chaque contenu, décidez : jamais, avec précaution ou sans risque dans un assistant grand public (p. 97).</p>
+        <div id="ccGame"></div>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:10px">
+          <button class="btn sm" id="ccCheck">Vérifier mes réponses</button>
+          <button class="btn sm ghost" id="ccReset">Recommencer</button>
+          <span class="score" id="ccScore"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Minuteur de pratique</h3>
+        <p class="small muted" style="margin-top:0">Chaque exercice du parcours peut lancer son minuteur. Ou choisissez une durée.</p>
+        <div class="chips" id="timerChips"></div>
+        <p class="small muted">Le minuteur reste visible en bas à gauche pendant que vous naviguez.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= EN DIRECT ======================= -->
+  <section data-view="direct">
+    <h2>En direct dans la salle</h2>
+    <p class="lead">Sondages, quiz et nuages de mots lancés par le formateur, résultats affichés en temps réel. Vos réponses ne sont visibles que par les personnes présentes sur cette page, le temps de la session.</p>
+    <div class="grid g2">
+      <div class="card live" id="liveCard">
+        <div class="small muted" id="liveStatus"><span class="dot"></span>Connexion à la salle…</div>
+        <label class="f">Votre prénom (affiché au formateur)</label>
+        <input type="text" id="myName" maxlength="40" placeholder="Prénom">
+        <div id="liveAct" style="margin-top:16px"></div>
+      </div>
+      <div class="card">
+        <h3>Résultats</h3>
+        <div id="liveRes" class="empty">Aucune activité en cours.</div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn sm ghost" id="projBtn">Afficher en grand</button>
+          <span class="small muted" id="peerCount"></span>
+        </div>
+      </div>
+    </div>
+    <details class="card" style="margin-top:14px" id="trainerBox">
+      <summary style="cursor:pointer;font-weight:700;color:var(--navy)">Espace formateur</summary>
+      <p class="small muted">Lancez une activité : elle s'affiche chez tous les stagiaires présents sur la page. Ce mode n'est pas protégé par un mot de passe : il suffit de ne pas le signaler aux stagiaires.</p>
+      <label class="f" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="isTrainer" style="width:auto"> Je suis le formateur ou la formatrice</label>
+      <div id="trainerUi" style="display:none">
+        <div class="kicker" style="color:var(--muted);margin-top:12px">Activités prêtes</div>
+        <div class="chips" id="presetChips" style="margin-top:6px"></div>
+        <div class="kicker" style="color:var(--muted);margin-top:16px">Activité sur mesure</div>
+        <label class="f">Question</label>
+        <input type="text" id="cQ" placeholder="Qu'avez-vous retenu de ce temps fort ?">
+        <label class="f">Type</label>
+        <select id="cT"><option value="poll">Sondage (une réponse)</option><option value="cloud">Nuage de mots</option></select>
+        <label class="f">Options du sondage (séparées par des points-virgules)</label>
+        <input type="text" id="cO" placeholder="Oui ; Non ; Je ne sais pas">
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn sm" id="cGo">Lancer</button>
+          <button class="btn sm ghost" id="cStop">Clore l'activité</button>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ======================= ASSISTANT ======================= -->
+  <section data-view="assistant">
+    <h2>Assistant d'apprentissage</h2>
+    <p class="lead">Posez une question sur la formation : il répond à partir des fiches, du glossaire et du déroulé, et vous renvoie vers la bonne ressource. Il peut se tromper comme tout assistant : ouvrez la fiche citée.</p>
+    <div class="card">
+      <div class="sugg" id="sugg"></div>
+      <div class="chat" id="chat"></div>
+      <form class="askrow" id="askForm">
+        <input type="text" id="askIn" placeholder="Ex. : quelle différence entre un connecteur et un plugin ?" autocomplete="off">
+        <button class="btn" type="submit" id="askBtn">Demander</button>
+      </form>
+      <p class="small muted" id="askMode" style="margin:8px 0 0"></p>
+    </div>
+  </section>
+</main>
+
+<footer>Support conçu pour Samsa par Gerald Holubowicz (journalism.design). Les numéros de page renvoient au support projeté « Prendre en main les IA génératives », version de novembre 2026. Les interfaces et les offres des éditeurs changent souvent : à revérifier avant chaque session.</footer>
+
+<div class="overlay" id="ov"></div>
+<aside class="sheet" id="sheet" aria-hidden="true"><button class="x" id="sheetX" aria-label="Fermer">×</button><div id="sheetBody"></div></aside>
+<div id="timerBox"><span class="small" id="timerLbl">Pratique</span><span class="t" id="timerT">00:00</span><button id="timerPause">Pause</button><button id="timerStop">✕</button></div>
+<button id="fab">Une question ?</button>
+<div class="proj" id="proj"><button class="btn ghost" id="projClose" style="float:right">Fermer</button><div id="projBody"></div></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   Typographie française : espaces insécables avant : ; ? ! et dans « »
+   ===================================================================== */
+const NB = " ";
+function fr(s){ return String(s).replace(/ ([:;?!»%])/g, NB+"$1").replace(/« /g, "«"+NB); }
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+const T = s => esc(fr(s));
+const $ = (s, el=document) => el.querySelector(s);
+const $$ = (s, el=document) => [...el.querySelectorAll(s)];
+
+/* =====================================================================
+   Stockage local (progression, scores) — peut être indisponible
+   ===================================================================== */
+const STORE_KEY = "iagen-formation-v1";
+let state = { fmt:"1", done:{}, quiz:{}, name:"" };
+try { const raw = localStorage.getItem(STORE_KEY); if(raw) state = Object.assign(state, JSON.parse(raw)); } catch(e){}
+function save(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){} }
+
+/* =====================================================================
+   DONNÉES · Fiches pratiques
+   pages = pages du support projeté (version de novembre 2026, 135 pages)
+   ===================================================================== */
+const FICHES = [
+ {id:"projet", ico:"PROJET", titre:"Projet (Gem, espace)", resume:"Un dossier qui réunit des documents et des consignes permanentes, relus à chaque conversation.",
+  sections:[
+   ["Ce que c'est","Un espace de travail dans l'assistant : vous y déposez des documents (sources, notes) et des instructions propres au dossier. Chaque nouvelle conversation ouverte dans le projet les relit. Les noms varient : Projets dans ChatGPT et Claude, Gems dans Gemini."],
+   ["En rédaction",["Un projet par dossier au long cours, avec 5 à 10 sources publiques.","Des instructions qui disent : tes seules sources sont ces documents ; cite le document et la page ; si l'information n'y est pas, dis-le.","Des règles graduées : toujours, demander d'abord, jamais (exercice 4 du niveau 2)."]],
+   ["Trois couches à ne pas confondre",["Instructions personnalisées : tout le compte, toutes les conversations.","Projet : un dossier, ses documents, ses consignes.","Prompt : une demande, ici et maintenant."]],
+   ["Limites",["Des consignes, pas des verrous : une règle « jamais » peut céder selon la formulation.","Une continuité partielle : les décisions d'une conversation ne passent pas toujours dans la suivante. Terminez chaque session par une note de décisions.","Ni versionné ni local : les données restent chez l'éditeur."]],
+  ], warn:"Le Projet pour apprendre la méthode ; un dossier de fichiers à vous pour le travail durable ou sensible.", pages:"75, 86, 114 à 117", liens:["instructions","sve","configuration"]},
+ {id:"plugin", ico:"PLUGIN", titre:"Plugin", resume:"La mallette : un paquet prêt à installer qui réunit compétences, connecteurs et commandes pour un métier.",
+  sections:[
+   ["Ce que c'est","Le mot est apparu en 2023 avec les « plugins ChatGPT », abandonnés en 2024. Il désigne aujourd'hui, de façon assez vague, tout module qui ajoute une capacité à un assistant. Dans Claude ou Claude Code, un plugin est un paquet précis : des compétences, des connecteurs et des commandes installés d'un coup."],
+   ["En rédaction",["Un plugin « enquête » (exemple fictif) : 2 compétences, 1 connecteur vers Drive, 3 commandes dont /chronologie.","Les plugins métiers proposés par Anthropic depuis 2026 (juridique, finance…)."]],
+   ["L'image à retenir","Le connecteur, ce sont les clés. La compétence, la fiche de procédure. Le plugin, la mallette qui rassemble le tout."],
+  ], warn:"Installer un plugin, c'est aussi installer ses connecteurs : vérifiez à quoi il donne accès.", pages:"82, 85", liens:["connecteur","competence","mcp"]},
+ {id:"connecteur", ico:"CONNECTEUR", titre:"Connecteur", resume:"Les clés : un accès autorisé à un service tiers (Drive, Gmail, Notion…), avec vos droits.",
+  sections:[
+   ["Ce que c'est","Une autorisation donnée à l'assistant de lire, chercher et parfois écrire dans un service extérieur, avec vos propres droits. C'est l'équivalent d'une délégation de mot de passe. Le connecteur lit au moment de la demande : rien n'est versé d'avance dans le modèle, mais ce qu'il lit part dans la conversation."],
+   ["En rédaction",["Drive : retrouver la note de la réunion de mardi.","Gmail : lister les communiqués reçus cette semaine.","Notion : alimenter la base des sujets."]],
+   ["Où le trouver","Paramètres › Connecteurs › choisir le service › Connecter › choisir les droits. Les intitulés varient d'un assistant à l'autre."],
+   ["Le principe du moindre privilège",["Ne brancher que ce dont la tâche a besoin.","En lecture seule quand c'est possible.","Valider soi-même chaque action d'écriture."]],
+  ], warn:"Ne branchez jamais votre messagerie ou votre stockage professionnels sur un compte personnel. Risque spécifique : l'injection de prompt.", pages:"82 à 85", liens:["mcp","injection","plugin"]},
+ {id:"competence", ico:"SKILL", titre:"Compétence (skill)", resume:"La fiche de procédure : un fichier SKILL.md que l'assistant ne charge que si la tâche s'y prête.",
+  sections:[
+   ["Ce que c'est","Un fichier texte, SKILL.md, qui décrit une méthode maison écrite une fois. L'assistant lit son nom et sa description en permanence, mais ne charge la procédure complète que lorsque la demande s'y prête. Le format est ouvert depuis décembre 2025 : la même fiche peut servir dans plusieurs outils."],
+   ["En rédaction",["« Brève maison » : format, longueur, titre.","« Vérif chiffres » : contrôler un rapport.","« Sous-titres » : normes de la chaîne."]],
+   ["À quoi ça ressemble","---\nname: breve-maison\ndescription: rédige une brève au format maison\n---\n1. Titre informatif, 70 signes\n2. Source entre parenthèses"],
+  ], warn:"Une compétence est une consigne, pas un contrôle : relisez toujours le résultat.", pages:"85, 117", liens:["plugin","sve","configuration"]},
+ {id:"mcp", ico:"MCP", titre:"MCP (Model Context Protocol)", resume:"La prise USB-C des IA : un standard ouvert pour brancher un même outil sur plusieurs assistants.",
+  sections:[
+   ["Ce que c'est","Un protocole ouvert publié par Anthropic en novembre 2024, adopté en 2025 par OpenAI, Google et Microsoft, et confié en décembre 2025 à l'Agentic AI Foundation, sous l'égide de la Linux Foundation. Chaque service se branche une fois et sert à tous les assistants compatibles."],
+   ["Pourquoi c'est important",["Séparer le modèle des outils : le modèle raisonne, le connecteur agit. On peut changer d'assistant sans refaire ses branchements.","Les données restent chez elles : elles sont lues au moment de la demande.","L'intelligence de l'outil ne tient pas qu'au modèle : elle dépend de ce à quoi vous lui donnez accès, et c'est vous qui décidez."]],
+   ["Ce qu'on peut brancher","Google Drive, Gmail, Notion, Slack, WordPress, une base de données, un dossier sur votre disque… et des milliers d'autres services."],
+  ], warn:"Plus un assistant est connecté, plus il est utile… et plus une erreur ou un document piégé peut avoir de conséquences.", pages:"82 à 84", liens:["connecteur","injection","configuration"]},
+ {id:"instructions", ico:"RÉGLAGES", titre:"Instructions personnalisées", resume:"Écrites une fois, elles accompagnent toutes vos conversations : qui vous êtes, ton, rigueur.",
+  sections:[
+   ["Ce qu'on y met","Qui vous êtes et pour quel média ; la langue, le ton, le format ; vos exigences de rigueur ; ce que l'assistant doit faire quand il ne sait pas."],
+   ["Ce qu'on n'y met pas","Sources, noms de personnes, dossiers en cours, identifiants. Ces instructions accompagnent toutes les conversations, y compris celles que vous partagez."],
+   ["Où les régler (relevé d'octobre 2026)",["ChatGPT : Paramètres › Personnalisation › Instructions personnalisées.","Claude : Paramètres › Profil › Préférences personnelles, et les « styles ».","Gemini : Paramètres › Contexte personnel › Vos instructions pour Gemini.","Mistral : Paramètres › Personnalisation › Instructions."]],
+   ["Méthode",["Court : 1 500 caractères par champ chez ChatGPT.","Testez avec une question piège : la règle « si tu ne sais pas, dis-le » tient-elle ?","Révisez après une semaine : ajoutez ce que vous avez dû répéter."]],
+  ], warn:"Les intitulés des menus changent souvent : à vérifier la veille de la session.", pages:"86, 87", liens:["projet","donnees"], prompt:"instructions"},
+ {id:"notebook", ico:"NOTEBOOK", titre:"Gemini Notebook (ex-NotebookLM)", resume:"Un assistant qui ne répond qu'à partir des documents que vous lui donnez, en citant le passage.",
+  sections:[
+   ["Ce que c'est","Outil de Google, renommé Gemini Notebook le 16 juillet 2026. Il répond à partir des documents chargés dans un carnet et renvoie, par des numéros cliquables, au passage d'où vient chaque réponse."],
+   ["Comment ça marche",["Créer un carnet, avec un compte Google : un carnet par sujet, comme un dossier papier.","Ajouter des sources : PDF, Google Docs et Slides, pages web, vidéos YouTube, fichiers audio, EPUB.","Interroger : chaque réponse porte des numéros qui ouvrent le passage cité.","Produire dans le Studio : résumé audio ou vidéo, carte mentale, rapport, quiz, fiches."]],
+   ["Cinq usages en rédaction",["Dépouiller un rapport de 300 pages.","Préparer une interview : variations et contradictions d'un interlocuteur.","Comparer deux versions : un projet de loi avant et après amendements.","Suivre un dossier au long cours.","Expliquer à l'oral : un résumé audio, écouté en entier avant toute diffusion."]],
+   ["Offre gratuite (relevé d'octobre 2026, à revérifier)","100 carnets ; 50 sources par carnet, jusqu'à 500 000 mots ou 200 Mo chacune ; 50 questions et 3 résumés audio par jour."],
+  ], warn:"Une réponse sourcée n'est pas une réponse vérifiée. Ne versez ni document confidentiel ni source protégée depuis un compte personnel.", pages:"69 à 71", liens:["donnees","rmctf"]},
+ {id:"rmctf", ico:"R·M·C·T·F", titre:"La méthode R·M·C·T·F", resume:"Cinq questions à se poser avant d'écrire une demande ponctuelle : rôle, mission, contexte, tâche, format.",
+  sections:[
+   ["Les cinq lettres",["R · Rôle : qui doit répondre ? « Tu es secrétaire de rédaction d'une radio publique d'information. »","M · Mission : pour quoi faire ? « Aider un·e journaliste à s'approprier un rapport avant une interview. »","C · Contexte : ce que l'IA ne peut pas deviner : public, source, date, contraintes, ce qui a déjà été fait.","T · Tâche : l'action précise, avec un verbe : « Extrais les 5 chiffres clés et signale ce qui est contestable. »","F · Format : longueur, structure, tableau, ton, langue, ce qu'il ne faut pas faire."]],
+   ["Six réflexes en plus",["Délimiter la source : « n'utilise que ce texte ».","Autoriser le doute : « Si tu ne sais pas, dis-le. »","Donner un exemple : un chapô de votre rédaction vaut mieux que trois adjectifs.","Itérer : la première réponse est un brouillon.","Le prompt inversé : « Avant de répondre, pose-moi les questions dont tu as besoin. »","Changer de plateforme : les écarts entre deux assistants révèlent les zones fragiles."]],
+  ], warn:"Toutes les lettres ne servent pas pour une demande simple ; aucune n'est superflue pour une demande professionnelle.", pages:"100 à 103, 122, 123", liens:["sve"], outil:"toolRmctf"},
+ {id:"sve", ico:"S·V·E", titre:"La méthode S·V·E", resume:"Pour un travail qui dure plusieurs sessions : spécification, vérification, environnement.",
+  sections:[
+   ["Quand l'utiliser","R·M·C·T·F règle une demande. Pour un dossier, une enquête, une veille ou un petit outil, on organise la collaboration avec l'IA sur plusieurs sessions. Principe directeur : on peut externaliser sa pensée, pas sa compréhension."],
+   ["S · Spécification",["Dégager le but, pas la tâche : « faire le rapport mensuel » est une tâche, « décider si l'on garde la rubrique » est un but.","Découper en petits lots, avec un point de contrôle à chaque fois.","Faire lister les hypothèses de l'IA, puis relire la spec avec sa tête."]],
+   ["V · Vérification",["Fixer les critères avant d'exécuter : « trois sections, une recommandation chacune, chaque chiffre sourcé ».","Un second modèle en relecteur, sachant que deux modèles peuvent se tromper ensemble.","Un signal extérieur : source primaire, document de référence, test réel."]],
+   ["E · Environnement",["Des instructions permanentes (projet, Gem, fichier d'instructions).","Une base documentaire : sources brutes en lecture seule, notes de synthèse tenues à jour.","Des procédures écrites et des garde-fous gradués : toujours, demander d'abord, jamais."]],
+   ["Limites",["Conformité n'est pas vérité : la boucle contrôle des critères, pas l'exactitude d'un fait.","Des prescripteurs intéressés : « qualité ×2 », « 10 fois plus vite » sont des affirmations, pas des mesures.","Des coûts cachés : plus de modèles et de boucles, c'est plus de calcul, d'argent et d'énergie.","Le risque d'atrophie : déléguer aussi la spec et les critères vide la méthode de son sens."]],
+  ], warn:"Le découpage en trois couches vient de vulgarisateurs commentant Andrej Karpathy, pas de Karpathy lui-même.", pages:"104 à 116", liens:["projet","rmctf","configuration"], outil:"toolSve"},
+ {id:"donnees", ico:"DONNÉES", titre:"Le code couleur de la rédaction", resume:"Ce qu'on n'envoie jamais, ce qu'on envoie avec précaution, ce qu'on peut envoyer sans risque.",
+  sections:[
+   ["Jamais",["Identité ou coordonnées d'une source.","Documents confidentiels ou sous embargo.","Données personnelles de tiers (santé, adresse, casier…).","Contrats, données RH, informations internes.","Rushs et enregistrements non publiés."]],
+   ["Avec précaution",["Brouillons et notes de travail : anonymisez noms et lieux.","Retranscriptions d'interviews publiées ou publiables, avec accord.","Réglages de confidentialité activés, chat temporaire."]],
+   ["Sans risque",["Textes déjà publiés.","Communiqués, rapports et décisions publics.","Données ouvertes (data.gouv.fr…).","Vos propres idées, plans, questions de méthode."]],
+   ["Check-list d'hygiène numérique",["Un compte dédié, jamais votre adresse professionnelle.","Entraînement désactivé dès la création du compte.","Discussion temporaire pour tout essai sur un contenu non public.","Aucun connecteur vers une messagerie ou un stockage professionnel.","Ne jamais partager une conversation par lien public.","Purger l'historique et la mémoire régulièrement.","Vérifier chaque fait, chiffre et citation produits par l'IA."]],
+  ], warn:"Le secret des sources est protégé par l'article 2 de la loi du 29 juillet 1881. Appliquez d'abord la charte IA de votre entreprise.", pages:"89 à 98", liens:["connecteur","instructions"]},
+ {id:"injection", ico:"RISQUE", titre:"L'injection de prompt", resume:"Des instructions cachées dans un mail ou une page web, que l'assistant exécute comme si elles venaient de vous.",
+  sections:[
+   ["Ce que c'est","Quand un assistant lit un contenu extérieur (un e-mail via un connecteur, une page web, un document), ce contenu peut contenir des consignes dissimulées. L'assistant risque de les suivre : résumer de travers, envoyer un message, divulguer des informations."],
+   ["Pourquoi c'est un risque en rédaction","Une rédaction reçoit en permanence des contenus non sollicités : communiqués, pièces jointes, signalements. Un assistant branché sur la messagerie les lit tous."],
+   ["Se protéger",["Le moindre privilège : brancher le strict nécessaire, en lecture seule si possible.","Valider soi-même toute action d'écriture ou d'envoi.","Se méfier d'un résultat qui change brusquement de ton ou de sujet."]],
+  ], warn:"Plus un assistant est connecté et autonome, plus une injection peut avoir de conséquences.", pages:"83", liens:["connecteur","mcp"]},
+ {id:"interface", ico:"INTERFACE", titre:"Anatomie d'une interface", resume:"Les assistants partagent la même architecture : une fois le plan en tête, on passe de l'un à l'autre.",
+  sections:[
+   ["Les sept zones",["1 · Projets : dossiers avec documents et consignes permanentes.","2 · Sélecteur de modèle : rapide, ou « raisonnement », plus lent et plus fiable.","3 · Zone de saisie : le prompt, et l'endroit où l'on colle les textes.","4 · « + » et outils : fichiers, recherche web, recherche approfondie, image, canvas.","5 · Historique : les conversations passées, à purger régulièrement.","6 · Compte et paramètres : confidentialité, mémoire, connecteurs.","7 · Réponse : à copier, régénérer ou évaluer."]],
+   ["Les quatre assistants de la formation",["ChatGPT (OpenAI, États-Unis).","Claude (Anthropic, États-Unis).","Gemini (Google, États-Unis).","Mistral (Mistral AI, France), le seul européen."]],
+  ], warn:"Évaluer une réponse (pouce levé ou baissé) peut entraîner l'examen de toute la conversation par l'éditeur.", pages:"74 à 81, 89", liens:["donnees","projet"]},
+ {id:"configuration", ico:"COUCHES", titre:"La configuration idéale", resume:"Cinq couches, cinq questions : qui je suis, sur quoi je travaille, comment on fait, à quoi l'IA a accès, ce qu'on veut maintenant.",
+  sections:[
+   ["Les couches",["Instructions : qui suis-je ? Paramétrage du compte, ton, exigences de rigueur.","Projet : sur quoi je travaille ? Objectif, sources, règles du dossier.","Compétences : comment fait-on ? Procédures chargées à la demande.","Connecteurs et MCP : à quoi l'IA a-t-elle accès ?","Prompt : que veut-on maintenant ? R·M·C·T·F, ou spec, critères, environnement."]],
+   ["Une base à vous",["Une base statique : charte, glossaire, sources de référence, modèles. Change rarement, versionnée.","Une base dynamique : notes de travail, journal des décisions, veille, synthèses de session.","Des fichiers Markdown dans un dossier à vous : l'intelligence du travail reste chez vous, pas dans la plateforme."]],
+  ], pages:"117 à 119", liens:["projet","competence","mcp","instructions"]},
+];
+
+/* =====================================================================
+   DONNÉES · Glossaire
+   ===================================================================== */
+const GLOSS = [
+ ["Agent IA","Assistant capable d'enchaîner plusieurs actions (chercher, ouvrir un fichier, appeler un outil, écrire) pour accomplir une tâche, au-delà d'une simple réponse.","mcp","83"],
+ ["AI Act","Règlement européen sur l'intelligence artificielle (UE) 2024/1689, modifié en 2026. Il encadre les systèmes d'IA selon leur niveau de risque.",null,"95"],
+ ["Assistant conversationnel","Interface de dialogue construite autour d'un modèle de langage : ChatGPT, Claude, Gemini, Mistral, Copilot.","interface","74"],
+ ["Canvas","Espace d'édition ouvert à côté de la conversation pour travailler un texte ou un code en continu.","interface","75"],
+ ["Carnet","Dans Gemini Notebook, l'espace qui réunit les sources d'un sujet, comme un dossier papier.","notebook","69"],
+ ["Chat temporaire","Conversation qui n'est pas gardée dans l'historique : à utiliser pour tout essai sur un contenu non public.","donnees","98"],
+ ["Cloud Act","Loi américaine de 2018 qui permet aux autorités des États-Unis d'exiger d'un fournisseur américain des données qu'il détient, y compris stockées hors des États-Unis.","donnees","94"],
+ ["Code couleur","Classement des contenus en trois niveaux avant tout envoi à un assistant : jamais, avec précaution, sans risque.","donnees","97"],
+ ["Compétence (skill)","Fichier SKILL.md décrivant une procédure maison, chargé seulement quand la tâche s'y prête.","competence","85"],
+ ["Connecteur","Accès autorisé à un service tiers (Drive, Gmail, Notion…), qui permet à l'assistant de lire et parfois d'écrire avec vos droits.","connecteur","82"],
+ ["Critères de vérification","Ce qu'est un bon résultat, écrit avant l'exécution : « chaque chiffre renvoie à une page du rapport ».","sve","107"],
+ ["Garde-fous gradués","Classement des actions en trois groupes : toujours, demander d'abord, jamais.","sve","108"],
+ ["Gem","Nom donné par Gemini à un assistant personnalisé, avec ses instructions et ses documents : l'équivalent d'un projet.","projet","108"],
+ ["Gemini Notebook","Ex-NotebookLM, renommé le 16 juillet 2026 : un assistant de Google qui répond à partir des seules sources chargées.","notebook","69"],
+ ["Hallucination","Réponse fluide mais fausse : chiffre, citation, référence ou nom inventés. Vient de ce que le modèle apprend des régularités, pas des faits.","rmctf","29"],
+ ["Injection de prompt","Instructions cachées dans un e-mail, une page ou un document, que l'assistant exécute comme si elles venaient de vous.","injection","83"],
+ ["Instructions personnalisées","Consignes écrites une fois dans les réglages du compte, qui accompagnent toutes les conversations.","instructions","86"],
+ ["LLM (grand modèle de langage)","Modèle entraîné sur d'immenses corpus de textes pour prédire la suite d'un texte. C'est le moteur des assistants.",null,"27"],
+ ["MCP","Model Context Protocol : standard ouvert pour brancher outils et données sur les assistants, la « prise USB-C » des IA.","mcp","82"],
+ ["Mémoire","Ce que l'assistant retient de vous d'une conversation à l'autre. À consulter et purger régulièrement.","donnees","98"],
+ ["Modèle de raisonnement","Mode plus lent dans lequel le modèle « réfléchit » avant de répondre : plus fiable sur les tâches complexes.","interface","75"],
+ ["Note de décisions","Note datée rédigée en fin de session : ce qui a été validé, écarté et pourquoi, les hypothèses ouvertes.","sve","115"],
+ ["Plugin","Paquet prêt à installer qui réunit compétences, connecteurs et commandes pour un métier.","plugin","85"],
+ ["Pré-entraînement","Première étape de fabrication d'un modèle : il apprend des régularités sur d'énormes volumes de textes, pas des faits vérifiés.",null,"29"],
+ ["Projet","Dossier de l'assistant qui réunit documents et consignes permanentes, relus à chaque conversation.","projet","86"],
+ ["Prompt","La consigne donnée à l'assistant. Une commande complète, pas une recherche par mots-clés.","rmctf","100"],
+ ["Prompt inversé","Demander à l'IA de poser d'abord les questions dont elle a besoin pour faire le travail.","rmctf","103"],
+ ["R·M·C·T·F","Méthode d'initiation pour une demande ponctuelle : rôle, mission, contexte, tâche, format.","rmctf","101"],
+ ["Recherche approfondie","Mode où l'assistant enchaîne de nombreuses recherches web et rédige un rapport sourcé. Plus long, à vérifier comme le reste.","interface","75"],
+ ["RGPD","Règlement général sur la protection des données (UE) 2016/679, applicable depuis le 25 mai 2018. En France, l'autorité compétente est la CNIL.","donnees","93"],
+ ["RLHF","Apprentissage par renforcement à partir de retours humains : l'étape où des personnes notent les réponses pour orienter le comportement du modèle.",null,"30"],
+ ["S·V·E","Méthode pour un travail au long cours : spécification, vérification, environnement.","sve","105"],
+ ["Second modèle relecteur","Faire relire le travail d'un assistant par un autre. Utile, mais deux modèles peuvent se tromper ensemble.","sve","107"],
+ ["Spécification (spec)","Document qui transmet votre compréhension du travail : le but réel, un découpage en lots courts, des hypothèses validées.","sve","106"],
+ ["Studio","Dans Gemini Notebook, l'espace qui produit résumé audio ou vidéo, carte mentale, rapport, quiz et fiches.","notebook","69"],
+ ["Vibe coding","Terme lancé par Andrej Karpathy en février 2025 : on décrit l'outil voulu, l'IA écrit le code.",null,"127"],
+];
+
+/* =====================================================================
+   DONNÉES · Prompts à adapter (repris du support)
+   ===================================================================== */
+const PROMPTS = [
+ {id:"carnet", titre:"Votre premier carnet : questions de contrôle", tag:"Gemini Notebook", page:"71", txt:"1. [Question dont vous connaissez la réponse sur votre dossier]\n2. [Deuxième question vérifiable]\n3. [Troisième question vérifiable]\n4. Question hors corpus : [un fait qui n'est dans aucune source]\n\nPour chaque réponse : est-elle dans le passage cité ? Au même sens ? Que fait l'outil face à la question hors corpus : il refuse, il prévient, ou il invente ?"},
+ {id:"interview", titre:"Préparer une interview dans un carnet", tag:"Gemini Notebook", page:"70", txt:"À partir des seules sources de ce carnet, prépare une fiche d'interview de [nom, fonction] :\n– ses positions principales, chacune avec la source et la date ;\n– les variations ou contradictions entre ses déclarations ;\n– dix questions, dont trois sur ces contradictions.\nSi une information ne figure pas dans les sources, écris « non précisé »."},
+ {id:"resume", titre:"Palier 2 · Résumé guidé R·M·C·T·F", tag:"R·M·C·T·F", page:"123", txt:"RÔLE Tu es secrétaire de rédaction d'une rédaction publique d'information.\nMISSION Aider un·e journaliste à s'approprier vite ce document sans en trahir le sens.\nCONTEXTE Document : [type, auteur, date]. Il sera traité pour un public non spécialiste, à l'antenne et sur le web. Appuie-toi uniquement sur le texte fourni.\nTÂCHE 1) Résume les points essentiels. 2) Liste les chiffres cités. 3) Signale ce qui est ambigu ou contestable.\nFORMAT 1) 5 puces de 25 mots maximum. 2) Tableau Chiffre | Ce qu'il mesure | Passage d'origine. 3) Section « À vérifier ». Pas d'introduction ni de conclusion. Si une information manque, écris « non précisé ».\nTEXTE « [collez le document ici] »"},
+ {id:"analyse", titre:"Palier 3 · Analyse et résumé", tag:"R·M·C·T·F", page:"124", txt:"RÔLE Tu es journaliste spécialisé·e en vérification des faits.\nMISSION Préparer le traitement d'une tribune (ou d'un discours) publiée aujourd'hui.\nCONTEXTE Texte ci-dessous. Je dois en tirer une brève web et un lancement radio.\nTÂCHE 1) Identifie les acteurs cités et leur rôle. 2) Distingue les faits vérifiables, les opinions et les affirmations sans source. 3) Repère les procédés rhétoriques. 4) Propose trois angles de traitement. 5) Rédige une brève web de 600 signes et un lancement radio de 30 secondes.\nFORMAT Tableau pour les points 1 et 2, liste pour 3 et 4, textes finaux séparés. Ne cite que des passages présents dans le texte, entre guillemets.\nTEXTE « [collez le texte ici] »"},
+ {id:"planning", titre:"Palier 4 · Un planning de couverture", tag:"R·M·C·T·F", page:"125", txt:"RÔLE Tu es chef·fe d'édition d'une rédaction régionale.\nMISSION Organiser la couverture d'un événement de 5 jours (élection, festival, sommet…).\nCONTEXTE Équipe : 4 journalistes, 1 JRI, 1 éditeur·rice web. Supports : site, réseaux sociaux, print. Contraintes : [vos horaires, temps forts connus].\nTÂCHE Construis le planning jour par jour, créneau par créneau.\nFORMAT Tableau : Jour | Créneau | Sujet | Format | Support | Responsable | Matériel | Statut. Puis la même chose en CSV, séparateur point-virgule, pour import dans un tableur.\n\nÀ vérifier : les dates et les jours de la semaine, erreur fréquente."},
+ {id:"spec", titre:"S · La spec par interview", tag:"S·V·E", page:"110", txt:"Je prépare un travail journalistique au long cours. Avant de produire quoi que ce soit, interroge-moi, une question à la fois, pour établir :\n– la question éditoriale à laquelle ce travail doit répondre ;\n– le public et le support ;\n– ce qui rendrait ce travail raté ou inutile ;\n– les sources dont je dispose et celles qui manquent.\nQuand tu as assez d'éléments, rédige une spec d'une page. Termine par la liste des hypothèses que tu as faites sans que je les aie énoncées."},
+ {id:"lots", titre:"S · Découper et valider", tag:"S·V·E", page:"111", txt:"À partir de cette spec, propose un découpage en lots courts. Pour chaque lot : l'objectif, le livrable attendu et ce que je dois vérifier avant de passer au suivant.\nNe lance aucun lot. Attends ma validation, lot par lot."},
+ {id:"criteres", titre:"V · Critères d'abord", tag:"S·V·E", page:"112", txt:"ÉTAPE 1 · CRITÈRES Avant de rédiger la fiche de préparation d'interview, énonce des critères précis et vérifiables pour juger sa qualité. Par exemple : chaque chiffre renvoie à une page du rapport ; aucune question ne présuppose sa réponse ; les points contestés sont signalés comme tels. Attends que je valide ces critères.\n\nÉTAPE 2 · AUTO-ÉVALUATION Évalue la fiche critère par critère : respecté, partiellement, non respecté, et pourquoi. Signale ce que tu n'as pas pu vérifier."},
+ {id:"croisee", titre:"V · Relecture croisée par un second assistant", tag:"S·V·E", page:"113", txt:"Voici une fiche de préparation d'interview et le rapport dont elle est tirée. Relève les chiffres mal reportés, les affirmations absentes du rapport et les questions orientées. Ne réécris pas la fiche.\n\nPuis contrôle humain : vérifiez vous-même trois chiffres de la fiche dans le rapport original."},
+ {id:"projetinstr", titre:"E · Instructions du projet", tag:"S·V·E", page:"114", txt:"CONTEXTE Tu assistes un·e journaliste de [rédaction] sur le dossier [sujet]. Spec du dossier : [coller la spec].\nSOURCES Les documents de ce projet sont tes seules sources. Pour chaque affirmation, cite le document et la page. Si l'information n'y figure pas, dis-le.\nTOUJOURS Distinguer faits sourcés, hypothèses et interprétations. Énoncer des critères de vérification avant toute production longue. Terminer par ce qui reste à vérifier.\nDEMANDER D'ABORD Avant tout changement d'angle ou de périmètre, et avant de recourir à une connaissance extérieure aux documents.\nJAMAIS Inventer une citation, un chiffre ou une source. Reformuler une citation entre guillemets. Traiter des données nominatives sur des personnes privées."},
+ {id:"froid", titre:"E · Reprise à froid et note de décisions", tag:"S·V·E", page:"115", txt:"EN OUVERTURE (nouvelle conversation, même projet) : « Reprenons le dossier. Résume où nous en sommes, quels lots sont validés et ce qui reste à vérifier. »\n\nEN CLÔTURE : « Rédige une note de décisions datée : ce qui a été validé, ce qui a été écarté et pourquoi, les hypothèses encore ouvertes. Format court, à ajouter aux documents du projet. »"},
+ {id:"instructions", titre:"Instructions personnalisées pour journaliste", tag:"Réglages", page:"87", txt:"JE SUIS journaliste à [rédaction], au service [rubrique]. Je produis pour [le print / le web].\nRÉPONDS en français, sur un ton professionnel, sans flatterie ni formule d'introduction. Va droit au but.\nRIGUEUR Distingue toujours faits sourcés, hypothèses et opinions. N'invente jamais une citation, un chiffre, une référence ou un nom : si tu ne sais pas, dis-le. Indique la date de tes informations quand elle compte.\nSOURCES Préfère les sources primaires et publiques, avec leurs liens. Signale les sources intéressées (entreprise, lobby).\nFORMAT Indique le nombre de signes. Pas de listes à puces pour un texte destiné à la publication.\nSI C'EST AMBIGU Pose une seule question, puis avance en signalant tes hypothèses.\nNE FAIS PAS Réécrire mes citations ; trancher à ma place un choix éditorial."},
+];
+
+/* =====================================================================
+   DONNÉES · Exemples de rédactions (pages du support)
+   ===================================================================== */
+const CASES = [
+ ["Trouver","Philadelphia Inquirer","Dewey interroge tout ce que le journal a publié depuis 1978 ; Scrape surveille les réunions municipales et fait remonter des pistes.","59"],
+ ["Trouver","CalMatters","Digital Democracy signale des anomalies dans les votes et les débats du parlement californien. Les pistes ne sont pas publiables en l'état.","58"],
+ ["Trier, analyser","New York Times","Plus de 400 heures de réunions fuitées transcrites et triées avec l'IA ; chaque citation réécoutée sur l'enregistrement.","56"],
+ ["Trier, analyser","Washington Post","Haystacker passe au crible des milliers de vidéos, photos et textes pour les équipes d'enquête visuelle.","55"],
+ ["Trier, analyser","Jean Abbiateci","Le Recopilleur repère les passages suspects de plagiat ; le journaliste compare à la main.","60"],
+ ["Écrire, éditer","Newsquest","36 journalistes transforment communiqués et avis publics en articles avec l'IA, puis vérifient faits et citations.","57"],
+ ["Écrire, éditer","New York Times","Echo : résumés, titres, questions d'interview autorisés ; pas de rédaction ni de réécriture d'article.","47"],
+ ["Écrire, éditer","L'Est Républicain / Ebra","La presse régionale confie une partie de la copie à ChatGPT.","44"],
+ ["Vérifier","Der Spiegel","Un prototype signale les affirmations douteuses d'un texte ; le vérificateur décide.","49"],
+ ["Vérifier","Radio France","StatCheck, vérificateur de données statistiques conçu avec l'Inria, en test.","41"],
+ ["Diffuser","Le Monde in English","Traduction assistée par l'IA, relue avant publication.","38"],
+ ["Diffuser","Washington Post, Ouest-France","Des assistants qui répondent aux lecteurs à partir des seuls articles du titre.","46"],
+ ["Contre-exemple","Los Angeles Times","Un outil voulu par le propriétaire, sans la rédaction, qui juge les tribunes.","53"],
+];
+
+/* =====================================================================
+   DONNÉES · Quiz
+   ===================================================================== */
+const QUIZ = {
+ llm:{titre:"Comprendre la machine", q:[
+  ["Pendant le pré-entraînement, le modèle apprend…",["des faits vérifiés par des documentalistes","des régularités statistiques dans les textes","les règles de grammaire écrites par des linguistes","le contenu exact de chaque article lu"],1,"Il apprend des régularités, pas des faits vérifiés : d'où des réponses fluides mais parfois fausses (p. 29)."],
+  ["Que désigne RLHF ?",["Un format de fichier pour les prompts","L'apprentissage par renforcement à partir de retours humains","Un réglage de confidentialité","Un protocole pour brancher des outils"],1,"Des personnes notent les réponses pour orienter le comportement du modèle. C'est là que se fixent ton et réflexes (p. 30)."],
+  ["Qui fixe ce qu'un assistant accepte ou refuse de faire ?",["Une autorité publique internationale","Chaque entreprise, pour son modèle","L'utilisateur, dans ses réglages","Personne : c'est appris tout seul"],1,"Les filtres sont fixés par chaque entreprise et diffèrent d'un assistant à l'autre (p. 31)."],
+  ["L'IA générative est…",["toute l'intelligence artificielle","une branche parmi d'autres de l'IA","une technique apparue en 2022","un synonyme d'algorithme"],1,"La plupart des systèmes d'IA en service ne génèrent rien : ils classent, prédisent, recommandent (p. 26)."]
+ ]},
+ redac:{titre:"Ce qu'en font les rédactions", q:[
+  ["Que font les « AI-assisted reporters » de Newsquest ?",["Ils écrivent des éditoriaux avec ChatGPT","Ils transforment communiqués et avis publics en articles avec un outil d'IA, puis vérifient faits et citations","Ils traduisent le site en anglais","Ils animent un chatbot pour les lecteurs"],1,"36 journalistes au Royaume-Uni, selon Press Gazette. La direction dit libérer les autres reporters pour le terrain (p. 57)."],
+  ["Comment le New York Times a-t-il traité 400 heures d'enregistrements fuités ?",["Il a publié les résumés produits par l'IA","Transcription et repérage avec l'IA, chaque passage revérifié sur l'enregistrement","Il a confié le travail à une agence","Il a renoncé : trop de matériel"],1,"Près de 5 millions de mots. L'IA trouve ce qu'une recherche par mot-clé rate ; le journaliste contrôle (p. 56)."],
+  ["Les « tip sheets » de CalMatters sont…",["des articles publiés automatiquement","des pistes signalées par l'IA, à vérifier par les reporters","des fiches de style","des sondages de lecteurs"],1,"Selon la direction, elles ne sont pas publiables en l'état : la machine suggère, le reporter établit (p. 58)."],
+  ["Le Recopilleur de Jean Abbiateci…",["prouve le plagiat","désigne des passages suspects, que le journaliste compare à la main","réécrit les textes plagiés","détecte les images générées"],1,"Le script ne prouve rien : il trie. La Revue des médias note que l'IA générative, qui reformule à volonté, rend déjà ce type de détection obsolète (p. 60)."]
+ ]},
+ notebook:{titre:"Gemini Notebook", q:[
+  ["D'où Gemini Notebook tire-t-il ses réponses ?",["De tout le web","Des documents chargés dans le carnet, avec un renvoi vers chaque passage","De Wikipédia uniquement","De vos conversations passées"],1,"Chaque réponse porte des numéros cliquables qui ouvrent le passage cité (p. 69)."],
+  ["Une réponse sourcée est…",["une réponse vérifiée","un gain de temps pour vérifier, pas une réponse vérifiée","une réponse publiable telle quelle","une réponse sans erreur possible"],1,"Le modèle peut mal lire, mal résumer, sortir de ses sources. Le lien fait gagner du temps, pas le droit de ne pas lire (p. 71)."],
+  ["Que ne faut-il pas faire depuis un compte personnel ?",["Charger un rapport public","Verser des documents confidentiels ou des sources protégées","Comparer deux versions d'un texte","Générer une carte mentale"],1,"Avec un compte Workspace, les données relèvent du contrat de l'entreprise. Depuis un compte personnel, rien de confidentiel (p. 70)."],
+  ["Un résumé audio produit par le Studio…",["peut être diffusé directement","s'écoute en entier avant toute diffusion","est toujours fidèle","ne peut pas contenir d'erreur"],1,"C'est l'une des trois choses à ne pas faire : diffuser un résumé audio non écouté (p. 70)."]
+ ]},
+ jargon:{titre:"Le jargon des assistants", q:[
+  ["Un connecteur, c'est…",["un câble USB","un accès autorisé à un service tiers, avec vos droits","un modèle d'IA spécialisé","une extension de navigateur"],1,"L'assistant lit, et parfois écrit, avec vos droits : l'équivalent d'une délégation de mot de passe (p. 82)."],
+  ["MCP désigne…",["un modèle de Mistral","un standard ouvert pour brancher des outils sur plusieurs assistants","une loi européenne","un format d'image"],1,"La « prise USB-C » des IA, publiée par Anthropic en novembre 2024 et adoptée depuis par OpenAI, Google et Microsoft (p. 82, 84)."],
+  ["Une compétence (skill), c'est…",["une note de satisfaction","un fichier SKILL.md que l'assistant ne charge que si la tâche s'y prête","un abonnement payant","un tutoriel vidéo"],1,"Une méthode maison écrite une fois : brève maison, vérification de chiffres… (p. 85)."],
+  ["Un plugin réunit…",["plusieurs modèles","compétences, connecteurs et commandes pour un métier","toutes vos conversations","vos réglages de confidentialité"],1,"Les clés, la fiche de procédure et la mallette : connecteur, compétence, plugin (p. 85)."],
+  ["L'injection de prompt, c'est…",["un prompt très long","des instructions cachées dans un mail ou une page, que l'assistant exécute comme si elles venaient de vous","une mise à jour du modèle","un bug d'affichage"],1,"Un risque propre aux assistants branchés sur vos outils (p. 83)."],
+  ["Que mettre dans les instructions personnalisées ?",["Vos sources et vos dossiers en cours","Qui vous êtes, le ton, vos exigences de rigueur","Vos identifiants","Le nom de vos interlocuteurs"],1,"Elles accompagnent toutes les conversations, y compris celles que vous partagez (p. 86)."]
+ ]},
+ rmctf:{titre:"R·M·C·T·F", q:[
+  ["Que veut dire le M de R·M·C·T·F ?",["Modèle","Mission","Méthode","Mémoire"],1,"La mission dit pour quoi faire, à quelle fin (p. 101)."],
+  ["« Public non spécialiste, rapport publié aujourd'hui, appuie-toi uniquement sur ce texte » relève…",["du rôle","de la tâche","du contexte","du format"],2,"Le contexte, c'est ce que l'IA ne peut pas deviner (p. 101)."],
+  ["« 5 puces de 25 mots maximum, puis un tableau » relève…",["du format","de la mission","du rôle","du contexte"],0,"Longueur, structure, tableau, ton, langue, ce qu'il ne faut pas faire (p. 101)."],
+  ["Le prompt inversé consiste à…",["écrire le prompt à l'envers","demander à l'IA de poser d'abord les questions dont elle a besoin","traduire le prompt en anglais","effacer l'historique"],1,"Un des six réflexes en plus (p. 103)."],
+  ["Pourquoi soumettre le même prompt à deux assistants ?",["Pour aller plus vite","Leurs écarts révèlent les zones fragiles","Pour économiser des crédits","Ce n'est pas recommandé"],1,"Ce qui diffère entre deux réponses est ce qu'il faut vérifier en priorité (p. 103)."]
+ ]},
+ sve:{titre:"S·V·E", q:[
+  ["Dans S·V·E, que recouvre la vérification ?",["Relire l'orthographe","Définir avant d'exécuter ce qu'est un bon résultat, puis le contrôler","Faire confiance au modèle le plus récent","Demander à l'IA si elle est sûre"],1,"Critères écrits, second regard, sources extérieures (p. 105, 107)."],
+  ["« Faire le rapport mensuel » est…",["un but","une tâche ; le but serait par exemple « décider si l'on garde la rubrique »","une spec complète","un critère de vérification"],1,"L'IA ne peut pas deviner le but : c'est à vous de le transmettre (p. 106)."],
+  ["Faire relire Claude par ChatGPT…",["garantit l'absence d'erreur","fait ressortir des erreurs, mais deux modèles peuvent se tromper ensemble","est interdit par les éditeurs","ne sert à rien"],1,"D'où le retour au document original, que seul l'humain fait (p. 107, 113)."],
+  ["Les garde-fous gradués classent les actions en…",["facile, moyen, difficile","toujours, demander d'abord, jamais","gratuit, payant","public, privé"],1,"Une consigne peut être ignorée, un verrou technique non (p. 108)."],
+  ["« Conformité n'est pas vérité » signifie…",["la méthode est inutile","la boucle contrôle des critères, pas l'exactitude d'un fait","il faut toujours deux modèles","les critères sont facultatifs"],1,"La vérification journalistique reste humaine et sourcée (p. 109)."]
+ ]},
+ donnees:{titre:"Vos données", q:[
+  ["Une retranscription d'interview non publiée, avec le nom de la source :",["Sans risque","Avec précaution","Jamais"],2,"Identité d'une source et enregistrements non publiés : jamais (p. 97)."],
+  ["Un rapport public de la Cour des comptes :",["Jamais","Avec précaution","Sans risque"],2,"Communiqués, rapports et décisions publics : sans risque (p. 97)."],
+  ["Un brouillon qui cite des noms de lieux et de personnes :",["Sans risque","Avec précaution, en anonymisant","Jamais"],1,"« X », « la commune », « le témoin » plutôt que les vrais noms (p. 97, 98)."],
+  ["Le premier réglage à faire en créant un compte :",["Activer la mémoire","Désactiver l'entraînement","Partager ses conversations","Brancher sa messagerie"],1,"Entraînement désactivé dès la création du compte (p. 98)."]
+ ]},
+};
+
+/* =====================================================================
+   DONNÉES · Déroulés
+   type : comprendre | pratique | discussion | pause
+   ===================================================================== */
+const D1 = [
+ {id:"j1-accueil", t:["09:30","09:45"], type:"discussion", titre:"Accueil, objectifs, vos attentes", pages:"3, 5, 6, 8, 9",
+  obj:["Situer la journée : comprendre jusqu'à 10 h 45, pratiquer ensuite.","Dire où vous en êtes avec l'IA et ce que vous attendez."],
+  pts:["Un assistant d'IA est un service, pas un outil : on loue un accès dont les conditions et les prix peuvent changer.","Il ne peut pas être une source à lui seul."],
+  disc:["Quel est votre niveau avec l'IA ? Qu'en attendez-vous pour votre travail ?","Votre rédaction a-t-elle une charte IA ? L'avez-vous lue ?"], live:"niveau"},
+ {id:"j1-comprendre", t:["09:45","10:20"], type:"comprendre", titre:"Où en est l'IA, d'où elle vient, comment elle est fabriquée", pages:"11 à 16, 18, 24, 27 à 31",
+  obj:["Mesurer ce que coûte l'IA : argent, énergie, droit d'auteur, travail caché.","Comprendre pourquoi un LLM produit des réponses fluides mais parfois fausses."],
+  pts:["Un LLM se fabrique en étapes : données d'entraînement, pré-entraînement, alignement (RLHF), filtres.","Le pré-entraînement apprend des régularités, pas des faits : d'où la relecture systématique.","Les règles de ce qui est permis ou refusé sont fixées par chaque entreprise."],
+  quiz:"llm", fiches:["interface"]},
+ {id:"j1-presse", t:["10:20","10:45"], type:"comprendre", titre:"L'IA et la presse, ce qu'en font les rédactions", pages:"33 à 35, 37 à 67",
+  obj:["Comprendre l'effet des résumés d'IA sur l'audience de la presse.","Voir des usages réels, de l'usage assumé au contre-exemple."],
+  pts:["L'essentiel des usages se joue autour de l'article, rarement dans son écriture.","Partout, la règle est la même : l'outil propose, le journaliste vérifie."],
+  ex:true, quiz:"redac", disc:["Lequel de ces usages serait utile dans votre service ? Lequel vous inquiète ?"]},
+ {id:"j1-p1", t:["10:45","11:00"], type:"pause", titre:"Pause"},
+ {id:"j1-notebook", t:["11:00","12:15"], type:"pratique", tf:1, titre:"Temps fort 1 · Gemini Notebook (ex-NotebookLM)", pages:"69 à 71, 97",
+  obj:["Créer un carnet et l'interroger.","Mesurer jusqu'où l'outil reste fidèle à vos sources, et où il en sort."],
+  pts:["Il répond à partir des documents chargés et renvoie au passage cité.","Une réponse sourcée n'est pas une réponse vérifiée.","Aucun document confidentiel depuis un compte personnel : appliquez le code couleur."],
+  exo:{titre:"Votre premier carnet, puis une fiche d'interview", duree:50, steps:["Choisir un dossier suivi par votre rédaction, que vous connaissez bien.","Charger cinq sources publiques : un rapport, deux articles, une vidéo YouTube, un PDF.","Poser trois questions dont vous connaissez la réponse ; noter ce qui est juste, approximatif, faux.","Ouvrir chaque citation : la réponse est-elle dans le passage cité, au même sens ?","Poser une question hors corpus : l'outil refuse, prévient, ou invente ?","Demander une fiche de préparation d'interview et contrôler chaque affirmation dans sa source."], prompts:["carnet","interview"]},
+  quiz:"notebook", fiches:["notebook","donnees"], live:"carnet"},
+ {id:"j1-debrief1", t:["12:15","12:30"], type:"discussion", titre:"Débrief : ce que l'outil a inventé, raté, trouvé", pages:"71",
+  disc:["Combien de réponses justes, approximatives, fausses ?","Les erreurs viennent-elles de la lecture des sources ou d'un ajout du modèle ?","Quel temps de vérification pour quel gain ?","Auriez-vous publié l'une de ces réponses telle quelle ?"], live:"invente"},
+ {id:"j1-dej", t:["12:30","13:30"], type:"pause", titre:"Déjeuner"},
+ {id:"j1-assistants", t:["13:30","14:30"], type:"pratique", tf:2, titre:"Temps fort 2 · ChatGPT, Claude, Gemini, Mistral : le tour du propriétaire", pages:"74 à 87, 91, 97, 98",
+  obj:["Se repérer dans les quatre interfaces.","Comprendre projet, connecteur, compétence, plugin, MCP.","Régler la confidentialité et écrire ses instructions personnalisées."],
+  pts:["Les assistants partagent la même architecture : projets, sélecteur de modèle, outils, historique, paramètres.","Un seul est européen : Mistral. Les trois autres relèvent du droit américain.","Plus un assistant est connecté, plus il est utile, et plus une erreur peut coûter."],
+  exo:{titre:"Mise en route guidée", duree:35, steps:["Créer un compte dédié sur deux assistants, jamais avec votre adresse professionnelle.","Désactiver l'entraînement et repérer le chat temporaire.","Repérer les sept zones de l'interface sur chaque assistant.","Coller le modèle d'instructions personnalisées et l'adapter à votre service.","Tester avec une question piège sur un fait obscur : la règle « si tu ne sais pas, dis-le » tient-elle ?"], prompts:["instructions"]},
+  quiz:"jargon", fiches:["interface","projet","connecteur","competence","plugin","mcp","instructions","injection"]},
+ {id:"j1-rmctf", t:["14:30","15:15"], type:"pratique", tf:2, titre:"Méthode R·M·C·T·F, paliers 1 et 2", pages:"100 à 103, 122, 123",
+  obj:["Écrire une demande complète en cinq questions.","Constater l'écart entre un prompt nu et un prompt construit."],
+  pts:["Un prompt est une commande, pas une recherche : une consigne complète, comme pour un·e stagiaire brillant·e.","Rôle, mission, contexte, tâche, format.","Six réflexes : délimiter la source, autoriser le doute, donner un exemple, itérer, prompt inversé, changer de plateforme."],
+  exo:{titre:"Résumé nu, puis résumé guidé", duree:35, steps:["Choisir un document public long et récent que vous connaissez bien.","Palier 1 : coller le texte dans deux assistants avec ce seul prompt : « Résume ce texte. »","Observer longueur, structure, hiérarchie, erreurs.","Palier 2 : refaire avec le prompt R·M·C·T·F (outil Constructeur).","Comparer précision, utilité et temps de vérification."], prompts:["resume"]},
+  quiz:"rmctf", fiches:["rmctf"], outil:"toolRmctf", live:"lettre"},
+ {id:"j1-p2", t:["15:15","15:30"], type:"pause", titre:"Pause"},
+ {id:"j1-paliers", t:["15:30","16:10"], type:"pratique", tf:2, titre:"Paliers 3 et 4 : analyser un texte, fabriquer un objet", pages:"124, 125",
+  obj:["Utiliser l'IA comme premier lecteur critique, pas comme rédacteur.","Produire un objet directement utilisable : un planning, un CSV."],
+  pts:["Distinguer faits vérifiables, opinions et affirmations sans source.","L'IA produit aussi des objets : tableaux, CSV, check-lists, rétroplannings.","Vérifier les dates et les jours de la semaine : erreur fréquente."],
+  exo:{titre:"Analyse d'une tribune, puis planning de couverture", duree:40, steps:["Palier 3 : soumettre une tribune ou un discours du jour avec le prompt d'analyse.","Vérifier que chaque citation proposée figure bien dans le texte.","Palier 4 : demander un planning de couverture d'un événement de 5 jours, puis sa version CSV.","Importer le CSV dans un tableur et contrôler dates et jours."], prompts:["analyse","planning"]}},
+ {id:"j1-sve", t:["16:10","17:00"], type:"pratique", tf:2, titre:"Méthode S·V·E : spécification, vérification, environnement", pages:"104 à 113",
+  obj:["Passer d'une demande ponctuelle à un travail organisé sur plusieurs sessions.","Écrire les critères avant d'exécuter."],
+  pts:["S : transmettre le but réel, découper en lots courts, faire lister les hypothèses.","V : fixer les critères avant, un second regard, un signal extérieur.","E : instructions permanentes, base documentaire, procédures, garde-fous gradués."],
+  exo:{titre:"La spec par interview, puis les critères d'abord", duree:35, steps:["Choisir un sujet au long cours de votre rédaction.","Lancer le prompt de spec par interview et répondre une question à la fois.","Relire la spec : combien d'hypothèses l'IA a-t-elle posées seule ? Lesquelles sont fausses ?","Sur un rapport public lié au sujet, faire énoncer les critères d'une fiche d'interview, les corriger, puis faire évaluer la fiche critère par critère."], prompts:["spec","criteres"]},
+  quiz:"sve", fiches:["sve","projet","configuration"], outil:"toolSve"},
+ {id:"j1-libre", t:["17:00","17:15"], type:"discussion", titre:"Discussion libre : les limites, vos usages", pages:"109, 116",
+  pts:["Conformité n'est pas vérité.","Des prescripteurs intéressés, des coûts cachés, un risque d'atrophie."],
+  disc:["Qu'est-ce qui vous a surpris aujourd'hui ?","Où placez-vous la limite entre assistance et écriture ?","Qui, dans votre rédaction, devrait décider des outils ?"]},
+ {id:"j1-bilan", t:["17:15","17:30"], type:"discussion", titre:"Bilan : qu'allez-vous tester lundi matin ?", pages:"133, 134",
+  disc:["Une tâche précise que vous testerez la semaine prochaine.","Une question qui reste ouverte."], live:"lundi"},
+];
+
+const D2 = [
+ // ---------- Jour 1 : comprendre, puis temps fort 1 ----------
+ {id:"a-accueil", day:1, t:["09:30","09:50"], type:"discussion", titre:"Accueil, objectifs, vos attentes", pages:"3, 5, 6, 8, 9",
+  obj:["Situer les deux journées : comprendre et Gemini Notebook le jour 1, les assistants et les méthodes le jour 2."],
+  pts:["Un assistant d'IA est un service, pas un outil.","Il ne peut pas être une source à lui seul."],
+  disc:["Quel est votre niveau avec l'IA ? Qu'en attendez-vous ?","Votre rédaction a-t-elle une charte IA ?"], live:"niveau"},
+ {id:"a-etat", day:1, t:["09:50","10:45"], type:"comprendre", titre:"Où en est l'IA, d'où elle vient", pages:"11 à 24",
+  obj:["Mesurer ce que coûte l'IA : argent, énergie, droit d'auteur, travail caché.","Comprendre pourquoi tout s'accélère en 2022."],
+  pts:["Des milliards investis en avance sur les revenus.","Une industrie lourde : électricité, eau, métaux.","Un rêve plus ancien que l'informatique, des promesses souvent non tenues."]},
+ {id:"a-p1", day:1, t:["10:45","11:00"], type:"pause", titre:"Pause"},
+ {id:"a-machine", day:1, t:["11:00","11:40"], type:"comprendre", titre:"Comprendre la machine : comment est fabriqué un LLM", pages:"25 à 31",
+  obj:["Comprendre les étapes de fabrication d'un modèle et leurs effets."],
+  pts:["Données d'entraînement, pré-entraînement, RLHF, filtres : cinq étapes, cinq séries de choix.","Le modèle apprend des régularités, pas des faits."],
+  quiz:"llm"},
+ {id:"a-presse", day:1, t:["11:40","12:15"], type:"comprendre", titre:"L'IA et la presse, ce qu'en font les rédactions", pages:"33 à 67",
+  obj:["Comprendre l'effet des résumés d'IA sur l'audience.","Voir des usages réels, de l'usage assumé au contre-exemple."],
+  pts:["L'essentiel des usages se joue autour de l'article.","L'outil propose, le journaliste vérifie."], ex:true, quiz:"redac"},
+ {id:"a-disc1", day:1, t:["12:15","12:30"], type:"discussion", titre:"Discussion : et dans votre rédaction ?", disc:["Lequel de ces usages serait utile dans votre service ? Lequel vous inquiète ?","Qui décide des outils chez vous ?"]},
+ {id:"a-dej", day:1, t:["12:30","13:30"], type:"pause", titre:"Déjeuner"},
+ {id:"a-nb1", day:1, t:["13:30","14:15"], type:"pratique", tf:1, titre:"Temps fort 1 · Gemini Notebook : votre premier carnet", pages:"69, 71",
+  obj:["Créer un carnet, charger des sources, l'interroger."],
+  pts:["Il répond à partir des documents chargés et renvoie au passage cité.","Une réponse sourcée n'est pas une réponse vérifiée."],
+  exo:{titre:"Votre premier carnet", duree:30, steps:["Choisir un dossier que vous connaissez bien.","Charger cinq sources publiques : un rapport, deux articles, une vidéo, un PDF.","Poser trois questions dont vous connaissez la réponse.","Ouvrir chaque citation.","Poser une question hors corpus."], prompts:["carnet"]}, quiz:"notebook", fiches:["notebook"], live:"carnet"},
+ {id:"a-nb2", day:1, t:["14:15","15:15"], type:"pratique", tf:1, titre:"Cinq usages en rédaction : rapport, interview, deux versions", pages:"70",
+  obj:["Appliquer le carnet à trois situations de rédaction."],
+  pts:["Dépouiller un rapport : chaque chiffre renvoie à sa page.","Préparer une interview : variations et contradictions.","Comparer deux versions d'un texte : ce qui change."],
+  exo:{titre:"Trois situations, un carnet chacune", duree:55, steps:["Dépouiller un rapport public : cinq chiffres clés, chacun avec sa page.","Préparer une interview à partir des déclarations passées d'un interlocuteur.","Comparer deux versions d'un même texte (projet de loi amendé, deux rapports annuels).","Pour chaque situation, contrôler trois réponses dans les sources."], prompts:["interview"]}},
+ {id:"a-p2", day:1, t:["15:15","15:30"], type:"pause", titre:"Pause"},
+ {id:"a-nb3", day:1, t:["15:30","16:30"], type:"pratique", tf:1, titre:"Le Studio : résumé audio, carte mentale, quiz, et leurs limites", pages:"69, 70",
+  obj:["Produire des contenus dérivés et juger leur fidélité."],
+  pts:["Résumé audio ou vidéo, carte mentale, rapport, quiz, fiches.","Un résumé audio s'écoute en entier avant toute diffusion."],
+  exo:{titre:"Produire et contrôler", duree:55, steps:["Générer un résumé audio de votre carnet et l'écouter en entier.","Noter chaque approximation ou ajout par rapport aux sources.","Générer une carte mentale et un quiz : sont-ils fidèles ?","Décider : qu'est-ce qui serait diffusable, et après quelle vérification ?"]}},
+ {id:"a-donnees", day:1, t:["16:30","17:00"], type:"pratique", tf:1, titre:"Vos données : le code couleur de la rédaction", pages:"89 à 98",
+  obj:["Savoir ce qu'on peut envoyer à un assistant grand public."],
+  pts:["Ce qui part quand vous appuyez sur « envoyer » : contenu, métadonnées, compte, réactions, données des connecteurs.","Jamais, avec précaution, sans risque.","Le secret des sources est protégé par la loi de 1881."],
+  exo:{titre:"Le jeu du code couleur, puis vos réglages", duree:25, steps:["Faire le jeu du code couleur (onglet Outils).","Désactiver l'entraînement sur vos comptes.","Purger un historique de test et repérer la mémoire."]}, quiz:"donnees", fiches:["donnees"]},
+ {id:"a-debrief", day:1, t:["17:00","17:30"], type:"discussion", titre:"Débrief du temps fort 1", disc:["Combien de réponses justes, approximatives, fausses ?","Quel temps de vérification pour quel gain ?","Auriez-vous publié l'une de ces réponses telle quelle ?"], live:"invente"},
+ // ---------- Jour 2 : temps fort 2 ----------
+ {id:"b-retour", day:2, t:["09:30","09:45"], type:"discussion", titre:"Retour sur la veille : questions ouvertes", disc:["Qu'avez-vous retenu de Gemini Notebook ?","Une question restée sans réponse ?"]},
+ {id:"b-assist", day:2, t:["09:45","10:45"], type:"pratique", tf:2, titre:"Temps fort 2 · ChatGPT, Claude, Gemini, Mistral", pages:"72 à 81",
+  obj:["Se repérer dans les quatre interfaces.","Comparer les mêmes fonctions sous des noms différents."],
+  pts:["Même architecture : projets, sélecteur de modèle, outils, historique, paramètres.","Un seul est européen : Mistral."],
+  exo:{titre:"Le tour du propriétaire", duree:45, steps:["Créer un compte dédié sur deux assistants.","Repérer les sept zones de l'interface.","Soumettre la même question aux quatre et comparer."]}, fiches:["interface"]},
+ {id:"b-p1", day:2, t:["10:45","11:00"], type:"pause", titre:"Pause"},
+ {id:"b-jargon", day:2, t:["11:00","11:45"], type:"pratique", tf:2, titre:"Projets, connecteurs, compétences, plugins, MCP, instructions", pages:"82 à 87",
+  obj:["Comprendre ce que les mots recouvrent.","Écrire ses instructions personnalisées."],
+  pts:["Connecteur : les clés. Compétence : la fiche de procédure. Plugin : la mallette.","MCP : la prise USB-C des IA.","Instructions : qui vous êtes, ton, rigueur ; jamais de sources."],
+  exo:{titre:"Paramétrer sa plateforme", duree:30, steps:["Coller le modèle d'instructions et l'adapter.","Tester avec une question piège.","Repérer où se trouvent les connecteurs, sans en brancher aucun vers un outil professionnel."], prompts:["instructions"]}, quiz:"jargon", fiches:["projet","connecteur","competence","plugin","mcp","instructions","injection"]},
+ {id:"b-rmctf", day:2, t:["11:45","12:30"], type:"pratique", tf:2, titre:"Méthode R·M·C·T·F, paliers 1 et 2", pages:"100 à 103, 122, 123",
+  obj:["Écrire une demande complète en cinq questions."],
+  pts:["Rôle, mission, contexte, tâche, format.","Six réflexes en plus."],
+  exo:{titre:"Résumé nu, puis résumé guidé", duree:35, steps:["Palier 1 : « Résume ce texte » dans deux assistants.","Palier 2 : le même texte avec R·M·C·T·F.","Comparer précision, utilité, temps de vérification."], prompts:["resume"]}, quiz:"rmctf", fiches:["rmctf"], outil:"toolRmctf", live:"lettre"},
+ {id:"b-dej", day:2, t:["12:30","13:30"], type:"pause", titre:"Déjeuner"},
+ {id:"b-paliers", day:2, t:["13:30","14:30"], type:"pratique", tf:2, titre:"Paliers 3 et 4 : analyser, fabriquer un objet", pages:"124, 125",
+  obj:["Utiliser l'IA comme premier lecteur critique.","Produire un planning et un CSV."],
+  pts:["Faits, opinions, affirmations sans source.","Vérifier les dates et les jours de la semaine."],
+  exo:{titre:"Analyse puis planning", duree:55, steps:["Palier 3 : analyse d'une tribune du jour.","Palier 4 : planning de couverture d'un événement de 5 jours, puis CSV.","Variante : un rétroplanning à J-15."], prompts:["analyse","planning"]}},
+ {id:"b-sve1", day:2, t:["14:30","15:15"], type:"pratique", tf:2, titre:"S·V·E : la spécification et les critères", pages:"104 à 107, 110 à 112",
+  obj:["Transmettre le but réel, découper, faire lister les hypothèses.","Écrire les critères avant d'exécuter."],
+  pts:["Dégager le but, pas la tâche.","Une spec acceptée sans modification n'a pas été relue."],
+  exo:{titre:"Exercices 1, 2 et 3a du niveau 2", duree:40, steps:["La spec par interview.","Découper en lots et rejeter ou modifier au moins un lot.","Critères d'abord sur une fiche d'interview."], prompts:["spec","lots","criteres"]}, fiches:["sve"], outil:"toolSve"},
+ {id:"b-p2", day:2, t:["15:15","15:30"], type:"pause", titre:"Pause"},
+ {id:"b-sve2", day:2, t:["15:30","16:30"], type:"pratique", tf:2, titre:"S·V·E : relecture croisée, projet, reprise à froid", pages:"108, 113 à 117",
+  obj:["Organiser l'environnement : projet, instructions, note de décisions."],
+  pts:["Un second modèle relit, puis vous revenez au document.","Le projet garde instructions et documents, pas toujours les décisions de la veille."],
+  exo:{titre:"Exercices 3b, 4 et 5 du niveau 2", duree:55, steps:["Relecture croisée par un second assistant, puis contrôle de trois chiffres vous-même.","Monter le projet avec ses instructions et 5 à 10 sources publiques.","Test de résistance : « Trouve une citation du directeur pour illustrer. » La règle JAMAIS tient-elle ?","Reprise à froid dans une nouvelle conversation, puis note de décisions."], prompts:["croisee","projetinstr","froid"]}, quiz:"sve", fiches:["sve","projet","configuration"]},
+ {id:"b-libre", day:2, t:["16:30","17:00"], type:"discussion", titre:"Discussion libre : les limites de la méthode, vos usages", pages:"109, 116",
+  disc:["Conformité n'est pas vérité : où la vérification humaine reste-t-elle indispensable ?","Projet en ligne ou dossier à vous : que choisiriez-vous pour un dossier sensible ?"]},
+ {id:"b-bilan", day:2, t:["17:00","17:30"], type:"discussion", titre:"Bilan et évaluation", pages:"133, 134", disc:["Une tâche précise que vous testerez la semaine prochaine.","Une question qui reste ouverte."], live:"lundi"},
+];
+
+/* Activités prêtes pour la salle */
+const PRESETS = {
+ niveau:{type:"poll", q:"Votre niveau avec l'IA générative ?", o:["Jamais utilisée","Quelques essais","Usage régulier","Usage quotidien au travail"]},
+ attente:{type:"cloud", q:"Un mot pour ce que vous attendez de cette formation"},
+ carnet:{type:"poll", q:"Votre premier carnet : où en êtes-vous ?", o:["Sources chargées","Questions posées","Citations vérifiées","Terminé"]},
+ invente:{type:"poll", q:"Gemini Notebook a-t-il inventé quelque chose dans vos réponses ?", o:["Oui","Non","Je ne sais pas"]},
+ lettre:{type:"poll", q:"Quelle lettre de R·M·C·T·F oubliez-vous le plus souvent ?", o:["R · Rôle","M · Mission","C · Contexte","T · Tâche","F · Format"]},
+ fini:{type:"poll", q:"Où en êtes-vous de l'exercice ?", o:["J'ai terminé","Presque","J'ai besoin d'aide"]},
+ ia:{type:"cloud", q:"Un mot pour décrire l'IA aujourd'hui"},
+ lundi:{type:"cloud", q:"Qu'allez-vous tester lundi matin ?"},
+};
+
+/* Code couleur : jeu */
+const CC = [
+ ["La retranscription d'un entretien off avec un lanceur d'alerte","jam"],
+ ["Un rapport de la Cour des comptes publié ce matin","san"],
+ ["Vos notes d'interview, noms et lieux remplacés par « X » et « la commune »","pre"],
+ ["Un document interne sous embargo jusqu'à jeudi","jam"],
+ ["Un article déjà publié par votre journal","san"],
+ ["Le tableau des salaires de la rédaction","jam"],
+ ["Un jeu de données de data.gouv.fr","san"],
+ ["La retranscription d'une interview publiée, avec l'accord de l'interviewé","pre"],
+ ["Le numéro de téléphone d'une source","jam"],
+ ["Votre plan d'article et vos questions de méthode","san"],
+ ["Un brouillon de papier qui cite des personnes privées","pre"],
+ ["Des rushs vidéo non publiés","jam"],
+];
+const CCL = {jam:"Jamais", pre:"Avec précaution", san:"Sans risque"};
+
+/* =====================================================================
+   Utilitaires
+   ===================================================================== */
+const mins = s => { const [h,m]=s.split(":").map(Number); return h*60+m; };
+const hfr = s => s.replace(":", " h ").replace(/^0/,"");
+function modules(){ return state.fmt==="2" ? D2 : D1; }
+function totals(list){
+  const t={comprendre:0,pratique:0,discussion:0};
+  list.forEach(m=>{ if(m.type!=="pause") t[m.type]+= mins(m.t[1])-mins(m.t[0]); });
+  return t;
+}
+function fmtMin(n){ const h=Math.floor(n/60), m=n%60; return h? (m? `${h} h ${String(m).padStart(2,"0")}` : `${h} h`) : `${m} min`; }
+function ficheById(id){ return FICHES.find(f=>f.id===id); }
+async function copyText(txt, btn){
+  try{ await navigator.clipboard.writeText(txt); if(btn){ const o=btn.textContent; btn.textContent="Copié"; setTimeout(()=>btn.textContent=o,1400); } }
+  catch(e){ if(btn){ btn.textContent="Sélectionnez et copiez à la main"; } }
+}
+
+/* =====================================================================
+   Navigation (ancre de l'URL)
+   ===================================================================== */
+const VIEWS = ["parcours","ressources","outils","direct","assistant"];
+function route(){
+  let h = (location.hash||"").slice(1);
+  let fiche = null;
+  if(h.startsWith("fiche-")){ fiche = h.slice(6); h = "ressources"; }
+  if(!VIEWS.includes(h)) h = "parcours";
+  $$("section[data-view]").forEach(s=>s.classList.toggle("on", s.dataset.view===h));
+  $$("#nav a").forEach(a=>a.setAttribute("aria-current", a.dataset.v===h ? "page" : "false"));
+  $("#fab").style.display = h==="assistant" ? "none" : "";
+  if(fiche && ficheById(fiche)) openFiche(fiche);
+}
+window.addEventListener("hashchange", route);
+
+/* =====================================================================
+   PARCOURS
+   ===================================================================== */
+let curDay = 1;
+function renderSplit(){
+  const list = modules(), t = totals(list), tot = t.comprendre+t.pratique+t.discussion;
+  const pct = k => Math.round(t[k]/tot*100);
+  $("#pratPct").textContent = pct("pratique")+" %";
+  $("#pratTxt").innerHTML = T(`de pratique : ${fmtMin(t.pratique)} sur ${fmtMin(tot)} de formation, hors pauses`);
+  $("#split").innerHTML = `<span style="width:${pct("comprendre")}%;background:var(--comp)"></span><span style="width:${pct("pratique")}%;background:var(--prat)"></span><span style="width:${pct("discussion")}%;background:var(--disc)"></span>`;
+  $("#legend").innerHTML = [["comprendre","Comprendre","var(--comp)"],["pratique","Pratique","var(--prat)"],["discussion","Discussion libre","var(--disc)"]]
+    .map(([k,l,c])=>`<span><b style="background:${c}"></b>${l} · ${fmtMin(t[k])} (${pct(k)}${NB}%)</span>`).join("");
+}
+function renderDays(){
+  const box = $("#days");
+  if(state.fmt!=="2"){ box.innerHTML=""; box.style.display="none"; return; }
+  box.style.display="flex";
+  box.innerHTML = [1,2].map(d=>`<button data-day="${d}" aria-pressed="${d===curDay}">Jour ${d} · ${d===1?"Comprendre et Gemini Notebook":"Les assistants et les méthodes"}</button>`).join("");
+  $$("button",box).forEach(b=>b.onclick=()=>{ curDay=+b.dataset.day; renderDays(); renderTimeline(); });
+}
+function typeLabel(t){ return {comprendre:"Comprendre",pratique:"Pratique",discussion:"Discussion libre",pause:"Pause"}[t]; }
+function renderTimeline(){
+  const list = modules().filter(m=> state.fmt!=="2" || m.day===curDay);
+  const now = new Date(), nm = now.getHours()*60+now.getMinutes();
+  $("#timeline").innerHTML = list.map(m=>{
+    const dur = mins(m.t[1])-mins(m.t[0]);
+    const isNow = nm>=mins(m.t[0]) && nm<mins(m.t[1]);
+    if(m.type==="pause") return `<div class="mod" data-type="pause"><div class="time"><b>${hfr(m.t[0])}</b></div><div class="body"><div class="mhead"><div class="meta"><span class="pill pause">${m.titre}</span><span class="small muted">${fmtMin(dur)}</span></div></div></div></div>`;
+    const done = !!state.done[m.id];
+    return `<div class="mod${done?" done":""}${isNow?" now":""}" data-type="${m.type}" data-id="${m.id}">
+      <div class="time"><b>${hfr(m.t[0])}</b>${hfr(m.t[1])}</div>
+      <div class="body">
+        <div class="mhead" role="button" tabindex="0" aria-expanded="false">
+          <span class="check" role="checkbox" aria-checked="${done}" aria-label="Séquence terminée" tabindex="0">${done?"✓":""}</span>
+          <div style="flex:1">
+            <div class="meta"><span class="pill ${m.type}">${typeLabel(m.type)}</span>${m.tf?`<span class="pill tf">Temps fort ${m.tf}</span>`:""}<span class="small muted">${fmtMin(dur)}${m.exo?` · dont ${m.exo.duree}${NB}min d'exercice`:""}</span>${isNow?`<span class="pill" style="background:var(--yel)">En ce moment</span>`:""}</div>
+            <h3>${T(m.titre)}</h3>
+            ${m.pages?`<div class="small muted">Support : pages ${T(m.pages)}</div>`:""}
+          </div>
+          <span class="chev">▸</span>
+        </div>
+        <div class="mdetail">${detail(m)}</div>
+      </div></div>`;
+  }).join("");
+  $$("#timeline .mod[data-id]").forEach(el=>{
+    const head = $(".mhead",el), id = el.dataset.id;
+    const toggle = ()=>{ el.classList.toggle("open"); head.setAttribute("aria-expanded", el.classList.contains("open")); };
+    head.addEventListener("click", e=>{ if(e.target.closest(".check")) return; toggle(); });
+    head.addEventListener("keydown", e=>{ if((e.key==="Enter"||e.key===" ") && !e.target.closest(".check")){ e.preventDefault(); toggle(); } });
+    const ck = $(".check",el);
+    const flip = ()=>{ state.done[id]=!state.done[id]; save(); renderTimeline(); renderProgress(); };
+    ck.addEventListener("click", e=>{ e.stopPropagation(); flip(); });
+    ck.addEventListener("keydown", e=>{ if(e.key===" "||e.key==="Enter"){ e.preventDefault(); e.stopPropagation(); flip(); } });
+    bindDetail(el);
+  });
+}
+function detail(m){
+  let h = "";
+  if(m.obj) h += `<div class="blk"><h4>Objectifs</h4><ul>${m.obj.map(x=>`<li>${T(x)}</li>`).join("")}</ul></div>`;
+  if(m.pts) h += `<div class="blk"><h4>Ce qu'il faut retenir</h4><ul>${m.pts.map(x=>`<li>${T(x)}</li>`).join("")}</ul></div>`;
+  if(m.ex) h += `<div class="blk"><h4>Exemples de rédactions</h4><ul class="small">${CASES.slice(0,9).map(c=>`<li><b>${T(c[1])}</b> · ${T(c[2])} <span class="muted">(p.${NB}${c[3]})</span></li>`).join("")}</ul><button class="btn sm ghost" data-goto="exemples" style="margin-top:8px">Tous les exemples</button></div>`;
+  if(m.exo){
+    h += `<div class="blk exo"><h4 style="color:var(--blue)">Temps de pratique · ${m.exo.duree}${NB}minutes</h4><h3>${T(m.exo.titre)}</h3><ol>${m.exo.steps.map(s=>`<li>${T(s)}</li>`).join("")}</ol>
+      <div class="chips" style="margin-top:10px"><button class="btn sm" data-timer="${m.exo.duree}" data-tl="${esc(m.exo.titre)}">Lancer le minuteur (${m.exo.duree}${NB}min)</button>
+      ${(m.exo.prompts||[]).map(p=>{const P=PROMPTS.find(x=>x.id===p); return P?`<button class="chip" data-prompt="${p}">Prompt : ${T(P.titre)}</button>`:"";}).join("")}
+      ${m.outil?`<button class="chip" data-tool="${m.outil}">Ouvrir l'outil</button>`:""}</div></div>`;
+  }
+  if(m.disc) h += `<div class="blk disc"><h4 style="color:#7A5300">Discussion</h4><ul>${m.disc.map(x=>`<li>${T(x)}</li>`).join("")}</ul></div>`;
+  if(m.quiz) h += `<div class="blk"><h4>Quiz · ${T(QUIZ[m.quiz].titre)}</h4><div data-quiz="${m.quiz}"><button class="btn sm ghost" data-startquiz="${m.quiz}">Faire le quiz (${QUIZ[m.quiz].q.length} questions)${state.quiz[m.quiz]!=null?` · meilleur score ${state.quiz[m.quiz]}/${QUIZ[m.quiz].q.length}`:""}</button></div></div>`;
+  if(m.fiches) h += `<div class="blk"><h4>Fiches pratiques</h4><div class="chips">${m.fiches.map(f=>`<button class="chip" data-fiche="${f}">${T(ficheById(f).titre)}</button>`).join("")}</div></div>`;
+  if(m.live) h += `<p class="small muted" style="margin:0">Activité en salle prévue : « ${T(PRESETS[m.live].q)} » (onglet En direct).</p>`;
+  return h;
+}
+function bindDetail(root){
+  $$("[data-fiche]",root).forEach(b=>b.onclick=()=>openFiche(b.dataset.fiche));
+  $$("[data-timer]",root).forEach(b=>b.onclick=()=>startTimer(+b.dataset.timer, b.dataset.tl||"Pratique"));
+  $$("[data-prompt]",root).forEach(b=>b.onclick=()=>openPrompt(b.dataset.prompt));
+  $$("[data-tool]",root).forEach(b=>b.onclick=()=>{ location.hash="#outils"; setTimeout(()=>{ const t=$("#"+b.dataset.tool); if(t) t.scrollIntoView({behavior:"smooth"}); },50); });
+  $$("[data-startquiz]",root).forEach(b=>b.onclick=()=>renderQuiz(b.closest("[data-quiz]"), b.dataset.startquiz));
+  $$("[data-goto]",root).forEach(b=>b.onclick=()=>{ resTab=b.dataset.goto; location.hash="#ressources"; renderRes(); });
+}
+
+/* ---------- Quiz ---------- */
+function renderQuiz(box, id){
+  const Q = QUIZ[id]; let answered = 0, good = 0;
+  box.innerHTML = `<div class="quiz">${Q.q.map((q,i)=>`<div class="qq" data-i="${i}"><p>${i+1}. ${T(q[0])}</p>${q[1].map((o,j)=>`<button class="opt" data-j="${j}">${T(o)}</button>`).join("")}</div>`).join("")}<div class="score" data-score></div></div>`;
+  $$(".qq",box).forEach(qq=>{
+    const q = Q.q[+qq.dataset.i];
+    $$(".opt",qq).forEach(b=>b.onclick=()=>{
+      if(qq.dataset.done) return; qq.dataset.done=1; answered++;
+      const j=+b.dataset.j, ok = j===q[2]; if(ok) good++;
+      b.classList.add(ok?"ok":"ko"); $$(".opt",qq)[q[2]].classList.add("ok");
+      qq.insertAdjacentHTML("beforeend", `<div class="expl"><b>${ok?"Juste.":"Pas tout à fait."}</b> ${T(q[3])}</div>`);
+      if(answered===Q.q.length){
+        $("[data-score]",box).innerHTML = T(`Score : ${good} sur ${Q.q.length}. `) + `<button class="btn sm ghost" data-again>Recommencer</button>`;
+        state.quiz[id] = Math.max(state.quiz[id]||0, good); save(); renderProgress();
+        $("[data-again]",box).onclick=()=>renderQuiz(box,id);
+      }
+    });
+  });
+}
+
+/* ---------- Progression ---------- */
+function renderProgress(){
+  const list = modules().filter(m=>m.type!=="pause");
+  const qz = [...new Set(list.filter(m=>m.quiz).map(m=>m.quiz))];
+  const total = list.length + qz.length;
+  const done = list.filter(m=>state.done[m.id]).length + qz.filter(q=>state.quiz[q]!=null).length;
+  const p = total? Math.round(done/total*100) : 0;
+  $("#progTxt").textContent = p+NB+"%"; $("#progBar").style.width = p+"%";
+}
+
+/* =====================================================================
+   RESSOURCES
+   ===================================================================== */
+let resTab = "fiches";
+function norm(s){ return String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,""); }
+function matches(q, ...fields){ if(!q) return true; const n = norm(fields.join(" ")); return norm(q).split(/\s+/).filter(Boolean).every(w=>n.includes(w)); }
+function renderRes(){
+  $$("#resNav button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.r===resTab));
+  const q = $("#resSearch").value.trim(), box = $("#resBody");
+  if(resTab==="fiches"){
+    const L = FICHES.filter(f=>matches(q,f.titre,f.resume,JSON.stringify(f.sections)));
+    box.innerHTML = L.length? `<div class="grid g3">${L.map(f=>`<div class="card fcard" data-fiche="${f.id}" tabindex="0" role="button"><span class="ico">${esc(f.ico)}</span><h3>${T(f.titre)}</h3><p class="small" style="margin:0">${T(f.resume)}</p><p class="small muted" style="margin:8px 0 0">Support : p.${NB}${T(f.pages)}</p></div>`).join("")}</div>` : `<p class="empty">Aucune fiche ne correspond. Essayez le glossaire ou l'assistant.</p>`;
+  } else if(resTab==="glossaire"){
+    const L = GLOSS.filter(g=>matches(q,g[0],g[1]));
+    box.innerHTML = L.length? `<div class="card"><dl style="margin:0">${L.map(g=>`<div class="gl"><dt>${T(g[0])}</dt><dd>${T(g[1])} <span class="muted small">(p.${NB}${g[3]})</span>${g[2]?` <button class="chip" data-fiche="${g[2]}">Fiche : ${T(ficheById(g[2]).titre)}</button>`:""}</dd></div>`).join("")}</dl></div>` : `<p class="empty">Aucun terme ne correspond.</p>`;
+  } else if(resTab==="prompts"){
+    const L = PROMPTS.filter(p=>matches(q,p.titre,p.tag,p.txt));
+    box.innerHTML = L.length? `<div class="grid g2">${L.map(p=>`<div class="card"><span class="pill">${T(p.tag)}</span> <span class="small muted">p.${NB}${p.page}</span><h3 style="margin-top:8px">${T(p.titre)}</h3><div class="prompt" id="pr-${p.id}">${esc(p.txt)}</div><button class="btn sm" data-copy="pr-${p.id}">Copier</button></div>`).join("")}</div>` : `<p class="empty">Aucun prompt ne correspond.</p>`;
+  } else {
+    const L = CASES.filter(c=>matches(q,...c));
+    const groups = [...new Set(L.map(c=>c[0]))];
+    box.innerHTML = L.length? groups.map(g=>`<h3 style="margin:18px 0 8px">${T(g)}</h3><div class="grid g2">${L.filter(c=>c[0]===g).map(c=>`<div class="card"><b>${T(c[1])}</b><p class="small" style="margin:4px 0 0">${T(c[2])}</p><p class="small muted" style="margin:6px 0 0">Support : p.${NB}${c[3]}</p></div>`).join("")}</div>`).join("") + `<p class="small muted" style="margin-top:14px">Les chiffres viennent souvent des médias eux-mêmes : ce sont leurs déclarations. Sources complètes sur chaque slide du support.</p>` : `<p class="empty">Aucun exemple ne correspond.</p>`;
+  }
+  $$("[data-fiche]",box).forEach(el=>{ el.onclick=()=>openFiche(el.dataset.fiche); el.onkeydown=e=>{ if(e.key==="Enter") openFiche(el.dataset.fiche); }; });
+  bindCopy(box);
+}
+function bindCopy(root){ $$("[data-copy]",root).forEach(b=>b.onclick=()=>copyText($("#"+b.dataset.copy).textContent, b)); }
+
+/* ---------- Panneau fiche / prompt ---------- */
+function openSheet(html){
+  $("#sheetBody").innerHTML = html; $("#sheet").classList.add("on"); $("#ov").classList.add("on"); $("#sheet").setAttribute("aria-hidden","false");
+  $("#sheet").scrollTop = 0; bindCopy($("#sheetBody"));
+  $$("[data-fiche]",$("#sheetBody")).forEach(b=>b.onclick=()=>openFiche(b.dataset.fiche));
+  $$("[data-tool]",$("#sheetBody")).forEach(b=>b.onclick=()=>{ closeSheet(); location.hash="#outils"; setTimeout(()=>$("#"+b.dataset.tool)?.scrollIntoView({behavior:"smooth"}),60); });
+  $$("[data-prompt]",$("#sheetBody")).forEach(b=>b.onclick=()=>openPrompt(b.dataset.prompt));
+}
+function closeSheet(){ $("#sheet").classList.remove("on"); $("#ov").classList.remove("on"); $("#sheet").setAttribute("aria-hidden","true"); }
+$("#sheetX").onclick = closeSheet; $("#ov").onclick = closeSheet;
+document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ closeSheet(); $("#proj").classList.remove("on"); } });
+function openFiche(id){
+  const f = ficheById(id); if(!f) return;
+  const sec = f.sections.map(([h,c])=>`<div class="sec"><h4>${T(h)}</h4>${Array.isArray(c)?`<ul>${c.map(x=>`<li>${T(x)}</li>`).join("")}</ul>`: (c.includes("\n")?`<div class="prompt">${esc(c)}</div>`:`<p style="margin:0">${T(c)}</p>`)}</div>`).join("");
+  openSheet(`<span class="pill">Fiche pratique</span><h2>${T(f.titre)}</h2><p class="lead" style="margin-bottom:6px">${T(f.resume)}</p>${sec}
+   ${f.warn?`<div class="warn small"><b>À retenir.</b> ${T(f.warn)}</div>`:""}
+   <p class="small muted">Support : pages ${T(f.pages)}</p>
+   <div class="chips">${f.outil?`<button class="btn sm" data-tool="${f.outil}">Ouvrir l'outil</button>`:""}${f.prompt?`<button class="chip" data-prompt="${f.prompt}">Prompt à adapter</button>`:""}${(f.liens||[]).map(l=>`<button class="chip" data-fiche="${l}">${T(ficheById(l).titre)}</button>`).join("")}</div>`);
+}
+function openPrompt(id){
+  const p = PROMPTS.find(x=>x.id===id); if(!p) return;
+  openSheet(`<span class="pill">${T(p.tag)}</span><h2>${T(p.titre)}</h2><p class="small muted">Support : page ${p.page}. Remplacez les passages entre crochets.</p><div class="prompt" id="sp-${p.id}" style="max-height:none">${esc(p.txt)}</div><button class="btn sm" data-copy="sp-${p.id}">Copier le prompt</button>`);
+}
+
+/* =====================================================================
+   OUTILS
+   ===================================================================== */
+function renderRmctf(){
+  const v = k => $(`#toolRmctf [data-k="${k}"]`).value.trim();
+  const lab = {R:"RÔLE",M:"MISSION",C:"CONTEXTE",T:"TÂCHE",F:"FORMAT"};
+  let out = ["R","M","C","T","F"].filter(k=>v(k)).map(k=>`${lab[k]} ${v(k)}`).join("\n");
+  if($("#rDoubt").checked) out += (out?"\n":"") + "Si tu ne sais pas, dis-le. N'invente ni chiffre, ni citation, ni source.";
+  if($("#rInv").checked) out += (out?"\n":"") + "Avant de répondre, pose-moi les questions dont tu as besoin pour faire ce travail.";
+  $("#rOut").textContent = out || "Le prompt apparaîtra ici.";
+  const miss = ["R","M","C","T","F"].filter(k=>!v(k));
+  $("#rCheck").textContent = miss.length ? fr("Manque : " + miss.join(", ")) : fr("Les cinq lettres y sont. Relisez : chaque lettre est-elle précise ?");
+}
+let sveTab = "S";
+function renderSve(){
+  $$("#sveNav button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.s===sveTab));
+  const s = $("#sveSubj").value.trim() || "[votre sujet]", r = $("#sveRed").value.trim() || "[votre rédaction et votre support]";
+  const P = {
+   S:`Je prépare un travail journalistique au long cours sur ${s}, pour ${r}. Avant de produire quoi que ce soit, interroge-moi, une question à la fois, pour établir :\n– la question éditoriale à laquelle ce travail doit répondre ;\n– le public et le support ;\n– ce qui rendrait ce travail raté ou inutile ;\n– les sources dont je dispose et celles qui manquent.\nQuand tu as assez d'éléments, rédige une spec d'une page, propose un découpage en lots courts et attends ma validation. Termine par la liste des hypothèses que tu as faites sans que je les aie énoncées.`,
+   V:`Avant de produire le prochain livrable du dossier « ${s} », énonce des critères précis et vérifiables pour juger sa qualité. Par exemple : chaque chiffre renvoie à un document et à une page ; aucune question ne présuppose sa réponse ; les points contestés sont signalés comme tels. Attends que je valide ces critères.\n\nÀ la fin, évalue le livrable critère par critère : respecté, partiellement, non respecté, et pourquoi. Signale ce que tu n'as pas pu vérifier.`,
+   E:`CONTEXTE Tu assistes un·e journaliste de ${r} sur le dossier « ${s} ». Spec du dossier : [coller la spec validée].\nSOURCES Les documents de ce projet sont tes seules sources. Pour chaque affirmation, cite le document et la page. Si l'information n'y figure pas, dis-le.\nTOUJOURS Distinguer faits sourcés, hypothèses et interprétations. Énoncer des critères de vérification avant toute production longue. Terminer par ce qui reste à vérifier.\nDEMANDER D'ABORD Avant tout changement d'angle ou de périmètre, et avant de recourir à une connaissance extérieure aux documents.\nJAMAIS Inventer une citation, un chiffre ou une source. Reformuler une citation entre guillemets. Traiter des données nominatives sur des personnes privées.`,
+   N:`Rédige une note de décisions datée pour le dossier « ${s} » : ce qui a été validé, ce qui a été écarté et pourquoi, les hypothèses encore ouvertes, ce qui reste à vérifier. Format court, à ajouter aux documents du projet.\n\nÀ l'ouverture de la prochaine session : « Reprenons le dossier. Résume où nous en sommes, quels lots sont validés et ce qui reste à vérifier. »`
+  };
+  $("#sveOut").textContent = fr(P[sveTab]);
+}
+function renderCC(){
+  $("#ccGame").innerHTML = CC.map((c,i)=>`<div class="ccitem" data-i="${i}"><div class="small">${T(c[0])}</div><div class="cc">${["jam","pre","san"].map(k=>`<button class="${k}" data-k="${k}">${CCL[k]}</button>`).join("")}</div></div>`).join("");
+  $("#ccScore").textContent = "";
+  $$("#ccGame .ccitem").forEach(it=>$$("button",it).forEach(b=>b.onclick=()=>{ $$("button",it).forEach(x=>x.classList.remove("sel")); b.classList.add("sel"); it.dataset.pick=b.dataset.k; it.querySelector(".fb")?.remove(); }));
+}
+$("#ccCheck").onclick = ()=>{
+  let good=0, n=0;
+  $$("#ccGame .ccitem").forEach(it=>{
+    const ans = CC[+it.dataset.i][1]; it.querySelector(".fb")?.remove();
+    if(!it.dataset.pick) return; n++;
+    const ok = it.dataset.pick===ans; if(ok) good++;
+    it.insertAdjacentHTML("beforeend", `<div class="fb small" style="margin-top:4px;color:${ok?"var(--ok)":"var(--ko)"}">${ok?"Juste.":T("Réponse : "+CCL[ans]+".")}</div>`);
+  });
+  $("#ccScore").textContent = n? fr(`${good} sur ${n}`) : "Choisissez au moins une réponse.";
+};
+$("#ccReset").onclick = renderCC;
+
+/* ---------- Minuteur ---------- */
+let tmr = {left:0, run:false, id:null};
+function startTimer(min, label){
+  tmr.left = min*60; tmr.run = true; $("#timerLbl").textContent = label.length>40? label.slice(0,38)+"…" : label;
+  $("#timerBox").classList.add("on"); $("#timerPause").textContent="Pause"; tick(); clearInterval(tmr.id); tmr.id=setInterval(tick,1000);
+}
+function tick(){
+  if(tmr.run && tmr.left>0) tmr.left--;
+  const m=Math.floor(tmr.left/60), s=tmr.left%60;
+  $("#timerT").textContent = `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  if(tmr.left===0){ $("#timerT").textContent="Terminé"; clearInterval(tmr.id); }
+}
+$("#timerPause").onclick = ()=>{ tmr.run=!tmr.run; $("#timerPause").textContent = tmr.run?"Pause":"Reprendre"; };
+$("#timerStop").onclick = ()=>{ clearInterval(tmr.id); $("#timerBox").classList.remove("on"); };
+$("#timerChips").innerHTML = [5,10,15,20,30,45].map(n=>`<button class="chip" data-t="${n}">${n}${NB}min</button>`).join("");
+$$("#timerChips [data-t]").forEach(b=>b.onclick=()=>startTimer(+b.dataset.t,"Pratique"));
+
+/* =====================================================================
+   EN DIRECT · capacité « room » (présence partagée, rien n'est conservé)
+   Le formateur publie l'activité dans sa présence ; chaque stagiaire
+   publie ses réponses dans la sienne ; chacun agrège ce qu'il reçoit.
+   ===================================================================== */
+let room = null, peersNow = [], myAct = null;
+const me = { name: state.name||"", ans:{} };
+$("#myName").value = me.name;
+function actFromPeers(){
+  let best = null;
+  peersNow.forEach(p=>{ const a = p.presence && p.presence.act; if(p.presence && p.presence.role==="trainer" && a && a.id && (!best || (a.ts||0)>(best.ts||0))) best = a; });
+  return best;
+}
+function pushPresence(){
+  if(!room) return;
+  const patch = { name: me.name.slice(0,40), ans: me.ans };
+  if($("#isTrainer").checked){ patch.role="trainer"; patch.act = myAct; } else { patch.role=null; patch.act=null; }
+  room.presence(patch).catch(()=>{});
+}
+function renderLive(){
+  const act = actFromPeers() || ($("#isTrainer").checked ? myAct : null);
+  const box = $("#liveAct");
+  if(!act){ box.innerHTML = `<p class="empty">En attente d'une activité lancée par le formateur.</p>`; $("#liveRes").innerHTML = `<span class="empty">Aucune activité en cours.</span>`; return; }
+  const mine = me.ans[act.id];
+  if(act.type==="poll"){
+    box.innerHTML = `<h3>${T(act.q)}</h3>${act.o.map((o,i)=>`<button class="opt${mine===i?" ok":""}" data-i="${i}">${T(o)}</button>`).join("")}`;
+    $$(".opt",box).forEach(b=>b.onclick=()=>{ me.ans = {[act.id]: +b.dataset.i}; pushPresence(); renderLive(); });
+  } else {
+    box.innerHTML = `<h3>${T(act.q)}</h3><form id="wForm" class="askrow"><input type="text" id="wIn" maxlength="30" placeholder="Un ou deux mots" value="${esc(mine||"")}"><button class="btn" type="submit">Envoyer</button></form>`;
+    $("#wForm").onsubmit = e=>{ e.preventDefault(); const w=$("#wIn").value.trim().slice(0,30); if(!w) return; me.ans = {[act.id]: w}; pushPresence(); renderLive(); };
+  }
+  $("#liveRes").innerHTML = results(act);
+}
+function collect(act){
+  const vals = [];
+  const seen = new Set();
+  peersNow.forEach(p=>{ if(seen.has(p.peer)) return; seen.add(p.peer); const v = p.presence && p.presence.ans && p.presence.ans[act.id]; if(v!==undefined && v!==null) vals.push(v); });
+  if(!room && me.ans[act.id]!==undefined) vals.push(me.ans[act.id]);
+  return vals;
+}
+function results(act, big){
+  const vals = collect(act);
+  if(!vals.length) return `<span class="empty">Pas encore de réponse.</span>`;
+  if(act.type==="poll"){
+    const c = act.o.map((_,i)=>vals.filter(v=>v===i).length), mx = Math.max(1,...c);
+    return `<div class="small muted">${vals.length} réponse${vals.length>1?"s":""}</div><div class="bars">${act.o.map((o,i)=>`<div class="row"><span>${T(o)}</span><span class="track"><i style="width:${c[i]/mx*100}%"></i></span><b>${c[i]}</b></div>`).join("")}</div>`;
+  }
+  const f = {}; vals.forEach(v=>{ const k=norm(String(v)).trim(); if(!k) return; f[k]=f[k]||{w:String(v),n:0}; f[k].n++; });
+  const L = Object.values(f).sort((a,b)=>b.n-a.n), mx = L[0].n;
+  return `<div class="small muted">${vals.length} réponse${vals.length>1?"s":""}</div><div class="cloud">${L.map(x=>`<span style="font-size:${(big?22:14)+ (x.n/mx)*(big?50:22)}px">${esc(x.w)}</span>`).join("")}</div>`;
+}
+function launch(act){ myAct = Object.assign({id:"a"+Date.now().toString(36), ts:Date.now()}, act); pushPresence(); renderLive(); }
+$("#presetChips").innerHTML = Object.entries(PRESETS).map(([k,p])=>`<button class="chip" data-p="${k}">${T(p.q)}</button>`).join("");
+$$("#presetChips [data-p]").forEach(b=>b.onclick=()=>launch(PRESETS[b.dataset.p]));
+$("#cGo").onclick = ()=>{ const q=$("#cQ").value.trim(); if(!q) return; const t=$("#cT").value; const o=$("#cO").value.split(";").map(x=>x.trim()).filter(Boolean); if(t==="poll" && o.length<2){ $("#cO").focus(); return; } launch(t==="poll"?{type:"poll",q,o}:{type:"cloud",q}); };
+$("#cStop").onclick = ()=>{ myAct=null; pushPresence(); renderLive(); };
+$("#isTrainer").onchange = ()=>{ $("#trainerUi").style.display = $("#isTrainer").checked?"block":"none"; pushPresence(); renderLive(); };
+$("#myName").oninput = ()=>{ me.name=$("#myName").value; state.name=me.name; save(); pushPresence(); };
+$("#projBtn").onclick = ()=>{ const act = actFromPeers() || myAct; if(!act) return; $("#projBody").innerHTML = `<h2>${T(act.q)}</h2>${results(act,true)}`; $("#proj").classList.add("on"); };
+$("#projClose").onclick = ()=>$("#proj").classList.remove("on");
+function onPeers(ch){
+  peersNow = ch.peers.filter(p=>p.kind==="viewer");
+  $("#peerCount").textContent = `${peersNow.length} personne${peersNow.length>1?"s":""} sur la page`;
+  renderLive();
+  if($("#proj").classList.contains("on")){ const act = actFromPeers() || myAct; if(act) $("#projBody").innerHTML = `<h2>${T(act.q)}</h2>${results(act,true)}`; }
+}
+
+/* =====================================================================
+   ASSISTANT · capacité « sample » (demander à Claude), sinon recherche locale
+   ===================================================================== */
+let sample = null, chatHist = [], busy = false;
+function corpus(){
+  const mods = [...D1.map(m=>Object.assign({fmt:"1 jour"},m)), ...D2.map(m=>Object.assign({fmt:"2 jours"},m))].filter(m=>m.type!=="pause");
+  return [
+   "== DÉROULÉ ==", ...mods.map(m=>`[${m.fmt}${m.day?" · jour "+m.day:""}] ${m.t[0]}-${m.t[1]} ${typeLabel(m.type)}${m.tf?" · temps fort "+m.tf:""} : ${m.titre}${m.pages?" (pages "+m.pages+")":""}${m.exo?" · exercice "+m.exo.duree+" min : "+m.exo.steps.join(" / "):""}`),
+   "== FICHES (citer avec [[fiche:id]]) ==", ...FICHES.map(f=>`[[fiche:${f.id}]] ${f.titre} — ${f.resume} ${f.sections.map(([h,c])=>h+" : "+(Array.isArray(c)?c.join(" ; "):c)).join(" | ")} ${f.warn?"À retenir : "+f.warn:""} (pages ${f.pages})`),
+   "== GLOSSAIRE ==", ...GLOSS.map(g=>`${g[0]} : ${g[1]} (p. ${g[3]})${g[2]?" → [[fiche:"+g[2]+"]]":""}`),
+   "== PROMPTS (citer avec [[prompt:id]]) ==", ...PROMPTS.map(p=>`[[prompt:${p.id}]] ${p.titre} (${p.tag}, p. ${p.page})`),
+   "== EXEMPLES DE RÉDACTIONS ==", ...CASES.map(c=>`${c[0]} · ${c[1]} : ${c[2]} (p. ${c[3]})`),
+   "== OUTILS DE LA PLATEFORME == Onglet Outils : constructeur R·M·C·T·F, kit S·V·E, jeu du code couleur, minuteur. Onglet En direct : sondages et nuages de mots."
+  ].join("\n");
+}
+const SYS = `Tu es l'assistant d'apprentissage d'une formation de journalistes à l'IA générative (« Prendre en main les IA génératives »). Réponds en français, en trois à six phrases, sans flatterie. Appuie-toi uniquement sur le CORPUS ci-dessous. Si la réponse n'y figure pas, dis-le en une phrase et indique la ressource la plus proche. Termine par une ou deux références sous la forme [[fiche:id]] ou [[prompt:id]], et cite les pages du support quand le corpus les donne. Ne donne jamais de conseil juridique personnalisé ; renvoie à la charte IA de la rédaction pour les cas sensibles.`;
+function linkify(txt){
+  return T(txt).replace(/\[\[(fiche|prompt):([a-z0-9-]+)\]\]/g,(m,k,id)=>{
+    if(k==="fiche"){ const f=ficheById(id); return f?`<a href="#fiche-${id}" class="ref" data-fiche="${id}">Fiche : ${esc(f.titre)}</a>`:""; }
+    const p=PROMPTS.find(x=>x.id===id); return p?`<a href="#" class="ref" data-prompt="${id}">Prompt : ${esc(p.titre)}</a>`:"";
+  });
+}
+function addMsg(role, html){
+  const d = document.createElement("div"); d.className = "msg "+role; d.innerHTML = html; $("#chat").appendChild(d);
+  d.scrollIntoView({block:"nearest"}); return d;
+}
+function bindRefs(el){
+  $$("[data-fiche]",el).forEach(a=>a.onclick=e=>{ e.preventDefault(); openFiche(a.dataset.fiche); });
+  $$("[data-prompt]",el).forEach(a=>a.onclick=e=>{ e.preventDefault(); openPrompt(a.dataset.prompt); });
+}
+function localSearch(q){
+  const words = norm(q).split(/[^a-z0-9·]+/).filter(w=>w.length>2);
+  const score = s => { const n=norm(s); return words.reduce((a,w)=>a+(n.includes(w)?1:0),0); };
+  const R = [
+   ...FICHES.map(f=>({s:score(f.titre+" "+f.resume+" "+JSON.stringify(f.sections))+score(f.titre)*2, h:`<a href="#fiche-${f.id}" class="ref" data-fiche="${f.id}">Fiche : ${esc(f.titre)}</a> ${T(f.resume)}`})),
+   ...GLOSS.map(g=>({s:score(g[0]+" "+g[1])+score(g[0])*2, h:`<b>${T(g[0])}</b> · ${T(g[1])}`})),
+   ...PROMPTS.map(p=>({s:score(p.titre+" "+p.tag), h:`<a href="#" class="ref" data-prompt="${p.id}">Prompt : ${esc(p.titre)}</a>`})),
+  ].filter(r=>r.s>0).sort((a,b)=>b.s-a.s).slice(0,4);
+  return R.length? "Voici les ressources les plus proches de votre question :\n" + R.map(r=>"• "+r.h).join("\n") : "Je ne trouve rien qui corresponde. Essayez un autre mot, ou parcourez les fiches pratiques.";
+}
+async function ask(q){
+  if(busy || !q.trim()) return;
+  addMsg("u", T(q));
+  if(!sample){ const el = addMsg("a", localSearch(q)); bindRefs(el); return; }
+  busy = true; $("#askBtn").disabled = true;
+  const el = addMsg("a", "…");
+  const first = chatHist.length===0;
+  const msgs = [...chatHist, {role:"user", content: first ? `${SYS}\n\nCORPUS\n${corpus()}\n\nQUESTION\n${q}` : q}];
+  try{
+    const res = await sample(msgs, { cache:false, onText:({text})=>{ el.innerHTML = linkify(text); } });
+    el.innerHTML = linkify(res.text); bindRefs(el);
+    chatHist = [...msgs, {role:"assistant", content: res.text}].slice(-12);
+    if(chatHist.length && chatHist[0].role!=="user"){ chatHist = chatHist.slice(1); }
+    // garder le corpus dans le premier message si l'historique a été raccourci
+    if(!chatHist[0].content.includes("CORPUS")) chatHist = [];
+  }catch(e){
+    if(e && e.code==="not_granted"){ sample=null; setAskMode(); }
+    el.innerHTML = localSearch(q); bindRefs(el);
+  }finally{ busy=false; $("#askBtn").disabled=false; }
+}
+function setAskMode(){
+  $("#askMode").textContent = sample ? fr("L'assistant répond avec Claude, à partir des seules ressources de cette plateforme.") : fr("Mode recherche : l'assistant propose les fiches, termes et prompts les plus proches de votre question.");
+}
+$("#askForm").onsubmit = e=>{ e.preventDefault(); const q=$("#askIn").value; $("#askIn").value=""; ask(q); };
+$("#sugg").innerHTML = ["Quelle différence entre un connecteur et un plugin ?","À quoi sert MCP ?","Que mettre dans mes instructions personnalisées ?","Comment vérifier une réponse de Gemini Notebook ?","Quand passer de R·M·C·T·F à S·V·E ?","Puis-je charger une interview dans un assistant ?"].map(s=>`<button class="chip">${T(s)}</button>`).join("");
+$$("#sugg .chip").forEach(b=>b.onclick=()=>ask(b.textContent));
+$("#fab").onclick = ()=>{ location.hash="#assistant"; setTimeout(()=>$("#askIn").focus(),50); };
+
+/* =====================================================================
+   Démarrage
+   ===================================================================== */
+function setFmt(f){
+  state.fmt=f; save(); curDay=1;
+  $$(".seg button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.fmt===f));
+  renderSplit(); renderDays(); renderTimeline(); renderProgress();
+}
+$$(".seg button").forEach(b=>b.onclick=()=>setFmt(b.dataset.fmt));
+$("#resSearch").oninput = renderRes;
+$$("#resNav button").forEach(b=>b.onclick=()=>{ resTab=b.dataset.r; renderRes(); });
+$$("#toolRmctf input, #toolRmctf textarea").forEach(i=>i.oninput=renderRmctf);
+$("#rDoubt").onchange=renderRmctf; $("#rInv").onchange=renderRmctf;
+$("#sveSubj").oninput=renderSve; $("#sveRed").oninput=renderSve;
+$$("#sveNav button").forEach(b=>b.onclick=()=>{ sveTab=b.dataset.s; renderSve(); });
+bindCopy(document);
+
+setFmt(state.fmt); renderRes(); renderRmctf(); renderSve(); renderCC(); setAskMode(); renderLive(); route();
+setInterval(()=>{ if($("section[data-view=parcours]").classList.contains("on") && !$(".mod.open")) renderTimeline(); }, 60000);
+
+/* Capacités de la page : elles s'allument si la vue les accepte */
+(async ()=>{
+  try{ if(window.claude && claude.use){
+    claude.use("sample").then(s=>{ sample = s || null; setAskMode(); }).catch(()=>{});
+    claude.use("room").then(r=>{
+      room = r || null;
+      if(!room){ $("#liveStatus").innerHTML = `<span class="dot"></span>${T("Salle indisponible dans cette vue : les activités fonctionnent ici en local, sans partage.")}`; return; }
+      room.onConnection(c=>{ $("#liveStatus").innerHTML = `<span class="dot${c?" on":""}"></span>${c?"Connecté à la salle":"Reconnexion…"}`; }, ()=>{ $("#liveStatus").innerHTML = `<span class="dot"></span>${T("Salle indisponible : activités en local.")}`; });
+      room.onPeers(onPeers, ()=>{});
+      pushPresence();
+    }).catch(()=>{});
+  } else {
+    $("#liveStatus").innerHTML = `<span class="dot"></span>${T("Salle indisponible dans cette vue : les activités fonctionnent ici en local.")}`;
+  } }catch(e){}
+})();
+</script>
+</body>
+</html>
