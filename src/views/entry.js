@@ -5,7 +5,7 @@
    4. support de formation (téléchargeable une heure avant la fin)
    → tableau de bord de la session. */
 import { $, T, esc, guard, toast } from "../lib/dom.js";
-import { resolveBranding, logosHtml, datesFr, hhmm, emargementQr } from "../lib/brand.js";
+import { resolveBranding, logosHtml, datesFr, hhmm, emargementQr, samsaHtml } from "../lib/brand.js";
 
 export async function viewEntry(root, [code], ctx) {
   const { api, go } = ctx;
@@ -23,7 +23,7 @@ export async function viewEntry(root, [code], ctx) {
     user = await api.currentUser();
     if (step === "title") {
       root.innerHTML = slide(`
-        ${logosHtml(br, "lg")}
+        ${logosHtml(br, "lg", true)}
         <div class="slide-kick">Formation</div>
         <div class="slide-title">${T(pub.formation)}</div>
         ${pub.title && pub.title !== pub.formation ? `<p class="slide-sub">${T(pub.title)}</p>` : ""}
@@ -37,7 +37,7 @@ export async function viewEntry(root, [code], ctx) {
       };
     } else if (step === "login") {
       root.innerHTML = slide(`
-        ${logosHtml(br)}
+        ${logosHtml(br, "", true)}
         <div class="slide-kick">Connexion</div>
         <div class="slide-title sm">Recevez votre code d'accès</div>
         <p class="slide-sub">${T("Un code personnel vous est envoyé par e-mail. Il fonctionne sur tous vos appareils pendant la formation, puis il est détruit.")}</p>
@@ -57,7 +57,7 @@ export async function viewEntry(root, [code], ctx) {
       $("#haveCode").onclick = () => { step = "code"; draw(); };
     } else if (step === "code") {
       root.innerHTML = slide(`
-        ${logosHtml(br)}
+        ${logosHtml(br, "", true)}
         <div class="slide-kick">Connexion</div>
         <div class="slide-title sm">Saisissez votre code</div>
         <p class="slide-sub">${email ? T(`Envoyé à ${email}. Pensez à vérifier les indésirables.`) : T("Le code reçu par e-mail pour cette formation.")}</p>
@@ -114,7 +114,8 @@ export async function viewEntry(root, [code], ctx) {
   return () => document.body.classList.remove("bare");
 }
 
-const slide = (inner, kind = "") => `<div class="slide-page ${kind}"><div class="slide-inner">${inner}</div></div>`;
+// Chaque slide porte le bandeau bleu avec le logo Samsa
+const slide = (inner, kind = "") => `<div class="slide-page ${kind}"><div class="slide-bar">${samsaHtml(true, "head")}</div><div class="slide-inner">${inner}</div></div>`;
 
 // Bloc support, partagé avec la page « Support » du tableau de bord
 export function supportBlock(st, onDark = false) {

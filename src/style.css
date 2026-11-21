@@ -466,3 +466,18 @@ body.bare main#view{max-width:none;padding:0;margin:0}
 input[type=url],input[type=email],input[type=date],input[type=time],input[type=number]{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:#fff}
 .slide-form input{border:0}
 .scr-top .logos{justify-content:flex-start;flex-wrap:nowrap}
+/* Logo Samsa : toujours présent dans le bandeau bleu */
+.brand-wrap{display:flex;align-items:center;gap:14px;text-decoration:none;color:#fff}
+.brand-wrap .brand{display:flex;flex-direction:column}
+.samsa{display:block;height:34px;width:auto}
+.samsa.head{height:30px}
+.samsa.lg{height:64px}
+.samsa.xl{height:90px}
+.samsa.sm{height:24px}
+.samsa-mask{display:inline-block;height:30px;aspect-ratio:480/141;background:var(--navy);-webkit-mask:var(--samsa) center/contain no-repeat;mask:var(--samsa) center/contain no-repeat}
+.samsa-mask.sm{height:22px}
+.samsa-mask.lg{height:56px}
+.slide-page{position:relative}
+.slide-bar{position:absolute;top:0;left:0;right:0;padding:18px 26px;display:flex;align-items:center;background:var(--navy)}
+.slide-page .slide-inner{padding-top:60px}
+.logos .samsa,.logos .samsa-mask{margin:0 4px}

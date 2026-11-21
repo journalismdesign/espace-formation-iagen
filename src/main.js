@@ -9,6 +9,7 @@ import "./style.css";
 
 import { api } from "./api/index.js";
 import { $, esc, toast } from "./lib/dom.js";
+import { samsaHtml } from "./lib/brand.js";
 import { closeSheet } from "./lib/content.js";
 import { viewLogin, viewTrainerLogin } from "./views/login.js";
 import { viewEntry } from "./views/entry.js";
@@ -44,7 +45,7 @@ function header(route) {
   const h = location.hash;
   const link = (href, label, on) => `<a href="${href}"${on ? ' aria-current="page"' : ""}>${label}</a>`;
   return `<header class="top"><div class="hwrap">
-    <a class="brand" href="#/"><span class="kicker">Espace formation · Journalisme &amp; IA</span><b>Prendre en main les IA génératives</b></a>
+    <a class="brand-wrap" href="#/">${samsaHtml(true, "head")}<span class="brand"><span class="kicker">Espace formation · Journalisme &amp; IA</span><b>Prendre en main les IA génératives</b></span></a>
     <nav class="topnav">
       ${trainer ? link("#/admin", "Back-office", h.startsWith("#/admin")) : link("#/", "Mon espace", h === "#/" || h === "" || h.startsWith("#/s/"))}
       ${link("#/profil", esc(me.full_name || me.email.split("@")[0]), h === "#/profil")}

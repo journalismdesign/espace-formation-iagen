@@ -2,6 +2,14 @@
    dates affichées, import d'images en data URL. */
 import QRCode from "qrcode";
 import { T, esc, dateFr } from "./dom.js";
+import samsaLogo from "../assets/samsa-logo.png";
+
+// Logo Samsa (organisme de formation), blanc : tel quel sur fond bleu,
+// teinté en marine par masque CSS sur fond clair
+export const SAMSA_LOGO = samsaLogo;
+export const samsaHtml = (onDark = true, cls = "") => onDark
+  ? `<img class="samsa ${cls}" src="${samsaLogo}" alt="Samsa">`
+  : `<span class="samsa-mask ${cls}" role="img" aria-label="Samsa" style="--samsa:url('${samsaLogo}')"></span>`;
 
 // Logos et noms à partir d'une session complète (connecté) ou publique
 export async function resolveBranding(api, session) {
@@ -17,9 +25,12 @@ export async function resolveBranding(api, session) {
   };
 }
 
-export function logosHtml(br, cls = "") {
+// onDark : logos posés sur fond bleu (slides, bandeau) plutôt que sur fond blanc
+export function logosHtml(br, cls = "", onDark = false) {
   const one = (x) => (x.logo ? `<span class="logo-tile ${cls}"><img src="${esc(x.logo)}" alt="${esc(x.name)}"></span>` : x.name ? `<span class="logo-tile text ${cls}">${T(x.name)}</span>` : "");
-  const a = one(br.client), b = one(br.org);
+  const a = one(br.client);
+  // Organisme : logo déposé dans les réglages, sinon le logo Samsa intégré
+  const b = br.org.logo ? one(br.org) : samsaHtml(onDark, cls);
   return a || b ? `<div class="logos">${a}${a && b ? `<span class="logo-x" aria-hidden="true">×</span>` : ""}${b}</div>` : "";
 }
 

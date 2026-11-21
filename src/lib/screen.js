@@ -15,7 +15,7 @@ export function screenHtml(d, compact = false) {
   const view = session.status === "live" ? live.view : null;
   const mod = live.module ? modulesFor(session.format).find((m) => m.id === live.module) : null;
   // Vues pilotées hors activité : slide de titre, émargement, support, slide Drive, séquence
-  if (view === "title") return `<div class="screen titleslide${compact ? " compact" : ""}">${branding ? logosHtml(branding, compact ? "" : "xl") : ""}
+  if (view === "title") return `<div class="screen titleslide${compact ? " compact" : ""}">${branding ? logosHtml(branding, compact ? "" : "xl", true) : ""}
       <div class="kick">Formation</div><div class="scr-title">${T(session.formation)}</div>
       ${session.title !== session.formation ? `<p class="scr-sub">${T(session.title)}</p>` : ""}
       <p class="scr-date">${T(datesFr(session))} · ${hhmm(session.start_time)} – ${hhmm(session.end_time)}</p>
