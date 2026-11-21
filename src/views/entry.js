@@ -24,7 +24,6 @@ export async function viewEntry(root, [code], ctx) {
     if (step === "title") {
       root.innerHTML = slide(`
         ${logosHtml(br, "lg", true)}
-        <div class="slide-kick">Formation</div>
         <div class="slide-title">${T(pub.formation)}</div>
         ${pub.title && pub.title !== pub.formation ? `<p class="slide-sub">${T(pub.title)}</p>` : ""}
         <p class="slide-date">${T(datesFr(pub))}${pub.start_time ? ` · ${hhmm(pub.start_time)} – ${hhmm(pub.end_time)}` : ""}</p>

@@ -3,7 +3,7 @@
 import { T, esc, dateFr } from "./dom.js";
 import { QUIZ } from "../data.js";
 import { currentAct, renderResults, actQuestion, countOf } from "./activities.js";
-import { logosHtml, datesFr, hhmm } from "./brand.js";
+import { logosHtml, datesFr, hhmm, samsaHtml } from "./brand.js";
 import { modulesFor, typeLabel } from "./content.js";
 import { slideEmbedUrl } from "../deck.js";
 
@@ -15,8 +15,8 @@ export function screenHtml(d, compact = false) {
   const view = session.status === "live" ? live.view : null;
   const mod = live.module ? modulesFor(session.format).find((m) => m.id === live.module) : null;
   // Vues pilotées hors activité : slide de titre, émargement, support, slide Drive, séquence
-  if (view === "title") return `<div class="screen titleslide${compact ? " compact" : ""}">${branding ? logosHtml(branding, compact ? "" : "xl", true) : ""}
-      <div class="kick">Formation</div><div class="scr-title">${T(session.formation)}</div>
+  if (view === "title") return `<div class="screen titleslide${compact ? " compact" : ""}">${samsaHtml(true, compact ? "sm" : "lg")}${branding ? logosHtml(branding, compact ? "" : "xl", true) : ""}
+      <div class="scr-title">${T(session.formation)}</div>
       ${session.title !== session.formation ? `<p class="scr-sub">${T(session.title)}</p>` : ""}
       <p class="scr-date">${T(datesFr(session))} · ${hhmm(session.start_time)} – ${hhmm(session.end_time)}</p>
       ${qrUrl ? `<div class="title-join"><img src="${qrUrl}" alt="QR code"><div>Rejoignez la formation<br><b>scannez le QR code</b><br>ou code <b class="mono">${esc(session.code)}</b></div></div>` : ""}</div>`;
@@ -47,7 +47,7 @@ export function screenHtml(d, compact = false) {
     main = `<div class="scr-head"><div><div class="kick">${kick}</div><div class="scr-title q">${T(actQuestion(act, live))}</div></div><div class="scr-count"><b>${n}</b><span>${n > 1 ? "réponses" : "réponse"}</span></div></div>${renderResults(act, live, rows, true)}`;
   }
   return `<div class="screen${compact ? " compact" : ""}">
-    <div class="scr-top">${branding ? logosHtml(branding, "sm") : `<span class="logo">IA</span>`}<div><b>${T(session.title)}</b><div class="small">${T(datesFr(session))}</div></div>
+    <div class="scr-top">${branding ? logosHtml(branding, "sm", false, true) : `<span class="logo">IA</span>`}<div><b>${T(session.title)}</b><div class="small">${T(datesFr(session))}</div></div>
       <div class="scr-pills"><span class="pill"><span class="dot${session.status === "live" ? " on" : ""}"></span>${session.status === "live" ? "En direct" : session.status === "closed" ? "Terminée" : "Hors ligne"}</span><span class="pill">${participants} participant${participants > 1 ? "s" : ""}</span></div></div>
     <div class="scr-body"><div class="scr-main">${main}</div>
       <div class="scr-side">${qrUrl ? `<img src="${qrUrl}" alt="QR code"><div class="small">Code <b class="mono">${esc(session.code)}</b></div>` : ""}

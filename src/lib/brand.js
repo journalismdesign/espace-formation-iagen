@@ -25,13 +25,15 @@ export async function resolveBranding(api, session) {
   };
 }
 
-// onDark : logos posés sur fond bleu (slides, bandeau) plutôt que sur fond blanc
-export function logosHtml(br, cls = "", onDark = false) {
-  const one = (x) => (x.logo ? `<span class="logo-tile ${cls}"><img src="${esc(x.logo)}" alt="${esc(x.name)}"></span>` : x.name ? `<span class="logo-tile text ${cls}">${T(x.name)}</span>` : "");
-  const a = one(br.client);
-  // Organisme : logo déposé dans les réglages, sinon le logo Samsa intégré
-  const b = br.org.logo ? one(br.org) : samsaHtml(onDark, cls);
-  return a || b ? `<div class="logos">${a}${a && b ? `<span class="logo-x" aria-hidden="true">×</span>` : ""}${b}</div>` : "";
+// Bloc « Une formation pour » + logo de l'entreprise cliente.
+// onDark : posé sur fond bleu ; withOrg : ajoute le logo de l'organisme
+// (seulement là où le bandeau bleu avec Samsa n'est pas visible).
+export function logosHtml(br, cls = "", onDark = false, withOrg = false) {
+  const c = br.client;
+  const tile = c.logo ? `<span class="logo-tile ${cls}"><img src="${esc(c.logo)}" alt="${esc(c.name)}"></span>` : c.name ? `<span class="logo-tile text ${cls}">${T(c.name)}</span>` : "";
+  const client = tile ? `<div class="for-client ${cls}${onDark ? " dark" : ""}"><span class="for-label">Une formation pour</span>${tile}</div>` : "";
+  const org = withOrg ? (br.org.logo ? `<span class="logo-tile ${cls}"><img src="${esc(br.org.logo)}" alt="${esc(br.org.name)}"></span>` : samsaHtml(onDark, cls)) : "";
+  return client || org ? `<div class="logos">${org}${client}</div>` : "";
 }
 
 // « mardi 1er décembre 2026 » ou « 1er et 2 décembre 2026 »
