@@ -14,6 +14,15 @@ import { modulesFor, typeLabel } from "../lib/content.js";
 import { parsePages, slideEmbedUrl, deckId } from "../deck.js";
 
 const PHASES = [["reglages", "Réglages"], ["avant", "Avant — inscription et cadrage"], ["jour", "Jour J — pilotage"], ["apres", "Après — suivi"]];
+const hhmmT = (t) => t.replace(/^0/, "").replace(":", " h ");
+const mins = (t) => { const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
+// Insère les créneaux d'émargement dans le déroulé, à leur heure
+function interleave(mods, slots) {
+  const out = []; const rest = [...slots].sort((a, b) => mins(a.t) - mins(b.t));
+  mods.forEach((m) => { while (rest.length && mins(rest[0].t) <= mins(m.t[0])) out.push({ ...rest.shift(), slot: true }); out.push(m); });
+  rest.forEach((x) => out.push({ ...x, slot: true }));
+  return out;
+}
 const firstName = (r) => (r.full_name || r.email.split("@")[0]).split(" ")[0];
 
 // Données de l'écran projeté (réponses agrégées, participants, projets)
@@ -223,26 +232,29 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
      ================================================================= */
   async function phaseJour() {
     box.innerHTML = `
-      <div class="grid adm2">
-        <div class="card">
-          <h3>Pilotage</h3>
-          <p class="small muted" id="hint" style="margin-top:0"></p>
-          <div class="kicker-d" style="margin:10px 0 6px">Ouverture · discussion libre</div>
-          <div class="acts" id="opening"></div>
-          <div class="kicker-d" style="margin:16px 0 6px">Déroulé · ce que voient les stagiaires et l'écran</div>
-          <div id="modules"></div>
-          <div class="kicker-d" style="margin:16px 0 6px">Activités en direct</div>
-          <div class="acts" id="acts"></div>
-          <div id="ctrl" style="margin:12px 0"></div>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><div class="kicker-d">Écran projeté</div><button class="linkbtn small" id="openScr">▭ Ouvrir l'écran projeté</button></div>
-          <div id="preview" class="preview"></div>
-          <details style="margin-top:14px"><summary class="small" style="cursor:pointer">Ajouter ou retirer des activités</summary><div id="actEdit"></div></details>
-          <hr><label class="f inline"><input type="checkbox" id="closeDay"${session.status === "closed" ? " checked" : ""}> Clore la journée (les stagiaires gardent l'accès aux ressources)</label>
-        </div>
+      <div class="grid jour2">
         <div>
-          <div class="card qrcard"><img src="${qrUrl}" alt="QR code"><button class="btn sm ghost" id="pjQ" style="margin-top:8px">Projeter le QR code</button></div>
+          <div class="card">
+            <h3>Pilotage</h3>
+            <p class="small muted" id="hint" style="margin-top:0"></p>
+            <div id="emRemind"></div>
+            <div class="kicker-d" style="margin:10px 0 6px">Ouverture · discussion libre</div>
+            <div class="acts" id="opening"></div>
+            <div class="kicker-d" style="margin:16px 0 6px">Déroulé · ce que voient les stagiaires et l'écran</div>
+            <div id="modules"></div>
+            <div class="kicker-d" style="margin:16px 0 6px">Activités en direct</div>
+            <div class="acts" id="acts"></div>
+            <div id="ctrl" style="margin:12px 0"></div>
+            <details style="margin-top:14px"><summary class="small" style="cursor:pointer">Ajouter ou retirer des activités</summary><div id="actEdit"></div></details>
+            <hr><label class="f inline"><input type="checkbox" id="closeDay"${session.status === "closed" ? " checked" : ""}> Clore la journée (les stagiaires gardent l'accès aux ressources)</label>
+          </div>
           <div class="card" style="margin-top:14px"><h3 id="pTitle">Participant·es</h3><div id="plist"></div></div>
         </div>
+        <aside class="jour-side">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="kicker-d">Écran projeté · en direct</div><button class="btn sm" id="openScr">Ouvrir l'écran projeté</button></div>
+          <div id="preview" class="preview"></div>
+          <div class="card qrcard row" style="margin-top:14px"><img src="${qrUrl}" alt="QR code"><div><div class="small">Rejoindre la session</div><b class="mono">${esc(session.code)}</b><br><button class="btn sm ghost" id="pjQ" style="margin-top:8px">Projeter le QR code</button></div></div>
+        </aside>
       </div>`;
     $("#openScr", box).onclick = () => window.open(`#/ecran/${sid}`, "ecran-" + sid, "popup=yes,width=1280,height=760");
     $("#pjQ", box).onclick = async () => showQr(session, await qr(joinUrl(session.code), 900));
@@ -253,7 +265,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       session = await guard(() => api.updateSession(sid, { status: "live", live, ...extra })) || session;
       draw();
     };
-    const keep = () => ({ module: session.live?.module || null }); // la séquence en cours reste affichée côté stagiaires
+    // la séquence en cours et les émargements déjà présentés survivent à chaque changement d'écran
+    const keep = () => ({ module: session.live?.module || null, emarg: session.live?.emarg || {} });
     const show = (view, extra = {}) => setLive({ ...keep(), view, ...extra, started_at: new Date().toISOString() });
     let modDay = 1;
     const launch = async (act) => {
@@ -278,22 +291,42 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       $("#opening", box).innerHTML = [["title", "Slide de titre", "Titre, logos, dates, QR"], ["emargement", "Émargement", session.emargement_url || session.emargement_qr ? "QR de l'organisme" : "À configurer"], ["support", "Support", "Annonce du téléchargement"], ["", "Écran d'attente", "Rien de projeté"]]
         .map(([v, l, sub]) => `<button class="act${(V || "") === v && !act ? " on" : ""}" data-view="${v}"><span>${v ? "▣" : "□"}</span>${l}<small>${T(sub)}</small></button>`).join("");
       $$("[data-view]", box).forEach((b) => (b.onclick = () => (b.dataset.view ? show(b.dataset.view) : setLive({ ...keep(), view: null }))));
+      // Émargements : arrivée du matin (début de journée) et reprise de l'après-midi (fin du déjeuner)
+      const all = modulesFor(session.format);
+      const days = session.format === "2" ? [1, 2] : [1];
+      const slots = days.flatMap((d) => {
+        const dm = all.filter((m) => (m.day || 1) === d);
+        const lunch = dm.find((m) => m.type === "pause" && /jeuner/i.test(m.titre));
+        const am = String(session.start_time || dm[0]?.t[0] || "09:30").slice(0, 5);
+        const pm = lunch ? lunch.t[1] : "13:30";
+        const date = d === 2 ? session.date2 : session.date;
+        return [{ key: `j${d}-matin`, day: d, t: am, label: "Émargement du matin", date }, { key: `j${d}-aprem`, day: d, t: pm, label: "Émargement de l'après-midi", date }];
+      });
+      const emDone = live.emarg || {};
+      const showEm = (k) => show("emargement", { emKey: k, emarg: { ...emDone, [k]: new Date().toISOString() } });
+      // Rappel : de 15 min avant à 30 min après l'heure prévue, le jour J
+      const nowD = new Date(), today = nowD.toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
+      const nowM = mins(nowD.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }));
+      const due = slots.find((x) => !emDone[x.key] && x.date === today && nowM >= mins(x.t) - 15 && nowM <= mins(x.t) + 30);
+      $("#emRemind", box).innerHTML = due ? `<div class="remind"><b>${T(`${due.label} · ${hhmmT(due.t)}`)}</b><span>${T("C'est le moment de projeter le QR code d'émargement.")}</span><button class="btn sm" data-em="${due.key}">Projeter l'émargement</button></div>` : "";
       // Déroulé : séquence courante + slides Drive des séquences qui en ont
       const mods = modulesFor(session.format).filter((m) => m.type !== "pause");
       const cur = mods.find((m) => m.id === live.module);
       if (cur?.day) modDay = cur.day;
       const shown = mods.filter((m) => session.format !== "2" || (m.day || 1) === modDay);
       $("#modules", box).innerHTML = `${session.format === "2" ? `<div class="days" style="margin:0 0 8px">${[1, 2].map((d) => `<button type="button" data-mday="${d}" aria-pressed="${d === modDay}">Jour ${d}</button>`).join("")}</div>` : ""}
-        <div class="modlist">${shown.map((m) => {
+        <div class="modlist">${interleave(shown, slots.filter((x) => session.format !== "2" || x.day === modDay)).map((m) => {
+          if (m.slot) return `<div class="modrow em${emDone[m.key] ? " done" : ""}${V === "emargement" && live.emKey === m.key ? " on" : ""}"><button type="button" data-em="${m.key}"><span class="mono small">${hhmmT(m.t)}</span><span class="pill tf">Émargement</span><b>${T(m.label)}</b>${emDone[m.key] ? `<span class="small muted" style="margin-left:auto">✓ présenté à ${new Date(emDone[m.key]).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>` : ""}</button></div>`;
           const on = m.id === live.module, pages = parsePages(m.pages);
-          return `<div class="modrow${on ? " on" : ""}"><button type="button" data-mod="${m.id}"><span class="mono small">${m.t[0].replace(":", " h ")}</span><span class="pill ${m.type}">${T(typeLabel(m.type))}</span><b>${T(m.titre)}</b></button>
+          return `<div class="modrow${on ? " on" : ""}"><button type="button" data-mod="${m.id}"><span class="mono small">${hhmmT(m.t[0])}</span><span class="pill ${m.type}">${T(typeLabel(m.type))}</span><b>${T(m.titre)}</b></button>
             ${on && pages.length && session.slides_url ? `<div class="slidebar"><button type="button" class="iconbtn" data-sl="prev" aria-label="Page précédente">←</button>${pages.map((p) => `<button type="button" class="chip${V === "slide" && live.slide === p ? " on" : ""}" data-page="${p}">${p}</button>`).join("")}<button type="button" class="iconbtn" data-sl="next" aria-label="Page suivante">→</button></div>` : ""}
             ${on && pages.length && !session.slides_url ? `<div class="small muted" style="padding:4px 8px">Pages ${T(m.pages)} · associez la présentation dans l'onglet Réglages pour les projeter.</div>` : ""}</div>`;
         }).join("")}</div>`;
       $$("[data-mday]", box).forEach((b) => (b.onclick = () => { modDay = +b.dataset.mday; draw(); }));
-      $$("[data-mod]", box).forEach((b) => (b.onclick = () => setLive({ module: b.dataset.mod, view: "module", started_at: new Date().toISOString() })));
+      $$("[data-em]", box).forEach((b) => (b.onclick = () => showEm(b.dataset.em)));
+      $$("[data-mod]", box).forEach((b) => (b.onclick = () => setLive({ ...keep(), module: b.dataset.mod, view: "module", started_at: new Date().toISOString() })));
       const pages = cur ? parsePages(cur.pages) : [];
-      const goPage = (p) => setLive({ module: cur.id, view: "slide", slide: p, started_at: new Date().toISOString() });
+      const goPage = (p) => setLive({ ...keep(), module: cur.id, view: "slide", slide: p, started_at: new Date().toISOString() });
       $$("[data-page]", box).forEach((b) => (b.onclick = () => goPage(+b.dataset.page)));
       $$("[data-sl]", box).forEach((b) => (b.onclick = () => {
         const i = V === "slide" ? pages.indexOf(live.slide) : -1;

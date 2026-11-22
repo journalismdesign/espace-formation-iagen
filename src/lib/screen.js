@@ -1,56 +1,134 @@
-/* Rendu de l'écran projeté, partagé par la page plein écran et l'aperçu
-   du back-office. */
-import { T, esc, dateFr } from "./dom.js";
+/* Écran projeté, dans la direction artistique du support Google Slides :
+   format 16:9, Montserrat, marine #0A2D4E, bleu #124F90, panneau clair
+   #F2F4F7, surtitres #C3CADD (sur fond marine) ou #4A6A95 (sur fond clair),
+   titres en capitales grasses, pastilles carrées alternées pour les lettres,
+   bandeau bleu en pied avec le logo Samsa et « JOURNALISME & IA · année ».
+   Les tailles sont exprimées en cqw (largeur du conteneur) : la même
+   maquette sert à l'écran plein et à l'aperçu du back-office. */
+import { T, esc } from "./dom.js";
 import { QUIZ } from "../data.js";
-import { currentAct, renderResults, actQuestion, countOf } from "./activities.js";
-import { logosHtml, datesFr, hhmm, samsaHtml } from "./brand.js";
+import { currentAct, quizQ, countOf } from "./activities.js";
+import { datesFr, hhmm, samsaHtml } from "./brand.js";
 import { modulesFor, typeLabel } from "./content.js";
 import { slideEmbedUrl } from "../deck.js";
 
-// d = { session, rows, participants, qrUrl, projects:[{titre,auteur,description}] }
+const LETTERS = "ABCDEFGHIJKL";
+const year = (s) => (s.date ? s.date.slice(0, 4) : String(new Date().getFullYear()));
+
+// Pied de slide commun
+function foot(session, right) {
+  return `<div class="ds-foot">${samsaHtml(true, "foot")}<b>JOURNALISME &amp; IA · ${year(session)}</b><span class="ds-foot-r">${right}</span></div>`;
+}
+// Slide sombre (titre, séparateur de partie)
+const dark = (session, inner, right, cls = "") => `<div class="deck-slide dark ${cls}"><div class="ds-body">${inner}</div>${foot(session, right)}</div>`;
+// Slide claire : panneau gauche (surtitre, titre, texte) + contenu à droite
+const light = (session, panel, main, right, cls = "") => `<div class="deck-slide light ${cls}"><div class="ds-body ds-split"><div class="ds-panel">${panel}</div><div class="ds-main">${main}</div></div>${foot(session, right)}</div>`;
+
+// Bloc client « Une formation pour » (tuile blanche, comme sur le titre du support)
+function clientBlock(branding) {
+  const c = branding?.client; if (!c || (!c.logo && !c.name)) return "";
+  return `<div class="ds-client"><span class="ds-kick">Une formation pour</span><span class="ds-tile">${c.logo ? `<img src="${esc(c.logo)}" alt="${esc(c.name)}">` : T(c.name)}</span></div>`;
+}
+
+// Réponses : lignes à pastilles carrées alternées
+function deckBars(opts, counts, good = -1) {
+  const mx = Math.max(1, ...counts);
+  return `<div class="ds-opts">${opts.map((o, i) => `<div class="ds-opt${i === good ? " good" : ""}">
+    <span class="ds-letter${i % 2 ? " alt" : ""}">${LETTERS[i]}</span>
+    <div class="ds-opt-t"><div class="ds-opt-l">${T(o)}</div><span class="ds-track"><i style="width:${(counts[i] / mx) * 100}%"></i></span></div>
+    <b class="ds-n">${counts[i]}</b></div>`).join("")}</div>`;
+}
+function deckCloud(rows) {
+  const f = {};
+  rows.forEach((r) => (Array.isArray(r.value) ? r.value : [r.value]).forEach((w) => {
+    const k = String(w).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim(); if (!k) return;
+    f[k] = f[k] || { w: String(w), n: 0 }; f[k].n += r.n;
+  }));
+  const L = Object.values(f).sort((a, b) => b.n - a.n);
+  if (!L.length) return `<div class="ds-wait">En attente des premiers mots…</div>`;
+  const mx = L[0].n;
+  return `<div class="ds-cloud">${L.map((x, i) => `<span class="${i % 2 ? "alt" : ""}" style="font-size:${1.4 + (x.n / mx) * 3.6}cqw">${esc(x.w)}</span>`).join("")}</div>`;
+}
+const joinBox = (session, qrUrl) => (qrUrl ? `<div class="ds-join"><img src="${qrUrl}" alt="QR code pour rejoindre"><div>Rejoindre<br><b class="mono">${esc(session.code)}</b></div></div>` : "");
+
+// d = { session, rows, participants, qrUrl, projects, branding, emQr, support }
 export function screenHtml(d, compact = false) {
   const { session, rows = [], participants = 0, qrUrl = "", projects = [], branding = null, emQr = null, support = null } = d;
-  const act = session.status === "live" ? currentAct(session) : null;
+  const cls = compact ? "compact" : "";
   const live = session.live || {};
-  const view = session.status === "live" ? live.view : null;
+  const isLive = session.status === "live";
+  const act = isLive ? currentAct(session) : null;
+  const view = isLive ? live.view : null;
   const mod = live.module ? modulesFor(session.format).find((m) => m.id === live.module) : null;
-  // Vues pilotées hors activité : slide de titre, émargement, support, slide Drive, séquence
-  if (view === "title") return `<div class="screen titleslide${compact ? " compact" : ""}">${samsaHtml(true, compact ? "sm" : "lg")}${branding ? logosHtml(branding, compact ? "" : "xl", true) : ""}
-      <div class="scr-title">${T(session.formation)}</div>
-      ${session.title !== session.formation ? `<p class="scr-sub">${T(session.title)}</p>` : ""}
-      <p class="scr-date">${T(datesFr(session))} · ${hhmm(session.start_time)} – ${hhmm(session.end_time)}</p>
-      ${qrUrl ? `<div class="title-join"><img src="${qrUrl}" alt="QR code"><div>Rejoignez la formation<br><b>scannez le QR code</b><br>ou code <b class="mono">${esc(session.code)}</b></div></div>` : ""}</div>`;
+  const right = `Code ${esc(session.code)} · ${participants} participant${participants > 1 ? "s" : ""}`;
+
+  // Slide de titre (et activité « Accueil ») : reprend la page 1 du support
+  if (view === "title" || act?.type === "welcome") {
+    return dark(session, `<div class="ds-center">
+        ${clientBlock(branding)}
+        <div class="ds-title xl">${T(session.formation)}</div>
+        ${samsaHtml(true, "big")}
+        <div class="ds-sub">${session.title && session.title !== session.formation ? T(session.title) + "<br>" : ""}${T(datesFr(session))} · ${hhmm(session.start_time)} – ${hhmm(session.end_time)}</div>
+      </div>${joinBox(session, qrUrl)}`, right, cls);
+  }
+
+  // Page du support Google Slides
   if (view === "slide") {
     const src = slideEmbedUrl(session.slides_url, live.slide || 1);
-    return `<div class="screen slidescreen${compact ? " compact" : ""}">${src ? `<iframe src="${esc(src)}" title="Support, page ${live.slide}" allowfullscreen loading="eager"></iframe>` : `<p class="waiting">Aucune présentation Google Slides n'est associée à la session (onglet Réglages).</p>`}
-      ${compact ? `<div class="small muted" style="padding:6px 2px">Page ${live.slide || 1}${mod ? " · " + T(mod.titre) : ""}</div>` : ""}</div>`;
+    return `<div class="deck-slide frame ${cls}">${src ? `<iframe src="${esc(src)}" title="Support, page ${live.slide}" allowfullscreen></iframe>` : dark(session, `<div class="ds-kick">Support</div><div class="ds-title">Aucune présentation associée</div><div class="ds-sub">Ajoutez le lien Google Slides dans l'onglet Réglages.</div>`, right)}</div>`;
   }
-  const idx = act ? session.activities.findIndex((a) => a.id === act.id) : -1;
-  const next = idx >= 0 ? session.activities[idx + 1] : session.activities[0];
-  let main;
+
+  // Séquence du déroulé : comme les séparateurs de partie du support
+  if (view === "module" && mod) {
+    return dark(session, `<div class="ds-left">
+        <div class="ds-kick">${T(typeLabel(mod.type))}${mod.tf ? ` · Temps fort ${mod.tf}` : ""} · ${T(mod.t[0].replace(":", " h "))} – ${T(mod.t[1].replace(":", " h "))}</div>
+        <div class="ds-title xxl">${T(mod.titre)}</div>
+        ${mod.exo ? `<div class="ds-sub">Exercice : ${T(mod.exo.titre)} · ${mod.exo.duree} min</div>` : ""}
+      </div>`, right, cls);
+  }
+
   if (view === "emargement") {
-    main = `<div class="kick">Émargement</div><div class="scr-title">Signez la feuille de présence</div>${emQr ? `<img class="scr-bigqr" src="${emQr}" alt="QR code d'émargement">` : `<p class="waiting">Aucun lien d'émargement configuré (onglet Réglages).</p>`}<p class="scr-sub">Scannez avec l'appareil photo de votre téléphone.</p>`;
-  } else if (view === "support") {
-    const when = support?.unlock_at ? new Date(support.unlock_at).toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).replace(":", " h ") : null;
-    main = `<div class="kick">Le support</div><div class="scr-title">${support?.unlocked ? "Le support est disponible" : "Le support vous attend"}</div><p class="scr-sub">${support?.unlocked ? T("Téléchargez-le depuis le menu « Support » de votre espace.") : T(`Il sera téléchargeable dans votre espace${when ? ` à partir de ${when}` : " en fin de formation"}, menu « Support ».`)}</p>`;
-  } else if (view === "module" && mod) {
-    main = `<div class="kick">${T(typeLabel(mod.type))}${mod.tf ? ` · Temps fort ${mod.tf}` : ""} · ${T(mod.t[0].replace(":", " h "))} – ${T(mod.t[1].replace(":", " h "))}</div><div class="scr-title q">${T(mod.titre)}</div>${mod.obj ? `<ul class="scr-list">${mod.obj.map((x) => `<li>${T(x)}</li>`).join("")}</ul>` : ""}${mod.exo ? `<p class="scr-sub">Exercice : ${T(mod.exo.titre)} · ${mod.exo.duree} min</p>` : ""}`;
-  } else if (!act) {
-    main = `<div class="scr-title">${session.status === "closed" ? "Merci pour cette journée" : "La formation va commencer"}</div><p class="scr-sub">${T(session.title)}</p>`;
-  } else if (act.type === "welcome") {
-    main = `<div class="kick">Bienvenue</div><div class="scr-title">${T(session.title)}</div><p class="scr-sub">${T(dateFr(session.date))}</p><p class="scr-sub">Scannez le QR code ou entrez le code <b class="mono">${esc(session.code)}</b> pour suivre la journée.</p>`;
-  } else if (act.type === "projects") {
-    main = `<div class="kick">Les projets du groupe</div><div class="scr-projects">${projects.length ? projects.map((p) => `<div class="scr-proj"><b>${T(p.titre)}</b><span>${T(p.auteur || "")}</span><p>${T((p.description || "").slice(0, 220))}</p></div>`).join("") : `<p class="waiting">Aucun cas d'usage validé pour l'instant.</p>`}</div>`;
-  } else {
-    const n = countOf(rows);
-    const kick = act.type === "quiz" ? `${T(QUIZ[act.quiz].titre)} · question ${(live.qi || 0) + 1} sur ${QUIZ[act.quiz].q.length}` : T(act.titre);
-    main = `<div class="scr-head"><div><div class="kick">${kick}</div><div class="scr-title q">${T(actQuestion(act, live))}</div></div><div class="scr-count"><b>${n}</b><span>${n > 1 ? "réponses" : "réponse"}</span></div></div>${renderResults(act, live, rows, true)}`;
+    return light(session, `<div class="ds-kick">Émargement</div><div class="ds-title">Signez la feuille de présence</div><p class="ds-text">Scannez le QR code avec l'appareil photo de votre téléphone. Un émargement par demi-journée.</p>`,
+      emQr ? `<div class="ds-qrbig"><img src="${emQr}" alt="QR code d'émargement"></div>` : `<div class="ds-wait">Aucun lien d'émargement configuré (onglet Réglages).</div>`, right, cls);
   }
-  return `<div class="screen${compact ? " compact" : ""}">
-    <div class="scr-top">${branding ? logosHtml(branding, "sm", false, true) : `<span class="logo">IA</span>`}<div><b>${T(session.title)}</b><div class="small">${T(datesFr(session))}</div></div>
-      <div class="scr-pills"><span class="pill"><span class="dot${session.status === "live" ? " on" : ""}"></span>${session.status === "live" ? "En direct" : session.status === "closed" ? "Terminée" : "Hors ligne"}</span><span class="pill">${participants} participant${participants > 1 ? "s" : ""}</span></div></div>
-    <div class="scr-body"><div class="scr-main">${main}</div>
-      <div class="scr-side">${qrUrl ? `<img src="${qrUrl}" alt="QR code"><div class="small">Code <b class="mono">${esc(session.code)}</b></div>` : ""}
-        ${next ? `<div class="scr-next"><div class="kick">Ensuite</div><b>${T(next.titre)}</b></div>` : ""}</div></div>
-  </div>`;
+
+  if (view === "support") {
+    const when = support?.unlock_at ? new Date(support.unlock_at).toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).replace(":", " h ") : null;
+    return light(session, `<div class="ds-kick">Le support</div><div class="ds-title">${support?.unlocked ? "Le support est disponible" : "Le support vous attend"}</div><p class="ds-text">${T("Dans votre espace, menu « Support de formation ».")}</p>`,
+      `<div class="ds-bignote"><span class="ds-letter big">${support?.unlocked ? "↓" : "🔒"}</span><div>${support?.unlocked ? "Téléchargeable dès maintenant" : `Téléchargeable${when ? ` à partir de <b>${when}</b>` : " en fin de formation"}`}</div></div>`, right, cls);
+  }
+
+  if (act?.type === "projects") {
+    return light(session, `<div class="ds-kick">Les projets du groupe</div><div class="ds-title">Cas d'usage</div><p class="ds-text">${projects.length} cas cadré${projects.length > 1 ? "s" : ""} et validé${projects.length > 1 ? "s" : ""} avant la formation.</p>`,
+      projects.length ? `<div class="ds-projects">${projects.slice(0, 9).map((p, i) => `<div class="ds-proj"><span class="ds-letter sm${i % 2 ? " alt" : ""}">${i + 1}</span><div><b>${T(p.titre)}</b><span>${T(p.auteur || "")}</span><p>${T((p.description || "").slice(0, 160))}</p></div></div>`).join("")}</div>` : `<div class="ds-wait">Aucun cas d'usage validé pour l'instant.</div>`, right, cls);
+  }
+
+  if (act) {
+    const n = countOf(rows);
+    let kick = act.titre, q = act.q || act.titre, main;
+    if (act.type === "quiz") {
+      const Q = quizQ(act, live);
+      kick = `${QUIZ[act.quiz].titre} · question ${(live.qi || 0) + 1} sur ${QUIZ[act.quiz].q.length}`;
+      q = Q?.[0] || "";
+      const counts = (Q?.[1] || []).map((_, i) => rows.filter((r) => r.value === i).reduce((a, r) => a + r.n, 0));
+      main = Q ? deckBars(Q[1], counts, live.reveal ? Q[2] : -1) + (live.reveal ? `<div class="ds-expl">${T(Q[3])}</div>` : "") : "";
+    } else if (act.type === "cloud") {
+      main = deckCloud(rows);
+    } else {
+      const opts = act.type === "vote" ? (live.options || act.options || []).map((o) => o.titre + (o.auteur ? ` · ${o.auteur}` : "")) : act.o || [];
+      const counts = opts.map((_, i) => rows.filter((r) => r.value === i).reduce((a, r) => a + r.n, 0));
+      main = opts.length ? deckBars(opts, counts) : `<div class="ds-wait">Aucune option.</div>`;
+    }
+    return light(session, `<div class="ds-kick">${T(kick)}</div><div class="ds-title q">${T(q)}</div>
+        <div class="ds-count"><b>${n}</b><span>${n > 1 ? "réponses" : "réponse"}</span></div>${joinBox(session, qrUrl)}`,
+      n || act.type === "cloud" ? main : `<div class="ds-wait">En attente des premières réponses…</div>${main}`, right, cls);
+  }
+
+  // Rien de lancé : écran d'attente
+  const next = session.activities?.[0];
+  return dark(session, `<div class="ds-left">
+      <div class="ds-kick">${session.status === "closed" ? "Fin de la formation" : "En attente"}</div>
+      <div class="ds-title xxl">${session.status === "closed" ? "Merci" : "La formation va commencer"}</div>
+      ${session.status !== "closed" && next ? `<div class="ds-sub">${T(session.title)}</div>` : ""}
+    </div>${session.status !== "closed" ? joinBox(session, qrUrl) : ""}`, right, cls);
 }

@@ -491,3 +491,106 @@ input[type=url],input[type=email],input[type=date],input[type=time],input[type=n
 .scr-top .for-client{flex-direction:row;align-items:center;gap:8px}
 .screen.titleslide .samsa{margin-bottom:1vh}
 .for-client{margin-bottom:1vh}
+
+/* =====================================================================
+   Écran projeté · DA du support Google Slides (16:9, unités cqw)
+   ===================================================================== */
+.deck-slide{--dnavy:#0A2D4E;--dblue:#124F90;--dpanel:#F2F4F7;--dkick:#C3CADD;--dmuted:#4A6A95;--dtext:#1D2B3A;
+  container-type:inline-size;position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;display:flex;flex-direction:column;font-family:Montserrat,system-ui,sans-serif;background:#fff;color:var(--dtext)}
+.deck-slide.dark{background:var(--dnavy);color:#fff}
+.ds-body{flex:1;position:relative;min-height:0}
+.ds-foot{height:5.93%;flex:none;background:var(--dblue);display:flex;align-items:center;gap:1.2cqw;padding:0 2.5cqw;color:#fff;border-top:.08cqw solid rgba(255,255,255,.15)}
+.ds-foot b{font-size:1.1cqw;font-weight:700;letter-spacing:.02em}
+.ds-foot-r{margin-left:auto;font-size:1.05cqw;font-weight:700}
+.samsa.foot{height:auto;width:6.3cqw}
+.samsa.big{height:auto;width:15.8cqw;margin:1.6cqw auto}
+.ds-kick{font-size:1.25cqw;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dmuted)}
+.dark .ds-kick{color:var(--dkick);font-size:1.6cqw}
+.ds-title{font-weight:800;text-transform:uppercase;line-height:1.05;letter-spacing:-.01em;color:var(--dnavy);font-size:2.7cqw;margin:.6cqw 0 1cqw}
+.dark .ds-title{color:#fff}
+.ds-title.xl{font-size:4.6cqw;max-width:80cqw;margin:1cqw auto 0}
+.ds-title.xxl{font-size:5.6cqw;max-width:85cqw}
+.ds-title.q{text-transform:none;font-size:2.15cqw;line-height:1.15}
+.ds-sub{font-size:1.46cqw;color:var(--dkick);line-height:1.4}
+.ds-text{font-size:1.1cqw;color:var(--dmuted);line-height:1.45;margin:0}
+.ds-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 6cqw}
+.ds-left{position:absolute;left:5cqw;right:8cqw;top:22%}
+.ds-client{display:flex;flex-direction:column;align-items:center;gap:.8cqw;margin-bottom:1.2cqw}
+.dark .ds-client .ds-kick{font-size:1.3cqw}
+.ds-tile{display:inline-grid;place-items:center;background:#fff;color:var(--dnavy);font-weight:800;font-size:1.9cqw;border-radius:.4cqw;padding:.8cqw 1.6cqw;min-height:5cqw}
+.ds-tile img{max-height:4.2cqw;max-width:20cqw;display:block}
+.ds-join{position:absolute;right:2.5cqw;bottom:2cqw;display:flex;align-items:center;gap:1cqw;background:#fff;color:var(--dnavy);border-radius:.5cqw;padding:.7cqw 1cqw;font-size:1cqw;line-height:1.3}
+.ds-join img{width:7cqw;height:7cqw}
+.ds-join b{font-size:1.4cqw}
+.ds-panel .ds-join{position:static;margin-top:auto;align-self:flex-start;border:.08cqw solid #dfe4ec}
+.ds-body.ds-split{display:grid;grid-template-columns:31.25% 1fr}
+.ds-panel{background:var(--dpanel);padding:5.7cqw 3.75cqw 2.5cqw;display:flex;flex-direction:column;min-height:0}
+.ds-main{padding:4cqw 4.5cqw 2.5cqw 5cqw;min-width:0;min-height:0;display:flex;flex-direction:column;justify-content:center}
+.ds-count{margin-top:1cqw}
+.ds-count b{display:block;font-size:5cqw;font-weight:800;color:var(--dnavy);line-height:1}
+.ds-count span{font-size:1cqw;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dmuted)}
+.ds-opts{display:flex;flex-direction:column;gap:1.3cqw}
+.ds-opt{display:grid;grid-template-columns:4.6cqw 1fr 4cqw;gap:1.6cqw;align-items:center}
+.ds-letter{display:grid;place-items:center;width:4.6cqw;height:4.6cqw;background:var(--dblue);color:#fff;font-weight:800;font-size:2.6cqw}
+.ds-letter.alt{background:var(--dnavy)}
+.ds-letter.big{width:7.75cqw;height:7.75cqw;font-size:3.75cqw}
+.ds-letter.sm{width:3cqw;height:3cqw;font-size:1.5cqw;flex:none}
+.ds-opt-l{font-size:1.5cqw;font-weight:700;color:var(--dnavy);line-height:1.2;margin-bottom:.5cqw}
+.ds-track{display:block;height:1.1cqw;background:var(--dpanel)}
+.ds-track i{display:block;height:100%;background:var(--dblue);transition:width .4s}
+.ds-n{font-size:2.2cqw;font-weight:800;color:var(--dnavy);text-align:right}
+.ds-opt.good .ds-letter{background:#1E7A4C}
+.ds-opt.good .ds-track i{background:#1E7A4C}
+.ds-opt.good .ds-opt-l{color:#1E7A4C}
+.ds-expl{margin-top:1.6cqw;font-size:1.15cqw;color:var(--dtext);background:var(--dpanel);padding:1cqw 1.3cqw;line-height:1.4}
+.ds-wait{font-size:1.4cqw;color:var(--dmuted);font-style:italic;padding:2cqw 0}
+.ds-cloud{display:flex;flex-wrap:wrap;gap:.6cqw 2.2cqw;align-items:center;justify-content:center;align-content:center;height:100%}
+.ds-cloud span{font-weight:800;color:var(--dnavy);line-height:1.05}
+.ds-cloud span.alt{color:var(--dblue)}
+.ds-qrbig{display:grid;place-items:center;height:100%}
+.ds-qrbig img{height:min(32cqw,100%);width:auto;border:.1cqw solid #dfe4ec;padding:1cqw;background:#fff}
+.ds-bignote{display:flex;align-items:center;gap:2cqw;font-size:2.2cqw;font-weight:700;color:var(--dnavy);line-height:1.3}
+.ds-projects{display:grid;grid-template-columns:1fr 1fr;gap:1.4cqw 2cqw;align-content:center}
+.ds-proj{display:flex;gap:1cqw;align-items:flex-start}
+.ds-proj b{display:block;font-size:1.35cqw;color:var(--dnavy);text-transform:uppercase;line-height:1.15}
+.ds-proj span{font-size:.95cqw;color:var(--dmuted);font-weight:700}
+.ds-proj p{font-size:.95cqw;margin:.3cqw 0 0;line-height:1.35}
+.deck-slide.frame{background:#000}
+.deck-slide.frame iframe{border:0;width:100%;height:100%}
+.deck-slide.frame>.deck-slide{position:absolute;inset:0}
+/* Page plein écran : la slide occupe le plus grand 16:9 possible */
+.screen-page{min-height:100vh;display:grid;place-items:center;padding:0;background:#000}
+.screen-page #scr{width:min(100vw,177.78vh)}
+/* Aperçu du back-office */
+.preview .deck-slide{border-radius:0}
+/* Logo de l'entreprise cliente : affiché tel quel, sans cadre ni fond */
+.for-client .logo-tile,.ds-tile{background:none!important;border:0!important;padding:0!important;border-radius:0!important;min-height:0!important;box-shadow:none!important}
+.for-client.dark .logo-tile.text,.dark .ds-tile{color:#fff}
+.ds-tile img{max-height:5.5cqw;max-width:24cqw}
+/* Jour J : pilotage à gauche, écran projeté à droite */
+.jour2{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);align-items:start}
+.jour-side{position:sticky;top:12px}
+.qrcard.row{display:flex;gap:14px;align-items:center;text-align:left}
+.qrcard.row img{width:96px}
+@media (max-width:980px){.jour2{grid-template-columns:1fr}.jour-side{position:static}}
+/* Slides d'entrée stagiaire · DA du support (marine uni, capitales, pied bleu) */
+.slide-page{background:#0A2D4E;padding:6vh 6vw 12vh}
+.slide-page .slide-inner{padding-top:0}
+.slide-kick{color:#C3CADD;font-size:15px;letter-spacing:.1em}
+.slide-title{text-transform:uppercase;font-weight:800;letter-spacing:-.01em}
+.slide-sub{color:#C3CADD}
+.slide-date{color:#C3CADD;font-weight:600}
+.slide-bar{top:auto;bottom:0;background:#124F90;gap:14px;padding:12px 22px;border-top:1px solid rgba(255,255,255,.15);color:#fff}
+.slide-bar b{font-size:13px;letter-spacing:.03em}
+.samsa.slidebig{height:auto;width:min(220px,40vw);margin:6px auto 4px}
+.btn.light{background:#fff;border-color:#fff;color:#0A2D4E;border-radius:0;text-transform:uppercase;letter-spacing:.04em}
+.slide-qr{border-radius:0}
+.lockbox.dark{border-radius:0}
+.for-client.dark .for-label{color:#C3CADD}
+.modrow.em{border-style:dashed;background:var(--yelt)}
+.modrow.em.done{background:#fff;border-style:solid}
+.modrow.em.on{border:2px solid var(--navy)}
+.remind{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;background:var(--yel);color:var(--navy);padding:10px 12px;margin:8px 0}
+.remind span{font-size:13px;flex:1}
+.modrow>button .mono{white-space:nowrap;min-width:52px}
+.fsbtn{top:10px;bottom:auto}

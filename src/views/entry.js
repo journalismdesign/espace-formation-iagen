@@ -25,6 +25,7 @@ export async function viewEntry(root, [code], ctx) {
       root.innerHTML = slide(`
         ${logosHtml(br, "lg", true)}
         <div class="slide-title">${T(pub.formation)}</div>
+        ${samsaHtml(true, "slidebig")}
         ${pub.title && pub.title !== pub.formation ? `<p class="slide-sub">${T(pub.title)}</p>` : ""}
         <p class="slide-date">${T(datesFr(pub))}${pub.start_time ? ` · ${hhmm(pub.start_time)} – ${hhmm(pub.end_time)}` : ""}</p>
         <button class="btn light big" id="go">Commencer →</button>`, "title");
@@ -114,7 +115,7 @@ export async function viewEntry(root, [code], ctx) {
 }
 
 // Chaque slide porte le bandeau bleu avec le logo Samsa
-const slide = (inner, kind = "") => `<div class="slide-page ${kind}"><div class="slide-bar">${samsaHtml(true, "head")}</div><div class="slide-inner">${inner}</div></div>`;
+const slide = (inner, kind = "") => `<div class="slide-page ${kind}"><div class="slide-inner">${inner}</div><div class="slide-bar">${samsaHtml(true, "head")}<b>JOURNALISME &amp; IA · ${new Date().getFullYear()}</b></div></div>`;
 
 // Bloc support, partagé avec la page « Support » du tableau de bord
 export function supportBlock(st, onDark = false) {

@@ -56,8 +56,12 @@ async def main():
 
         # Formateur : Jour J, pilote la slide de titre puis une séquence et une page du support
         await tr.goto(URL + f"#/admin/s/{sid}/jour"); await tr.wait_for_selector("#opening")
-        await tr.click("[data-view='title']"); await tr.wait_for_selector("#preview .titleslide")
+        await tr.click("[data-view='title']"); await tr.wait_for_selector("#preview .deck-slide.dark .samsa.big")
         await st.wait_for_selector("#liveCard h3:has-text('Bienvenue')", timeout=5000)
+        await tr.click("[data-em='j1-matin']"); await tr.wait_for_selector("#preview .ds-qrbig img")
+        await st.wait_for_selector("#liveCard h3:has-text('Émargement')", timeout=5000)
+        assert "présenté" in await tr.inner_text("[data-em='j1-matin']"), "l'émargement du matin doit être marqué comme présenté"
+        assert await tr.locator("[data-em='j1-aprem']").count() == 1, "créneau d'émargement de l'après-midi attendu"
         await tr.click("[data-mod='j1-comprendre']"); await tr.wait_for_selector("[data-page]")
         await tr.click("[data-page] >> nth=2"); await tr.wait_for_selector("#preview iframe")
         await st.wait_for_selector("#liveCard:has-text('page')", timeout=5000)
@@ -86,7 +90,7 @@ async def main():
         async with ctx.expect_page() as pinfo:   # ouverte depuis le back-office (même compte)
             await tr.click("#openScr")
         scr = await pinfo.value; watch(scr, "écran")
-        await scr.wait_for_selector(".screen"); await shot(scr, "07-ecran-projete")
+        await scr.wait_for_selector(".deck-slide"); await shot(scr, "07-ecran-projete")
         await tr.click("[data-a='attente']"); await scr.wait_for_timeout(1200); await shot(scr, "08-ecran-nuage")
         await scr.close()
 
