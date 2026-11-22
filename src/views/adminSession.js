@@ -57,7 +57,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     <div class="pagehead"><div>
       <h1 style="margin:0">${T(session.title)}</h1>
       <p class="muted" style="margin:4px 0">${T(session.formation)} · ${T(datesFr(session))} · code <b class="mono">${esc(session.code)}</b></p>
-      <div class="chips"><span class="state ${session.status}" id="stateP">${STATUS[session.status]}</span><span class="pill" id="rtP"><span class="dot on"></span>Temps réel</span></div>
+      <div class="chips"><span class="state ${session.status}" id="stateP">${STATUS[session.status]}</span><span class="pill" id="rtP"><span class="dot rt"></span>Temps réel</span></div>
     </div>
     <div class="head-actions"><a class="btn ghost sm" href="#/s/${sid}" title="Voir l'espace tel que le voient les stagiaires">Voir côté stagiaire</a>
       ${session.status === "draft" ? `<button class="btn sm" data-status="live">Ouvrir la salle</button>` : session.status === "live" ? `<button class="btn sm ghost" data-status="draft">Fermer la salle</button>` : `<button class="btn sm ghost" data-status="live">Rouvrir</button>`}</div></div>
@@ -114,6 +114,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         <div class="card"><h3>Émargement</h3>
           <label class="f" for="gEm">Lien de l'outil d'émargement</label><input type="url" id="gEm" placeholder="https://…" value="${esc(session.emargement_url || "")}">
           <label class="f">ou image du QR code fourni par l'organisme</label><input type="file" id="gEq" accept="image/*">
+          <label class="f" for="gEl">Nom du client pour la 2ᵉ étape (« Pour … »)</label><input type="text" id="gEl" maxlength="60" placeholder="FTV" value="${esc(session.emargement_label || "")}">
+          <p class="small muted">${T("Affiché « Pour FTV · Signez la feuille de présence en suivant le lien envoyé par mail ». Laissez vide pour reprendre le nom de l'entreprise.")}</p>
           <div id="emPrev" style="margin-top:10px"></div>
         </div>
         <div class="card" style="margin-top:14px"><h3>Support à télécharger</h3>
@@ -163,7 +165,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         format, date: $("#gD1", box).value || null, date2: format === "2" ? $("#gD2", box).value || null : null,
         start_time: $("#gS", box).value || "09:30", end_time: $("#gE", box).value || "17:30",
         brand_id: box.querySelector('input[name="brand"]:checked')?.value || null, client: $("#gC", box).value.trim(), client_logo: clientLogo, client_logo_light: clientLogoLight,
-        emargement_url: $("#gEm", box).value.trim() || null, emargement_qr: emQr,
+        emargement_url: $("#gEm", box).value.trim() || null, emargement_qr: emQr, emargement_label: $("#gEl", box).value.trim() || null,
         slides_url: $("#gSl", box).value.trim() || null, support_unlocked: $("#gSuF", box).checked,
       };
       if (patch.slides_url && !deckId(patch.slides_url)) return toast("Lien Google Slides non reconnu.", "ko");
@@ -263,7 +265,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
           <div class="card" style="margin-top:14px"><h3 id="pTitle">Participant·es</h3><div id="plist"></div></div>
         </div>
         <aside class="jour-side">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="kicker-d">Écran projeté · en direct</div><button class="btn sm" id="openScr">Ouvrir l'écran projeté</button></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="kicker-d live-tag"><span class="dot on"></span>Écran projeté · en direct</div><button class="btn sm" id="openScr">Ouvrir l'écran projeté</button></div>
           <div id="preview" class="preview"></div>
           <div class="card qrcard row" style="margin-top:14px"><img src="${qrUrl}" alt="QR code"><div><div class="small">Rejoindre la session</div><b class="mono">${esc(session.code)}</b><br><button class="btn sm ghost" id="pjQ" style="margin-top:8px">Projeter le QR code</button></div></div>
         </aside>

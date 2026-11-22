@@ -8,7 +8,7 @@
 import { T, esc } from "./dom.js";
 import { QUIZ } from "../data.js";
 import { currentAct, quizQ, countOf } from "./activities.js";
-import { datesFr, hhmm, samsaHtml, pickLogo } from "./brand.js";
+import { datesFr, hhmm, samsaHtml, pickLogo, emargementLabels, MAIL_ICON } from "./brand.js";
 import { modulesFor, typeLabel } from "./content.js";
 import { slideEmbedUrl } from "../deck.js";
 
@@ -89,9 +89,15 @@ export function screenHtml(d, compact = false) {
       </div>`, right, cls);
   }
 
+  // Émargement en deux étapes, comme la page « Informations générales » du support
   if (view === "emargement") {
-    return light(session, `<div class="ds-kick">Émargement</div><div class="ds-title">Signez la feuille de présence</div><p class="ds-text">Scannez le QR code avec l'appareil photo de votre téléphone. Un émargement par demi-journée.</p>`,
-      emQr ? `<div class="ds-qrbig"><img src="${emQr}" alt="QR code d'émargement"></div>` : `<div class="ds-wait">Aucun lien d'émargement configuré (onglet Réglages).</div>`, right, cls);
+    const L = emargementLabels(session, branding);
+    return light(session, `<div class="ds-kick barred">Informations générales</div><div class="ds-title">Deux étapes pour émarger</div>`,
+      `<div class="ds-em">
+        <div class="ds-em-col"><div class="ds-em-h">Pour <u>${T(L.org)}</u></div><div class="ds-em-t">Signez la feuille de présence grâce à ce QR code</div>
+          ${emQr ? `<div class="ds-qrbox"><img src="${emQr}" alt="QR code d'émargement"></div>` : `<div class="ds-wait">QR code à configurer (onglet Réglages).</div>`}</div>
+        ${L.client ? `<div class="ds-em-col"><div class="ds-em-h">Pour ${T(L.client)}</div><div class="ds-em-t">Signez la feuille de présence en suivant le lien envoyé par mail</div><div class="ds-mail">${MAIL_ICON}</div></div>` : ""}
+      </div>`, right, cls);
   }
 
   if (view === "support") {

@@ -8,7 +8,7 @@ import { currentAct, renderInput, renderResults, respKey } from "../lib/activiti
 import { renderCadrage } from "./cadrage.js";
 import { STATUS } from "./home.js";
 import { modulesFor } from "../lib/content.js";
-import { resolveBranding, logosHtml, datesFr, emargementQr } from "../lib/brand.js";
+import { resolveBranding, logosHtml, datesFr, emargementQr, emargementLabels, emargementStepsHtml } from "../lib/brand.js";
 import { supportBlock } from "./entry.js";
 
 const TABS = [
@@ -115,7 +115,7 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
         if (L.view === "title") h = `<h3>Bienvenue</h3><p class="muted">${T("La formation commence. Le déroulé de la journée est juste en dessous.")}</p>`;
         else if (L.view === "emargement") {
           const qr = await emargementQr(session);
-          h = `<h3>Émargement</h3>${qr ? `<img src="${qr}" alt="QR code d'émargement" style="width:180px;max-width:60%">` : ""}${session.emargement_url ? `<p><a class="btn" href="${esc(session.emargement_url)}" target="_blank" rel="noopener noreferrer">Émarger maintenant ↗</a></p>` : `<p class="muted">Suivez les indications du formateur.</p>`}`;
+          h = `<h3>Deux étapes pour émarger</h3>${emargementStepsHtml(session, qr, emargementLabels(session, br))}`;
         } else if (L.view === "support") h = `<h3>Le support de la formation</h3>${supportBlock(await api.supportStatus(sid).catch(() => ({})))}`;
         else if (L.view === "slide") h = `<h3>${T(mod?.titre || "Présentation")}</h3><p class="muted">${T(`Le formateur présente la page ${L.slide} du support.`)}</p>`;
         else h = `<h3>${T(mod?.titre || "")}</h3>${mod?.obj ? `<ul class="small">${mod.obj.map((x) => `<li>${T(x)}</li>`).join("")}</ul>` : ""}`;
@@ -274,9 +274,8 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   /* ---------------- Émargement ---------------- */
   async function tabEmargement() {
     const qr = await emargementQr(session);
-    body.innerHTML = `<div class="pagehead"><div><div class="kicker-d">${T(session.title)}</div><h1>Émargement</h1><p class="muted">${T("Signez la feuille de présence de chaque demi-journée avec l'outil de l'organisme de formation.")}</p></div></div>
-      <div class="card" style="max-width:520px;text-align:center">${qr ? `<img src="${qr}" alt="QR code d'émargement" style="width:260px;max-width:100%">` : `<p class="muted">Le formateur n'a pas encore ajouté le lien d'émargement.</p>`}
-      ${session.emargement_url ? `<p><a class="btn" href="${esc(session.emargement_url)}" target="_blank" rel="noopener noreferrer">Ouvrir le lien d'émargement ↗</a></p>` : ""}</div>`;
+    body.innerHTML = `<div class="pagehead"><div><div class="kicker-d">${T(session.title)}</div><h1>Émargement</h1><p class="muted">${T("Deux étapes, à chaque demi-journée : l'émargement de l'organisme de formation, puis celui de votre entreprise.")}</p></div></div>
+      <div class="card" style="max-width:820px">${emargementStepsHtml(session, qr, emargementLabels(session, br))}</div>`;
   }
 
   /* ---------------- Assistant ---------------- */

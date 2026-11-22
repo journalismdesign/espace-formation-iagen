@@ -33,7 +33,7 @@ async def main():
         sid = tr.url.split("/admin/s/")[1].split("/")[0]
         # Réglages : horaires, émargement, support
         await tr.goto(URL + f"#/admin/s/{sid}/reglages"); await tr.wait_for_selector("#regF")
-        await tr.fill("#gE", "17:30"); await tr.fill("#gEm", "https://exemple.fr/emargement-qualiopi")
+        await tr.fill("#gE", "17:30"); await tr.fill("#gEm", "https://exemple.fr/emargement-qualiopi"); await tr.fill("#gEl", "FTV")
         await tr.wait_for_selector("#emPrev img"); await tr.click("#regF button[type=submit]"); await tr.wait_for_timeout(500)
         await shot(tr, "02b-reglages")
         await tr.goto(URL + f"#/admin/s/{sid}/avant"); await tr.wait_for_selector("#invF")
@@ -57,7 +57,8 @@ async def main():
         await st.fill("#cd", "ZZZZZZ"); await st.click("#codeF button"); await st.wait_for_timeout(300)  # mauvais code refusé
         assert await st.locator("#codeF").count() == 1
         await st.fill("#cd", code); await st.click("#codeF button")
-        await st.wait_for_selector(".slide-qr"); await shot(st, "03b-emargement")
+        await st.wait_for_selector(".em-qr img"); await shot(st, "03b-emargement")
+        assert "POUR FTV" in (await st.inner_text(".em-steps")).upper(), "2e étape d'émargement au nom du client"
         await st.click("#next"); await st.wait_for_selector(".lockbox"); await shot(st, "03c-support-verrouille")
         await st.click("#next"); await st.wait_for_selector(".side"); await shot(st, "03-stagiaire-direct-attente")
         dark_src = await st.locator(".side .for-client img").get_attribute("src")
@@ -67,8 +68,10 @@ async def main():
         await tr.goto(URL + f"#/admin/s/{sid}/jour"); await tr.wait_for_selector("#opening")
         await tr.click("[data-view='title']"); await tr.wait_for_selector("#preview .deck-slide.dark .samsa.big")
         await st.wait_for_selector("#liveCard h3:has-text('Bienvenue')", timeout=5000)
-        await tr.click("[data-em='j1-matin']"); await tr.wait_for_selector("#preview .ds-qrbig img")
-        await st.wait_for_selector("#liveCard h3:has-text('Émargement')", timeout=5000)
+        await tr.click("[data-em='j1-matin']"); await tr.wait_for_selector("#preview .ds-qrbox img")
+        assert "POUR FTV" in (await tr.inner_text("#preview")).upper()
+        await shot(tr, "05b-emargement-ecran")
+        await st.wait_for_selector("#liveCard h3:has-text('émarger')", timeout=5000)
         assert "présenté" in await tr.inner_text("[data-em='j1-matin']"), "l'émargement du matin doit être marqué comme présenté"
         assert await tr.locator("[data-em='j1-aprem']").count() == 1, "créneau d'émargement de l'après-midi attendu"
         await tr.click("[data-mod='j1-comprendre']"); await tr.wait_for_selector("[data-page]")

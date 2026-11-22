@@ -65,7 +65,7 @@ export async function viewHome(root, _p, { api, me, go }) {
       <div class="kicker-d">Mes sessions</div>
       <div class="grid g3" style="margin-top:10px">
         ${sessions.length ? sessions.map((s) => `<div class="sess-card">
-          <div class="kicker-d">${STATUS[s.status]} · ${T(dateFr(s.date, { day: "numeric", month: "long" }))}</div>
+          <div class="kicker-d">${s.status === "live" ? `<span class="live-tag"><span class="dot on"></span>En direct</span>` : STATUS[s.status]} · ${T(dateFr(s.date, { day: "numeric", month: "long" }))}</div>
           <b>${T(s.title)}</b>
           <div class="small muted">${T(s.formation)}${s.format === "2" ? " · 2 jours" : ""}</div>
           <div style="display:flex;gap:6px;margin-top:10px"><a class="btn sm" href="#/s/${s.id}">${s.status === "closed" ? "Revoir" : "Rejoindre"}</a><a class="btn sm ghost" href="#/s/${s.id}/discussion">Discussion</a></div>

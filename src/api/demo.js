@@ -3,7 +3,7 @@
    compte (sessionStorage) : ouvrez un onglet formateur et un onglet
    stagiaire pour tester le direct. Aucune donnée ne quitte la machine. */
 
-const KEY = "iagen-demo-db-v4";
+const KEY = "iagen-demo-db-v5";
 const USER_KEY = "iagen-demo-user";
 const bc = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("iagen-demo") : null;
 const uid = () => crypto.randomUUID();
@@ -16,7 +16,7 @@ function load() {
   return null;
 }
 export const SESSION_DEFAULTS = { date2: null, start_time: "09:30", end_time: "17:30", brand_id: null, client_logo: null, client_logo_light: null,
-  slides_url: "https://docs.google.com/presentation/d/1G-exjcmMujp3XtEAOMCyzR9Plk3OzgS1qnVdTI0rJkg/edit", emargement_url: "", emargement_qr: null, support_unlocked: false };
+  slides_url: "https://docs.google.com/presentation/d/1G-exjcmMujp3XtEAOMCyzR9Plk3OzgS1qnVdTI0rJkg/edit", emargement_url: "", emargement_qr: null, emargement_label: null, support_unlocked: false };
 
 function seed(defaultActivities) {
   const sid = uid();

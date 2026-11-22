@@ -5,7 +5,7 @@
    4. support de formation (téléchargeable une heure avant la fin)
    → tableau de bord de la session. */
 import { $, T, esc, guard, toast } from "../lib/dom.js";
-import { resolveBranding, logosHtml, datesFr, hhmm, emargementQr, samsaHtml } from "../lib/brand.js";
+import { resolveBranding, logosHtml, datesFr, hhmm, emargementQr, samsaHtml, emargementLabels, emargementStepsHtml } from "../lib/brand.js";
 
 export async function viewEntry(root, [code], ctx) {
   const { api, go } = ctx;
@@ -86,11 +86,8 @@ export async function viewEntry(root, [code], ctx) {
       const qr = s ? await emargementQr(s) : null;
       root.innerHTML = slide(`
         <div class="slide-kick">Étape 1 sur 2</div>
-        <div class="slide-title sm">Émargement</div>
-        ${qr ? `<p class="slide-sub">${T("Scannez ce QR code avec votre téléphone pour signer la feuille de présence.")}</p>
-          <img class="slide-qr" src="${qr}" alt="QR code d'émargement">
-          ${s.emargement_url ? `<p><a class="btn light" href="${esc(s.emargement_url)}" target="_blank" rel="noopener noreferrer">Ouvrir le lien d'émargement ↗</a></p>` : ""}`
-          : `<p class="slide-sub">${T("Le formateur vous indiquera comment émarger. Vous retrouverez cette étape dans le menu.")}</p>`}
+        <div class="slide-title sm">Deux étapes pour émarger</div>
+        ${s ? emargementStepsHtml(s, qr, emargementLabels(s, br), true) : ""}
         <button class="btn light big" id="next">Continuer →</button>`);
       $("#next").onclick = () => { step = "support"; draw(); };
     } else if (step === "support") {
