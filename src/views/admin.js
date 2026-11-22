@@ -4,7 +4,11 @@ import { $, $$, T, esc, guard, dateFr } from "../lib/dom.js";
 import { defaultActivities } from "../lib/activities.js";
 import { STATUS } from "./home.js";
 
-export const joinUrl = (code) => `${location.origin}${location.pathname}#/join/${code}`;
+// Lien court de la session : <site>/CODE (redirigé vers #/join/CODE par 404.html ou au démarrage).
+// VITE_SHORT_BASE permet un domaine plus court (ex. https://formation.samsa.fr/).
+const SHORT_BASE = import.meta.env.VITE_SHORT_BASE;
+export const joinUrl = (code) => (SHORT_BASE ? SHORT_BASE.replace(/\/?$/, "/") : location.origin + location.pathname.replace(/[^/]*$/, "")) + code;
+export const joinUrlLabel = (code) => joinUrl(code).replace(/^https?:\/\//, "");
 export const qr = (text, size = 320) => QRCode.toDataURL(text, { width: size, margin: 1, color: { dark: "#0A2D4E", light: "#ffffff" } });
 
 export async function viewAdmin(root, _p, { api, go }) {
@@ -76,7 +80,7 @@ export function showQr(s, dataUrl) {
   d.innerHTML = `<button class="btn ghost" style="float:right">Fermer</button>
     <div style="text-align:center"><h2>${T(s.title)}</h2>
     <img src="${dataUrl}" alt="QR code pour rejoindre la session" style="width:min(60vh,80vw);height:auto">
-    <p style="font-size:clamp(18px,2.4vw,30px)">Ou rendez-vous sur <b>${esc(location.host)}</b> avec le code <b class="mono">${esc(s.code)}</b></p></div>`;
+    <p style="font-size:clamp(18px,2.4vw,30px)">ou <b class="mono">${esc(joinUrlLabel(s.code))}</b></p></div>`;
   document.body.appendChild(d);
   const close = () => { d.remove(); document.removeEventListener("keydown", esc_); };
   const esc_ = (e) => e.key === "Escape" && close();

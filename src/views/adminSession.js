@@ -6,7 +6,7 @@ import { QUIZ } from "../data.js";
 import { ACT_TYPES, currentAct, respKey, renderResults, defaultActivities, countOf } from "../lib/activities.js";
 import { screenHtml } from "../lib/screen.js";
 import { openSheet } from "../lib/content.js";
-import { joinUrl, qr, showQr, parseEmails } from "./admin.js";
+import { joinUrl, joinUrlLabel, qr, showQr, parseEmails } from "./admin.js";
 import { STATUS } from "./home.js";
 import { logoPair } from "./settings.js";
 import { STEPS, SENSIB } from "./cadrageModel.js";
@@ -233,7 +233,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
           </div>
         </div>
         <div>
-          <div class="card qrcard"><img src="${qrUrl}" alt="QR code de la session"><div class="small" style="margin:6px 0">Lien à transmettre :</div><div class="mono small linkbox" id="jl">${esc(joinUrl(session.code))}</div>
+          <div class="card qrcard"><img src="${qrUrl}" alt="QR code de la session"><div class="small" style="margin:6px 0">Lien à transmettre :</div><div class="mono linkbox" id="jl">${esc(joinUrlLabel(session.code))}</div>
             <div class="chips" style="justify-content:center;margin-top:8px"><button class="btn sm ghost" id="cpL">Copier le lien</button><button class="btn sm ghost" id="pjQ">Projeter le QR code</button></div></div>
         </div>
       </div>`;

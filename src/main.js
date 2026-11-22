@@ -89,6 +89,14 @@ async function render() {
   window.scrollTo(0, 0);
 }
 
+// Lien court …/CODE6 (serveur de développement, hébergements qui renvoient index.html)
+{
+  const seg = location.pathname.split("/").pop();
+  if (/^[A-Za-z0-9]{6}$/.test(seg) && !location.hash) {
+    history.replaceState(null, "", location.pathname.replace(/[^/]*$/, "") + "#/join/" + seg.toUpperCase());
+  }
+}
+
 // Le parcours d'entrée gère lui-même la connexion : pas de rendu forcé pendant celui-ci
 api.onAuthChange((u) => { if (!u) { me = null; booted = false; } if (u && currentRoute?.any) return; render(); });
 window.addEventListener("hashchange", render);

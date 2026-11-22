@@ -39,6 +39,7 @@ async def main():
         await tr.wait_for_selector("#emPrev img"); await tr.click("#regF button[type=submit]"); await tr.wait_for_timeout(500)
         await shot(tr, "02b-reglages")
         await tr.goto(URL + f"#/admin/s/{sid}/avant"); await tr.wait_for_selector("#invF")
+        assert (await tr.inner_text("#jl")).strip().endswith("/DEMO42"), "lien court attendu"
         await tr.fill("#invT", "alice@demo.fr"); await tr.click("#invF button"); await tr.wait_for_timeout(300)
         await tr.goto(URL + "#/admin/reglages"); await tr.wait_for_selector("#bF")
         # Logos de test (fictifs) : version sombre puis version claire pour la 3e entreprise (Libération)
@@ -50,7 +51,7 @@ async def main():
 
         # Stagiaire : slide de titre → prénom + e-mail → code → émargement → support → tableau de bord
         st = await ctx.new_page(); watch(st, "stagiaire")
-        await st.goto(URL + "#/join/DEMO42"); await st.wait_for_selector(".slide-page.title")
+        await st.goto(URL + "DEMO42"); await st.wait_for_selector(".slide-page.title")   # lien court
         await shot(st, "03a-slide-titre")
         light_src = await st.locator(".for-client img").get_attribute("src")
         await st.click("#go"); await st.wait_for_selector("#reqF")
