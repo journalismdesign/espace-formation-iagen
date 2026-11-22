@@ -92,8 +92,12 @@ export function emargementLabels(session, branding) {
   return {
     org: /^samsa$/i.test(org) ? "Samsa.fr" : org,
     client: session.emargement_label || branding?.client?.name || "",
+    // second émargement : facultatif, texte modifiable
+    second: session.emargement2_enabled !== false,
+    text: session.emargement2_text || EM2_DEFAULT,
   };
 }
+export const EM2_DEFAULT = "Signez la feuille de présence en suivant le lien envoyé par mail";
 export const MAIL_ICON = `<svg viewBox="0 0 120 76" aria-hidden="true"><rect x="0" y="0" width="120" height="76" fill="currentColor"/><path d="M2 2 L60 46 L118 2" fill="none" stroke="#fff" stroke-width="4"/><text x="60" y="27" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-weight="800" font-size="20" fill="#fff">@</text></svg>`;
 
 // Version compacte pour l'espace stagiaire (fond clair ou marine)
@@ -101,6 +105,6 @@ export function emargementStepsHtml(session, qr, labels, onDark = false) {
   return `<div class="em-steps${onDark ? " dark" : ""}">
     <div class="em-step"><div class="em-h">Pour <u>${T(labels.org)}</u></div><p>Signez la feuille de présence grâce à ce QR code.</p>
       ${qr ? `<div class="em-qr"><img src="${qr}" alt="QR code d'émargement"></div>${session.emargement_url ? `<a class="btn sm${onDark ? " light" : ""}" href="${esc(session.emargement_url)}" target="_blank" rel="noopener noreferrer">Ouvrir le lien ↗</a>` : ""}` : `<p class="small">QR code à venir.</p>`}</div>
-    ${labels.client ? `<div class="em-step"><div class="em-h">Pour ${T(labels.client)}</div><p>Signez la feuille de présence en suivant le lien envoyé par mail.</p><div class="em-mail">${MAIL_ICON}</div></div>` : ""}
+    ${labels.second && labels.client ? `<div class="em-step"><div class="em-h">Pour ${T(labels.client)}</div><p>${T(labels.text)}</p><div class="em-mail">${MAIL_ICON}</div></div>` : ""}
   </div>`;
 }

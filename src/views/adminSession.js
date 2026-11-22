@@ -10,7 +10,7 @@ import { joinUrl, qr, showQr, parseEmails } from "./admin.js";
 import { STATUS } from "./home.js";
 import { logoPair } from "./settings.js";
 import { STEPS, SENSIB } from "./cadrageModel.js";
-import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml } from "../lib/brand.js";
+import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml, EM2_DEFAULT } from "../lib/brand.js";
 import { modulesFor, typeLabel } from "../lib/content.js";
 import { parsePages, slideEmbedUrl, deckId, deckKind } from "../deck.js";
 
@@ -115,8 +115,14 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         <div class="card"><h3>Émargement</h3>
           <label class="f" for="gEm">Lien de l'outil d'émargement</label><input type="url" id="gEm" placeholder="https://…" value="${esc(session.emargement_url || "")}">
           <label class="f">ou image du QR code fourni par l'organisme</label><input type="file" id="gEq" accept="image/*">
-          <label class="f" for="gEl">Nom du client pour la 2ᵉ étape (« Pour … »)</label><input type="text" id="gEl" maxlength="60" placeholder="FTV" value="${esc(session.emargement_label || "")}">
-          <p class="small muted">${T("Affiché « Pour FTV · Signez la feuille de présence en suivant le lien envoyé par mail ». Laissez vide pour reprendre le nom de l'entreprise.")}</p>
+          <div class="em2box">
+            <label class="f inline"><input type="checkbox" id="gE2"${session.emargement2_enabled !== false ? " checked" : ""}> Afficher le second émargement (celui de l'entreprise)</label>
+            <div id="e2fields">
+              <label class="f" for="gEl">Nom du client (« Pour … »)</label><input type="text" id="gEl" maxlength="60" placeholder="Libé" value="${esc(session.emargement_label || "")}">
+              <label class="f" for="gEt">Texte</label><textarea id="gEt" maxlength="300" placeholder="${esc(EM2_DEFAULT)}">${esc(session.emargement2_text || "")}</textarea>
+              <p class="small muted">${T("Vides, ces champs reprennent le nom de l'entreprise et le texte par défaut. L'icône @ s'affiche sous le texte.")}</p>
+            </div>
+          </div>
           <div id="emPrev" style="margin-top:10px"></div>
         </div>
         <div class="card" style="margin-top:14px"><h3>Support à télécharger</h3>
@@ -146,6 +152,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       decks.push({ id: "d" + Date.now().toString(36), title, url }); $("#dkU", box).value = ""; $("#dkT", box).value = ""; drawDecks();
       toast("Ajoutée : pensez à enregistrer les réglages.");
     };
+    const syncE2 = () => ($("#e2fields", box).style.display = $("#gE2", box).checked ? "" : "none");
+    $("#gE2", box).onchange = syncE2; syncE2();
     const fmt = () => box.querySelector('input[name="fmt"]:checked').value;
     const syncD2 = () => ($("#d2wrap", box).style.visibility = fmt() === "2" ? "visible" : "hidden");
     box.querySelectorAll('input[name="fmt"]').forEach((r) => (r.onchange = syncD2)); syncD2();
@@ -182,6 +190,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         start_time: $("#gS", box).value || "09:30", end_time: $("#gE", box).value || "17:30",
         brand_id: box.querySelector('input[name="brand"]:checked')?.value || null, client: $("#gC", box).value.trim(), client_logo: clientLogo, client_logo_light: clientLogoLight,
         emargement_url: $("#gEm", box).value.trim() || null, emargement_qr: emQr, emargement_label: $("#gEl", box).value.trim() || null,
+        emargement2_enabled: $("#gE2", box).checked, emargement2_text: $("#gEt", box).value.trim() || null,
         slides_url: $("#gSl", box).value.trim() || null, support_unlocked: $("#gSuF", box).checked, decks,
       };
       if (patch.slides_url && !deckId(patch.slides_url)) return toast("Lien Google Slides non reconnu.", "ko");

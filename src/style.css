@@ -661,3 +661,4 @@ input[type=url],input[type=email],input[type=date],input[type=time],input[type=n
 .slide-page.title .for-client{margin-bottom:56px}
 .slide-page.title .samsa.slidebig{margin:50px auto 22px}
 @media (max-height:700px){.slide-page.title .for-client{margin-bottom:32px}.slide-page.title .samsa.slidebig{margin:30px auto 14px}}
+.em2box{margin-top:12px;padding:10px 12px;background:var(--light);border-radius:8px}

@@ -33,7 +33,7 @@ async def main():
         sid = tr.url.split("/admin/s/")[1].split("/")[0]
         # Réglages : horaires, émargement, support
         await tr.goto(URL + f"#/admin/s/{sid}/reglages"); await tr.wait_for_selector("#regF")
-        await tr.fill("#gE", "17:30"); await tr.fill("#gEm", "https://exemple.fr/emargement-qualiopi"); await tr.fill("#gEl", "FTV")
+        await tr.fill("#gE", "17:30"); await tr.fill("#gEm", "https://exemple.fr/emargement-qualiopi"); await tr.fill("#gEl", "FTV"); await tr.fill("#gEt", "Signez via le lien reçu de la DRH")
         await tr.fill("#dkT", "Étude de cas (PDF)"); await tr.fill("#dkU", "https://drive.google.com/file/d/1cWhTM8HR0KR33QIud2ZQxYAw1JcxbKHE/view?usp=drive_link"); await tr.click("#dkAdd")
         await tr.wait_for_selector("#deckList .prow")
         await tr.wait_for_selector("#emPrev img"); await tr.click("#regF button[type=submit]"); await tr.wait_for_timeout(500)
@@ -72,6 +72,7 @@ async def main():
         await st.wait_for_selector("#liveCard h3:has-text('Bienvenue')", timeout=5000)
         await tr.click("[data-em='j1-matin']"); await tr.wait_for_selector("#preview .ds-qrbox img")
         assert "POUR FTV" in (await tr.inner_text("#preview")).upper()
+        assert "lien reçu de la DRH" in await tr.inner_text("#preview"), "texte du second émargement modifiable"
         await shot(tr, "05b-emargement-ecran")
         await st.wait_for_selector("#liveCard h3:has-text('émarger')", timeout=5000)
         assert "présenté" in await tr.inner_text("[data-em='j1-matin']"), "l'émargement du matin doit être marqué comme présenté"

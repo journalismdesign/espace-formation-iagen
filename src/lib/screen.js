@@ -99,11 +99,11 @@ export function screenHtml(d, compact = false) {
   // Émargement en deux étapes, comme la page « Informations générales » du support
   if (view === "emargement") {
     const L = emargementLabels(session, branding);
-    return light(session, `<div class="ds-kick barred">Informations générales</div><div class="ds-title">Deux étapes pour émarger</div>`,
+    return light(session, `<div class="ds-kick barred">Informations générales</div><div class="ds-title">${L.second && L.client ? "Deux étapes pour émarger" : "Émargement"}</div>`,
       `<div class="ds-em">
         <div class="ds-em-col"><div class="ds-em-h">Pour <u>${T(L.org)}</u></div><div class="ds-em-t">Signez la feuille de présence grâce à ce QR code</div>
           ${emQr ? `<div class="ds-qrbox"><img src="${emQr}" alt="QR code d'émargement"></div>` : `<div class="ds-wait">QR code à configurer (onglet Réglages).</div>`}</div>
-        ${L.client ? `<div class="ds-em-col"><div class="ds-em-h">Pour ${T(L.client)}</div><div class="ds-em-t">Signez la feuille de présence en suivant le lien envoyé par mail</div><div class="ds-mail">${MAIL_ICON}</div></div>` : ""}
+        ${L.second && L.client ? `<div class="ds-em-col"><div class="ds-em-h">Pour ${T(L.client)}</div><div class="ds-em-t">${T(L.text)}</div><div class="ds-mail">${MAIL_ICON}</div></div>` : ""}
       </div>`, right, cls);
   }
 

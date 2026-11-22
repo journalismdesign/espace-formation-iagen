@@ -86,7 +86,7 @@ export async function viewEntry(root, [code], ctx) {
       const qr = s ? await emargementQr(s) : null;
       root.innerHTML = slide(`
         <div class="slide-kick">Étape 1 sur 2</div>
-        <div class="slide-title sm">Deux étapes pour émarger</div>
+        <div class="slide-title sm">${s && emargementLabels(s, br).second && emargementLabels(s, br).client ? "Deux étapes pour émarger" : "Émargement"}</div>
         ${s ? emargementStepsHtml(s, qr, emargementLabels(s, br), true) : ""}
         <button class="btn light big" id="next">Continuer →</button>`);
       $("#next").onclick = () => { step = "support"; draw(); };
