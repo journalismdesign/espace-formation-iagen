@@ -19,6 +19,8 @@ import { viewSession } from "./views/session.js";
 import { viewAdmin } from "./views/admin.js";
 import { viewAdminSession } from "./views/adminSession.js";
 import { viewScreen } from "./views/screen.js";
+import { viewStaff } from "./views/staff.js";
+import { isStaff, isAdmin } from "./lib/roles.js";
 import { viewSettings } from "./views/settings.js";
 import { viewTrainers } from "./views/trainers.js";
 import { skinFooter, skinForRoute, applySkin, currentSkin } from "./lib/skin.js";
@@ -36,8 +38,9 @@ const ROUTES = [
   [/^#\/profil$/, viewProfile],
   [/^#\/s\/([\w-]+)(?:\/([\w-]+))?(?:\/([\w-]+))?$/, viewSession],
   [/^#\/admin$/, viewAdmin, { trainer: true }],
-  [/^#\/admin\/reglages$/, viewSettings, { trainer: true }],
-  [/^#\/admin\/formateurs(?:\/([\w-]+))?$/, viewTrainers, { trainer: true }],
+  [/^#\/admin\/reglages$/, viewSettings, { trainer: true, admin: true }],
+  [/^#\/admin\/formateurs(?:\/([\w-]+))?$/, viewTrainers, { trainer: true, admin: true }],
+  [/^#\/admin\/equipe$/, viewStaff, { trainer: true, admin: true }],
   [/^#\/admin\/s\/([\w-]+)(?:\/(\w+))?$/, viewAdminSession, { trainer: true }],
   [/^#\/ecran\/([\w-]+)$/, viewScreen, { trainer: true, bare: true }],
   [/^#?\/?$/, viewHome],
@@ -45,7 +48,7 @@ const ROUTES = [
 
 function header(route) {
   if (route?.bare || !me) return "";
-  const trainer = me.role === "trainer";
+  const trainer = isStaff(me);
   const h = location.hash;
   const link = (href, label, on) => `<a href="${href}"${on ? ' aria-current="page"' : ""}>${label}</a>`;
   return `<header class="top"><div class="hwrap">
@@ -78,7 +81,8 @@ async function render() {
   me = user ? await api.me() : null;
   if (tok !== renderTok) return;
   if (user && !booted) { booted = true; try { await api.claimInvites(); } catch (e) { console.warn(e); } }
-  if (route.trainer && me?.role !== "trainer") { go("#/"); return; }
+  if (route.trainer && !isStaff(me)) { go("#/"); return; }
+  if (route.admin && !isAdmin(me)) { go("#/admin"); return; } // pages réservées à l'administration
   if (tok !== renderTok) return;
 
   // Habillage du centre de formation (session ouverte, sinon habillage par défaut)

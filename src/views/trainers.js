@@ -30,6 +30,8 @@ export async function viewTrainers(root, [id], { api, go }) {
     <form id="tF" class="grid jour2">
       <div class="card">
         <label class="f" for="tN">Nom</label><input type="text" id="tN" required maxlength="100" value="${esc(cur.name)}">
+        <label class="f" for="tLog">Adresse de connexion (compte formateur·ice)</label><input type="email" id="tLog" maxlength="200" value="${esc(cur.login_email || "")}" placeholder="prenom.nom@exemple.fr">
+        <p class="small muted" style="margin:2px 0 0">${T("La personne qui se connecte avec cette adresse voit les sessions attribuées à cette fiche. Elle doit aussi figurer dans « Équipe et accès ».")}</p>
         <label class="f">Photo (carrée de préférence)</label>
         <div style="display:flex;gap:12px;align-items:center"><span id="tPh">${cur.photo ? `<img src="${esc(cur.photo)}" class="thumb lg" alt="">` : ""}</span><input type="file" id="tPf" accept="image/*">${cur.photo ? `<button type="button" class="linkbtn small" id="tPd">Retirer</button>` : ""}</div>
         <label class="f">Fonctions (une ligne chacune : intitulé ▸ structure)</label>
@@ -49,7 +51,7 @@ export async function viewTrainers(root, [id], { api, go }) {
     </form>`;
 
   const read = () => {
-    cur.name = $("#tN", root).value.trim(); cur.tagline = $("#tTg", root).value.trim(); cur.tagline_sub = $("#tTs", root).value.trim();
+    cur.name = $("#tN", root).value.trim(); cur.login_email = $("#tLog", root).value.trim().toLowerCase(); cur.tagline = $("#tTg", root).value.trim(); cur.tagline_sub = $("#tTs", root).value.trim();
     cur.email = $("#tEm", root).value.trim(); cur.website = $("#tWs", root).value.trim();
     cur.roles = $$("#tRoles .row3", root).map((r) => ({ label: $(".rl", r).value.trim(), value: $(".rv", r).value.trim(), url: $(".ru", r).value.trim() }));
     cur.socials = $$("#tSoc .row3", root).map((r) => ({ label: $(".sl", r).value.trim(), url: $(".su", r).value.trim() }));

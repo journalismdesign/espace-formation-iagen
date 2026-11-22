@@ -692,7 +692,7 @@ details.acc-set:first-of-type{margin-top:0}
 .ds-contact-l{font-size:1.45cqw;line-height:1.55;color:#000}
 .ds-contact-l a{text-decoration:underline}
 .ds-trainer{display:flex;flex-direction:column;align-items:flex-start;gap:1.2cqw;height:100%;justify-content:center}
-.ds-banner{display:flex;height:8.6cqw;background:var(--dblue);margin-bottom:1.4cqw}
+.ds-banner{display:flex;height:8.6cqw;background:var(--logo-bg,var(--dblue));margin-bottom:1.4cqw}
 .ds-banner-logo{display:grid;place-items:center;width:20.5cqw}
 .samsa.banner{width:16cqw;height:auto}
 .ds-photo{height:8.6cqw;width:8.6cqw;object-fit:cover;display:block}
@@ -782,3 +782,11 @@ details.acc-set>*:not(summary){margin-left:0;margin-right:0}
 .vcheck{display:flex;gap:10px;align-items:flex-start;margin:8px 0;font-size:14px;cursor:pointer}
 .vcheck input{width:18px;height:18px;margin-top:2px;flex:none;accent-color:var(--blue)}
 [hidden]{display:none!important}
+/* Équipe et accès */
+.staff-grid{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);align-items:start}
+.staff-grid .askrow{display:flex;gap:8px}
+.staff-grid .askrow input{flex:1;min-width:0}
+.staff-grid .askrow select{width:auto;flex:none}
+.staff-grid td select{width:auto;min-width:140px}
+@media (max-width:900px){.staff-grid{grid-template-columns:1fr}}
+select.assign{max-width:180px;font-size:13px;padding:4px 6px}

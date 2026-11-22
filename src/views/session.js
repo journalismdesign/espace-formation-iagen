@@ -1,6 +1,7 @@
 /* Espace d'une session côté stagiaire : barre latérale + onglets.
    Onglets : direct (le jour J), cadrage, ressources, fiches, outils,
    discussion. */
+import { isStaff } from "../lib/roles.js";
 import { $, $$, T, esc, fr, NB, matches, dateFr, guard, toast, bindCopy, copyText, download, debounce } from "../lib/dom.js";
 import { FICHES, GLOSS, PROMPTS, CASES } from "../data.js";
 import { renderParcours, parcoursPct, ficheById, ficheHtml, bindRefs, openPrompt, toolsHtml, bindTools, corpusMarkdown, unlockedTools, TOOL_IDS, hasCadrage } from "../lib/content.js";
@@ -32,7 +33,7 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   }
   if (!TABS.some(([k]) => k === tab)) tab = "direct";
   const membership = await api.myMembership(sid).catch(() => null);
-  const trainerPreview = me.role === "trainer" && !membership;
+  const trainerPreview = isStaff(me) && !membership;
   const project = await api.myProject(sid).catch(() => null);
   const live = () => session.status === "live" && !!(session.live?.act || session.live?.view || session.live?.module);
   const br = await resolveBranding(api, session);
@@ -272,7 +273,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
     if (!t) { body.innerHTML = `<p class="empty">Discussion introuvable.</p>`; return; }
     const draw = async () => {
       const posts = await api.listPosts(tid);
-      const mineOr = (a) => a === me.id || me.role === "trainer";
+      const mineOr = (a) => a === me.id || isStaff(me);
       body.innerHTML = `<p><a href="#/s/${sid}/discussion">← Toutes les discussions</a></p>
         <div class="card"><h2 style="margin:0">${T(t.title)}</h2><div class="small muted">${T(t.author_name)} · ${new Date(t.created_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</div>
           ${t.body ? `<p style="white-space:pre-wrap">${T(t.body)}</p>` : ""}

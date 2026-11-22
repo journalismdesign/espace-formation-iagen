@@ -65,10 +65,23 @@ export function createDemoApi({ defaultActivities }) {
   let authCb = () => {};
   const need = () => { const u = user(); if (!u) throw new Error("Connectez-vous d'abord."); return u; };
   const prof = (id) => db.profiles.find((p) => p.id === id);
-  const isTrainer = () => prof(user()?.id)?.role === "trainer";
+  // Équipe : admin (gère tout) et formateur·ices (seulement les sessions attribuées à leur fiche)
+  const S = () => (db.staff ||= [{ email: DEMO_TRAINER, is_admin: true, created_at: now() }]);
+  const roleOf = (email) => { const t = S().find((x) => x.email === String(email || "").toLowerCase()); return t ? (t.is_admin ? "admin" : "trainer") : null; };
+  const syncRole = (p) => { if (p) { const r = roleOf(p.email); p.role = r || (p.role === "admin" || p.role === "trainer" ? "trainee" : p.role); } return p; };
+  const myProf = () => syncRole(prof(user()?.id));
+  const isTrainer = () => ["trainer", "admin"].includes(myProf()?.role);
+  const isAdmin = () => myProf()?.role === "admin";
   const needTrainer = () => { if (!isTrainer()) throw new Error("Réservé aux formateur·ices."); };
+  const needAdmin = () => { if (!isAdmin()) throw new Error("Réservé à l'administration."); };
   const isMember = (sid) => db.members.some((m) => m.session_id === sid && m.user_id === user()?.id);
-  const canSee = (sid) => isTrainer() || isMember(sid);
+  const manages = (sid) => {
+    if (isAdmin()) return true;
+    if (!isTrainer()) return false;
+    const x = db.sessions.find((y) => y.id === sid), t = x && (db.trainers || []).find((y) => y.id === x.trainer_id);
+    return !!(t?.login_email && t.login_email === myProf()?.email);
+  };
+  const canSee = (sid) => manages(sid) || isMember(sid);
   const nameOf = (id) => { const p = prof(id); return p ? (p.full_name || p.email.split("@")[0]) : "?"; };
 
   const lastDay = (x) => (x.format === "2" && x.date2) || x.date;
@@ -93,7 +106,7 @@ export function createDemoApi({ defaultActivities }) {
       if (!first.trim()) throw new Error("Indiquez votre prénom.");
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Adresse e-mail invalide.");
       let p = db.profiles.find((y) => y.email === email);
-      if (!p) { p = { id: uid(), email, full_name: first.trim(), role: email === DEMO_TRAINER ? "trainer" : "trainee", metier: null, niveau: null, outils: [], created_at: now() }; db.profiles.push(p); }
+      if (!p) { p = { id: uid(), email, full_name: first.trim(), role: roleOf(email) || "trainee", metier: null, niveau: null, outils: [], created_at: now() }; db.profiles.push(p); }
       else if (!p.full_name) p.full_name = first.trim();
       if (!db.members.some((m) => m.session_id === sid && m.user_id === p.id)) db.members.push({ session_id: sid, user_id: p.id, joined_at: now(), attended: false, progress: {} });
       const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -118,12 +131,12 @@ export function createDemoApi({ defaultActivities }) {
 
     async listTrainers() { if (!user()) throw new Error("Connectez-vous d'abord."); return [...(db.trainers || [])].sort((a, b) => a.name.localeCompare(b.name)); },
     async saveTrainer(t) {
-      needTrainer(); db.trainers = db.trainers || [];
-      const row = { name: t.name, photo: t.photo ?? null, roles: t.roles || [], tagline: t.tagline || null, tagline_sub: t.tagline_sub || null, email: t.email || null, website: t.website || null, socials: t.socials || [] };
+      needAdmin(); db.trainers = db.trainers || [];
+      const row = { name: t.name, login_email: (t.login_email || "").trim().toLowerCase() || null, photo: t.photo ?? null, roles: t.roles || [], tagline: t.tagline || null, tagline_sub: t.tagline_sub || null, email: t.email || null, website: t.website || null, socials: t.socials || [] };
       if (t.id) { const x = db.trainers.find((y) => y.id === t.id); Object.assign(x, row); commit(); return x; }
       const x = { id: uid(), created_at: now(), ...row }; db.trainers.push(x); commit(); return x;
     },
-    async deleteTrainer(id) { needTrainer(); db.trainers = db.trainers.filter((x) => x.id !== id); db.sessions.forEach((x) => x.trainer_id === id && (x.trainer_id = null)); commit(); },
+    async deleteTrainer(id) { needAdmin(); db.trainers = db.trainers.filter((x) => x.id !== id); db.sessions.forEach((x) => x.trainer_id === id && (x.trainer_id = null)); commit(); },
     async trainerCodeConfigured() { return !!(db.settings.trainer_code ?? DEMO_TRAINER_CODE); },
     async checkTrainerCode(code) { await new Promise((r) => setTimeout(r, 300)); return String(code).trim() === (db.settings.trainer_code ?? DEMO_TRAINER_CODE); },
     async sendTrainerOtp(email) {
@@ -140,31 +153,31 @@ export function createDemoApi({ defaultActivities }) {
       await api.signInEmail(email);
       return true;
     },
-    async claimTrainer() { const u = user(); return !!u && prof(u.id)?.role === "trainer"; },
+    async claimTrainer() { return !!user() && isTrainer(); },
     async setTrainerCode(code) { needTrainer(); if (String(code).trim().length < 6) throw new Error("Le code doit compter au moins 6 caractères."); db.settings.trainer_code = String(code).trim(); commit(); return true; },
     async listBrands() { return [...db.brands].sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name)); },
     async saveBrand(b) {
-      needTrainer();
+      needAdmin();
       if (b.id) { const x = db.brands.find((y) => y.id === b.id); x.name = b.name; x.logo = b.logo ?? null; x.logo_light = b.logo_light ?? null; commit(); return x; }
       const x = { id: uid(), name: b.name, logo: b.logo ?? null, logo_light: b.logo_light ?? null, sort: 100 }; db.brands.push(x); commit(); return x;
     },
-    async deleteBrand(id) { needTrainer(); db.brands = db.brands.filter((y) => y.id !== id); commit(); },
+    async deleteBrand(id) { needAdmin(); db.brands = db.brands.filter((y) => y.id !== id); commit(); },
     async listSkins() { need(); return [...(db.skins || [])].sort((a, b) => a.name.localeCompare(b.name)); },
     async saveSkin(k) {
-      needTrainer(); db.skins = db.skins || [];
+      needAdmin(); db.skins = db.skins || [];
       if (!k.name?.trim()) throw new Error("Indiquez un nom.");
       const row = { name: k.name.trim(), accent: k.accent || "#124F90", dark: k.dark || null, logo: k.logo ?? null, logo_light: k.logo_light ?? null, footer: k.footer || null };
       if (k.id) { const x = db.skins.find((y) => y.id === k.id); Object.assign(x, row); commit(); return x; }
       const x = { id: uid(), ...row }; db.skins.push(x); commit(); return x;
     },
     async deleteSkin(id) {
-      needTrainer(); db.skins = (db.skins || []).filter((y) => y.id !== id);
+      needAdmin(); db.skins = (db.skins || []).filter((y) => y.id !== id);
       db.sessions.forEach((x) => { if (x.skin_id === id) x.skin_id = null; });
       if (db.settings.default_skin === id) db.settings.default_skin = null;
       commit();
     },
     async getSettings() { return { ...db.settings }; },
-    async saveSetting(k, v) { needTrainer(); db.settings[k] = v; commit(); },
+    async saveSetting(k, v) { needAdmin(); db.settings[k] = v; commit(); },
 
     async supportStatus(sid) {
       if (!canSee(sid)) throw new Error("Accès refusé.");
@@ -182,7 +195,7 @@ export function createDemoApi({ defaultActivities }) {
       email = email.trim().toLowerCase();
       let p = db.profiles.find((x) => x.email === email);
       if (!p) {
-        p = { id: uid(), email, full_name: "", role: asTrainer || email === DEMO_TRAINER ? "trainer" : "trainee", metier: null, niveau: null, outils: [], created_at: now() };
+        p = { id: uid(), email, full_name: "", role: roleOf(email) || "trainee", metier: null, niveau: null, outils: [], created_at: now() };
         db.profiles.push(p); commit();
       }
       setUser({ id: p.id, email });
@@ -192,7 +205,7 @@ export function createDemoApi({ defaultActivities }) {
     async signInGoogle() { return api.signInEmail("prenom.nom@gmail.com"); },
     async signOut() { setUser(null); authCb(null); },
 
-    async me() { const u = user(); return u ? { ...prof(u.id) } : null; },
+    async me() { const u = user(); return u ? { ...syncRole(prof(u.id)) } : null; },
     async updateMe(patch) {
       const p = prof(need().id);
       ["full_name", "metier", "niveau", "outils"].forEach((k) => patch[k] !== undefined && (p[k] = patch[k]));
@@ -206,26 +219,49 @@ export function createDemoApi({ defaultActivities }) {
       if (n) commit(); return n;
     },
 
+    /* ---------- Équipe (admin) ---------- */
+    async listStaff() {
+      needAdmin();
+      return [...S()].sort((a, b) => (b.is_admin - a.is_admin) || a.email.localeCompare(b.email))
+        .map((t) => ({ ...t, has_account: db.profiles.some((p) => p.email === t.email), trainer_name: (db.trainers || []).find((y) => y.login_email === t.email)?.name || null }));
+    },
+    async saveStaff(email, isAdminFlag) {
+      needAdmin(); email = String(email || "").trim().toLowerCase();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Adresse e-mail invalide.");
+      if (!isAdminFlag && email === myProf()?.email) throw new Error("Vous ne pouvez pas retirer vos propres droits d'administration.");
+      const t = S().find((x) => x.email === email);
+      if (t) t.is_admin = !!isAdminFlag; else S().push({ email, is_admin: !!isAdminFlag, created_at: now() });
+      commit();
+    },
+    async removeStaff(email) {
+      needAdmin(); email = String(email || "").trim().toLowerCase();
+      if (email === myProf()?.email) throw new Error("Vous ne pouvez pas retirer votre propre accès.");
+      db.staff = S().filter((x) => x.email !== email); commit();
+    },
+
     async listSessions() { return db.sessions.filter((s) => canSee(s.id)).sort((a, b) => (a.date || "9").localeCompare(b.date || "9")); },
     async getSession(id) { return canSee(id) ? db.sessions.find((s) => s.id === id) || null : null; },
     async createSession(s) {
-      needTrainer();
+      needAdmin();
       const row = { ...SESSION_DEFAULTS, id: uid(), formation: "Prendre en main les IA génératives", client: "", date: null, format: "1", code: code6(), status: "draft", activities: [], live: {}, created_at: now(), ...s };
       db.sessions.push(row); commit(); return row;
     },
     async updateSession(id, patch) {
-      needTrainer(); const s = db.sessions.find((x) => x.id === id); Object.assign(s, patch);
+      needTrainer(); if (!manages(id)) throw new Error("Session non attribuée.");
+      const s = db.sessions.find((x) => x.id === id);
+      if (!isAdmin() && ((patch.trainer_id !== undefined && patch.trainer_id !== s.trainer_id) || (patch.skin_id !== undefined && patch.skin_id !== s.skin_id))) throw new Error("Seule l'administration attribue une session et choisit son habillage.");
+      Object.assign(s, patch);
       if (s.status === "closed") db.codes = db.codes.filter((c) => c.session_id !== id); // codes détruits à la clôture
       commit(); return s;
     },
     async deleteSession(id) {
-      needTrainer();
+      needAdmin();
       db.sessions = db.sessions.filter((s) => s.id !== id);
       ["members", "invites", "resources", "secrets", "projects", "responses", "threads", "posts"].forEach((t) => (db[t] = db[t].filter((r) => r.session_id !== id)));
       commit();
     },
     async duplicateSession(id) {
-      needTrainer();
+      needAdmin();
       const s = db.sessions.find((x) => x.id === id);
       const n = await api.createSession({ title: s.title + " (copie)", formation: s.formation, client: s.client, format: s.format, activities: s.activities,
         brand_id: s.brand_id, client_logo: s.client_logo, client_logo_light: s.client_logo_light, slides_url: s.slides_url, start_time: s.start_time, end_time: s.end_time, emargement_url: s.emargement_url, emargement_qr: s.emargement_qr,

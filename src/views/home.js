@@ -1,5 +1,6 @@
 /* « Mon espace » (stagiaire) : la seule chose à faire maintenant, la
    préparation, le parcours, les discussions et toutes les sessions. */
+import { isStaff } from "../lib/roles.js";
 import { $, $$, T, esc, dateFr, guard, NB } from "../lib/dom.js";
 import { preparation } from "./cadrageModel.js";
 import { datesFr } from "../lib/brand.js";
@@ -8,7 +9,7 @@ import { hasCadrage } from "../lib/content.js";
 export const STATUS = { draft: "À venir", live: "En direct", closed: "Terminée" };
 
 export async function viewHome(root, _p, { api, me, go }) {
-  if (me.role === "trainer") { go("#/admin"); return; } // la vue stagiaire reste accessible depuis chaque session
+  if (isStaff(me)) { go("#/admin"); return; } // la vue stagiaire reste accessible depuis chaque session
   const sessions = await api.listSessions();
   const open = sessions.filter((s) => s.status !== "closed");
   const next = open.find((s) => s.status === "live") || open[0] || null;
@@ -44,7 +45,7 @@ export async function viewHome(root, _p, { api, me, go }) {
 
   root.innerHTML = `
     <div class="pagehead"><div><h1>Mon espace</h1><p class="muted">${T("Le bloc « À faire maintenant » indique toujours la seule chose à faire aujourd'hui. Le reste du parcours s'ouvre au fur et à mesure.")}</p></div>
-      ${me.role === "trainer" ? `<a class="btn ghost sm" href="#/admin">Back-office</a>` : ""}</div>
+      ${isStaff(me) ? `<a class="btn ghost sm" href="#/admin">Back-office</a>` : ""}</div>
     <div class="grid home-top">${todo}</div>
     ${next ? `
     <div class="card" style="margin-top:14px">

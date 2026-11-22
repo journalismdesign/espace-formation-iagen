@@ -19,18 +19,18 @@ grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid(), auth.jwt() to anon, authenticated;
 -- Pas de droits par défaut : comme les projets Supabase récents, les migrations doivent tout accorder elles-mêmes
 `);
-for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql", "20261122080000_premiere_connexion.sql", "20261122090000_droits_explicites.sql", "20261122100000_conducteur_habillages.sql"]) {
+for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql", "20261122080000_premiere_connexion.sql", "20261122090000_droits_explicites.sql", "20261122100000_conducteur_habillages.sql", "20261123000000_roles_admin.sql"]) {
   try { await db.exec(readFileSync(new URL("../supabase/migrations/" + f, import.meta.url), "utf8")); }
   catch (e) { console.error("Migration", f, ":", e.message, e.where || ""); process.exit(1); }
 }
 ok(true, "migration appliquée");
 
 const T = "00000000-0000-0000-0000-00000000000a", A = "00000000-0000-0000-0000-00000000000b", B = "00000000-0000-0000-0000-00000000000c";
-await db.exec(`insert into trainer_emails values ('formateur@exemple.fr');
+await db.exec(`insert into trainer_emails (email, is_admin) values ('formateur@exemple.fr', true);
 insert into auth.users (id,email,raw_user_meta_data) values
  ('${T}','Formateur@exemple.fr','{"full_name":"Gerald"}'),('${A}','alice@exemple.fr','{}'),('${B}','bob@exemple.fr','{"name":"Bob"}');`);
 const roles = await db.query(`select email, role, full_name from profiles order by email`);
-ok(roles.rows.find(r => r.email === "formateur@exemple.fr").role === "trainer", "profil formateur créé par le déclencheur");
+ok(roles.rows.find(r => r.email === "formateur@exemple.fr").role === "admin", "profil admin créé par le déclencheur");
 ok(roles.rows.find(r => r.email === "bob@exemple.fr").full_name === "Bob", "nom repris de Google");
 
 const as = async (uid, email) => db.exec(`reset role; set test.uid='${uid}'; set test.email='${email}'; set request.jwt.claims='{"role":"authenticated"}'; set role authenticated;`);
@@ -161,6 +161,37 @@ const dupS = (await db.query(`select skin_id, programme->'modules'->0->>'titre' 
 ok(dupS.skin_id === sk && dupS.t === "Atelier", "duplication : habillage et conducteur repris");
 await db.exec(`delete from skins where id = '${sk}'`);
 ok((await db.query(`select skin_id from sessions where code = '${code}'`)).rows[0].skin_id === null, "habillage supprimé : la session revient au défaut");
+
+// Rôles : un·e formateur·ice ne voit que les sessions qui lui sont attribuées
+await db.exec(`reset role; set test.uid=''; set request.jwt.claims='';`);
+const F = "00000000-0000-0000-0000-00000000000f";
+await db.exec(`insert into trainer_emails (email) values ('fanny@exemple.fr'); insert into auth.users (id,email) values ('${F}','fanny@exemple.fr');`);
+ok((await db.query(`select role from profiles where id='${F}'`)).rows[0].role === "trainer", "compte formateur·ice (non admin)");
+await as(T, "formateur@exemple.fr");
+const fc = (await db.query(`insert into trainers (name, login_email) values ('Fanny', 'fanny@exemple.fr') returning id`)).rows[0].id;
+const s2 = (await db.query(`insert into sessions (title) values ('Session de Fanny') returning id`)).rows[0].id;
+await db.exec(`update sessions set trainer_id = '${fc}' where id = '${s2}'`);
+ok((await db.query(`select email from public.list_staff()`)).rows.length >= 2, "l'admin liste l'équipe");
+await as(F, "fanny@exemple.fr");
+const visible = (await db.query(`select id from sessions`)).rows.map((r) => r.id);
+ok(visible.length === 1 && visible[0] === s2, "la formatrice ne voit que sa session");
+await db.exec(`update sessions set title = 'Session de Fanny (modifiée)' where id = '${s2}'`);
+ok((await db.query(`select title from sessions where id='${s2}'`)).rows[0].title.includes("modifiée"), "elle modifie sa session");
+await fails(`update sessions set trainer_id = null where id = '${s2}'`, "elle ne change pas l'attribution");
+await fails(`insert into sessions (title) values ('Pirate')`, "elle ne crée pas de session");
+await fails(`select public.session_roster('${sid}')`, "pas de tableau des participant·es d'une autre session");
+await fails(`select public.list_staff()`, "pas d'accès à la liste de l'équipe");
+await fails(`insert into brands (name) values ('Pirate')`, "pas de réglages communs");
+ok((await db.query(`select count(*)::int n from public.session_roster('${s2}')`)).rows[0].n === 0, "tableau de sa propre session");
+await as(T, "formateur@exemple.fr");
+await fails(`select public.remove_staff('formateur@exemple.fr')`, "l'admin ne se retire pas lui-même");
+await db.exec(`select public.save_staff('fanny@exemple.fr', true)`);
+await db.exec(`reset role; set test.uid=''; set request.jwt.claims='';`);
+ok((await db.query(`select role from profiles where id='${F}'`)).rows[0].role === "admin", "promotion admin");
+await as(T, "formateur@exemple.fr");
+await db.exec(`select public.remove_staff('fanny@exemple.fr')`);
+await db.exec(`reset role; set test.uid=''; set request.jwt.claims='';`);
+ok((await db.query(`select role from profiles where id='${F}'`)).rows[0].role === "trainee", "accès retiré : redevient stagiaire");
 
 // Anonyme : rien
 await db.exec(`reset role; set test.uid=''; set role anon;`);

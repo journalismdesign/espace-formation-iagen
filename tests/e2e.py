@@ -264,6 +264,27 @@ async def main():
         rows = await tr.locator("tbody tr").count()
         assert rows == 2, f"2 sessions attendues, {rows} trouvées"
 
+        # Rôles : l'admin ajoute une formatrice, lui crée une fiche et lui attribue une session ; elle ne voit que celle-ci
+        await tr.goto(URL + "#/admin/equipe"); await tr.wait_for_selector("#addF")
+        await tr.fill("#aMail", "fanny@demo.fr"); await tr.click("#addF button"); await tr.wait_for_selector("text=fanny@demo.fr")
+        await shot(tr, "26-equipe")
+        await tr.goto(URL + "#/admin/formateurs/nouveau"); await tr.wait_for_selector("#tN")
+        await tr.fill("#tN", "Fanny Martin"); await tr.fill("#tLog", "fanny@demo.fr"); await tr.click("#tF .draft-save"); await tr.wait_for_url("**/formateurs/*-*")
+        await tr.goto(URL + "#/admin"); await tr.wait_for_selector("#newBtn"); await tr.click("#newBtn")
+        await tr.fill("#nTitle", "Session de Fanny"); await tr.select_option("#nTr", label="Fanny Martin"); await tr.click("#newForm button[type=submit]")
+        await tr.wait_for_url("**/reglages")
+        fp = await ctx.new_page(); watch(fp, "formatrice")
+        await fp.goto(URL + "#/formateur"); await fp.wait_for_selector("#gF"); await fp.fill("#gC", "SAMSA-DEMO"); await fp.click("#gF button")
+        await fp.wait_for_selector("#mForm"); await fp.fill("#mail", "fanny@demo.fr"); await fp.click("#mForm button"); await fp.wait_for_selector("h1:has-text('Mes sessions')")
+        rows = await fp.locator("tbody tr").all_inner_texts()
+        assert len(rows) == 1 and "Session de Fanny" in rows[0], f"la formatrice ne voit que sa session : {rows}"
+        assert await fp.locator("#newBtn, a[href='#/admin/reglages'], [data-del], select.assign").count() == 0, "pas d'outils d'administration"
+        await fp.goto(URL + "#/admin/reglages"); await fp.wait_for_url("**/#/admin")
+        await fp.click("tbody tr a"); await fp.wait_for_selector(".phases"); await fp.click("text=Réglages"); await fp.wait_for_selector("#gTr")
+        assert await fp.locator("#gTr[disabled]").count() == 1 and await fp.locator("#gSk[disabled]").count() == 1, "attribution et habillage verrouillés"
+        await shot(fp, "27-formatrice")
+        await fp.close()
+
         # Code oublié : code temporaire par e-mail, puis nouveau code d'accès
         c2 = await b.new_context(viewport={"width": 1280, "height": 860}); fx = await c2.new_page(); watch(fx, "oubli")
         await fx.goto(URL + "#/formateur"); await fx.wait_for_selector("#gForgot"); await fx.click("#gForgot")

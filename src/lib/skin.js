@@ -16,7 +16,7 @@ export const isHex = (v) => /^#[0-9a-fA-F]{6}$/.test(String(v || ""));
 const lum = (hex) => { const c = rgb(hex); if (!c) return 0; const [r, g, b] = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
 
 const NEUTRAL_DARK = "#1F2328";
-const VARS = ["--navy", "--blue", "--sky", "--prat", "--comp", "--tint", "--muted", "--line", "--light", "--dark", "--on-dark", "--on-dark2", "--on-accent", "--ink", "--kick"];
+const VARS = ["--navy", "--blue", "--sky", "--prat", "--comp", "--tint", "--muted", "--line", "--light", "--dark", "--on-dark", "--on-dark2", "--on-accent", "--ink", "--kick", "--logo-bg"];
 
 /** Applique un habillage à toute la page (null : palette Samsa par défaut) */
 export function applySkin(skin) {
@@ -29,6 +29,7 @@ export function applySkin(skin) {
   const dark = isHex(current.dark) ? current.dark : NEUTRAL_DARK;
   const set = (k, v) => root.style.setProperty(k, v);
   set("--navy", dark); set("--comp", dark);
+  set("--logo-bg", dark); // fond derrière le logo (bandeau de la slide « L'intervenant ») : la couleur sombre du centre
   set("--blue", accent); set("--sky", mix(accent, 0.25)); set("--prat", mix(accent, 0.2));
   set("--tint", mix(accent, 0.88));
   set("--muted", "#5B6170"); set("--line", "#D5D8DE"); set("--light", "#F4F5F7"); set("--dark", "#202227");

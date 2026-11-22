@@ -37,11 +37,15 @@ export function createSupabaseApi(url, anonKey) {
     /* ---------- Profils des intervenant·es ---------- */
     async listTrainers() { return ok(await sb.from("trainers").select("*").order("name")); },
     async saveTrainer(t) {
-      const row = { name: t.name, photo: t.photo ?? null, roles: t.roles || [], tagline: t.tagline || null, tagline_sub: t.tagline_sub || null, email: t.email || null, website: t.website || null, socials: t.socials || [] };
+      const row = { name: t.name, login_email: (t.login_email || "").trim().toLowerCase() || null, photo: t.photo ?? null, roles: t.roles || [], tagline: t.tagline || null, tagline_sub: t.tagline_sub || null, email: t.email || null, website: t.website || null, socials: t.socials || [] };
       if (t.id) return ok(await sb.from("trainers").update(row).eq("id", t.id).select().single());
       return ok(await sb.from("trainers").insert(row).select().single());
     },
     async deleteTrainer(id) { ok(await sb.from("trainers").delete().eq("id", id)); },
+    /* ---------- Équipe (admin) ---------- */
+    async listStaff() { return ok(await sb.rpc("list_staff")) || []; },
+    async saveStaff(email, isAdmin) { ok(await sb.rpc("save_staff", { p_email: email, p_admin: !!isAdmin })); },
+    async removeStaff(email) { ok(await sb.rpc("remove_staff", { p_email: email })); },
 
     /* ---------- Code d'accès formateur ---------- */
     async trainerCodeConfigured() { return ok(await sb.rpc("trainer_code_configured")); },

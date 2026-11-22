@@ -4,6 +4,7 @@ import { $, $$, T, esc, guard, dateFr } from "../lib/dom.js";
 import { defaultActivities } from "../lib/activities.js";
 import { STATUS } from "./home.js";
 import { skinDark } from "../lib/skin.js";
+import { isAdmin } from "../lib/roles.js";
 
 // Lien court de la session : <site>/CODE (redirigé vers #/join/CODE par 404.html ou au démarrage).
 // VITE_SHORT_BASE permet un domaine plus court (ex. https://formation.samsa.fr/).
@@ -12,16 +13,21 @@ export const joinUrl = (code) => (SHORT_BASE ? SHORT_BASE.replace(/\/?$/, "/") :
 export const joinUrlLabel = (code) => joinUrl(code).replace(/^https?:\/\//, "");
 export const qr = (text, size = 320) => QRCode.toDataURL(text, { width: size, margin: 1, color: { dark: skinDark(), light: "#ffffff" } });
 
-export async function viewAdmin(root, _p, { api, go }) {
-  const [sessions, counts, brands] = await Promise.all([api.listSessions(), api.memberCounts(), api.listBrands().catch(() => [])]);
+export async function viewAdmin(root, _p, { api, go, me }) {
+  const admin = isAdmin(me);
+  const [sessions, counts, brands, trainers, skins] = await Promise.all([api.listSessions(), api.memberCounts(), api.listBrands().catch(() => []),
+    api.listTrainers().catch(() => []), api.listSkins().catch(() => [])]);
+  const trainerName = (id) => trainers.find((t) => t.id === id)?.name || "";
+  const trOptions = (sel) => `<option value="">— Non attribuée —</option>${trainers.map((t) => `<option value="${t.id}"${t.id === sel ? " selected" : ""}>${T(t.name)}${t.login_email ? "" : " (sans compte)"}</option>`).join("")}`;
   // Client : entreprise préenregistrée (brands) ou nom saisi avec « Autre »
   const clientOf = (s) => {
     const b = s.brand_id && brands.find((x) => x.id === s.brand_id);
     return b ? { name: b.name, logo: b.logo || b.logo_light || null } : { name: s.client || "", logo: s.client_logo || null };
   };
   root.innerHTML = `
-    <div class="pagehead"><div><div class="kicker-d">Back-office formateur</div><h1>Sessions</h1></div>
-      <div class="head-actions"><a class="btn ghost" href="#/admin/formateurs">Formateurs</a><a class="btn ghost" href="#/admin/reglages">Réglages généraux</a><button class="btn" id="newBtn">+ Démarrer une session</button></div></div>
+    <div class="pagehead"><div><div class="kicker-d">${admin ? "Back-office · administration" : "Back-office formateur"}</div><h1>${admin ? "Sessions" : "Mes sessions"}</h1>
+      ${admin ? "" : `<p class="muted">${T("Les sessions qui vous sont attribuées par l'administration. Pour en obtenir une autre, contactez-la.")}</p>`}</div>
+      ${admin ? `<div class="head-actions"><a class="btn ghost" href="#/admin/equipe">Équipe et accès</a><a class="btn ghost" href="#/admin/formateurs">Formateurs</a><a class="btn ghost" href="#/admin/reglages">Réglages généraux</a><button class="btn" id="newBtn">+ Démarrer une session</button></div>` : ""}</div>
     <form class="card" id="newForm" hidden style="margin-bottom:14px">
       <h3>Nouvelle session</h3>
       <div class="grid g2">
@@ -29,6 +35,8 @@ export async function viewAdmin(root, _p, { api, go }) {
         <div><label class="f" for="nClient">Client ou rédaction</label><input type="text" id="nClient" maxlength="80" placeholder="Libération"></div>
         <div><label class="f" for="nDate">Date (jour 1 · le jour 2 se règle ensuite)</label><input type="date" id="nDate"></div>
         <div><label class="f" for="nFmt">Format</label><select id="nFmt"><option value="1">Une journée</option><option value="2">Deux journées</option></select></div>
+        <div><label class="f" for="nTr">Intervenant·e (attribution)</label><select id="nTr">${trOptions(null)}</select></div>
+        <div><label class="f" for="nSk">Habillage (environnement du centre)</label><select id="nSk"><option value="">Par défaut</option>${skins.map((k) => `<option value="${k.id}">${T(k.name)}</option>`).join("")}</select></div>
       </div>
       <label class="f" for="nInv">Inviter des stagiaires (une adresse par ligne, facultatif)</label>
       <textarea id="nInv" placeholder="prenom.nom@liberation.fr"></textarea>
@@ -36,28 +44,32 @@ export async function viewAdmin(root, _p, { api, go }) {
       <div style="display:flex;gap:8px"><button class="btn" type="submit">Créer la session</button><button class="btn ghost" type="button" id="nCancel">Annuler</button></div>
     </form>
     <div class="card table-card">
-      ${sessions.length ? `<table class="tbl"><thead><tr><th>Session</th><th>Client</th><th>État</th><th>Formation</th><th>Date</th><th>Code</th><th>Participants</th><th></th></tr></thead><tbody>
+      ${sessions.length ? `<table class="tbl"><thead><tr><th>Session</th><th>Client</th><th>Intervenant·e</th><th>État</th><th>Date</th><th>Code</th><th>Participants</th><th></th></tr></thead><tbody>
       ${sessions.map((s) => `<tr>
-        <td><a href="#/admin/s/${s.id}"><b>${T(s.title)}</b></a></td>
+        <td><a href="#/admin/s/${s.id}"><b>${T(s.title)}</b></a><div class="small muted">${T(s.formation || "")}${s.format === "2" ? " · 2 jours" : " · 1 jour"}</div></td>
         <td class="client-cell">${(() => { const c = clientOf(s); return c.logo ? `<img src="${esc(c.logo)}" alt="${esc(c.name)}" title="${esc(c.name)}" class="client-logo">` : c.name ? `<span>${T(c.name)}</span>` : `<span class="muted">—</span>`; })()}</td>
+        <td class="small">${admin ? `<select class="assign" data-assign="${s.id}" aria-label="Intervenant·e de la session">${trOptions(s.trainer_id)}</select>` : T(trainerName(s.trainer_id) || "—")}</td>
         <td><span class="state ${s.status}">${STATUS[s.status]}</span></td>
-        <td class="small">${T(s.formation)}${s.format === "2" ? " · 2 jours" : ""}</td>
         <td class="small mono">${s.date || "—"}</td>
         <td class="mono">${esc(s.code)}</td>
         <td>${counts[s.id] || 0}</td>
-        <td class="actions"><button class="iconbtn" data-qr="${s.id}" title="QR code" aria-label="QR code">▦</button><button class="iconbtn danger" data-del="${s.id}" title="Supprimer" aria-label="Supprimer">✕</button></td>
-      </tr>`).join("")}</tbody></table>` : `<p class="empty">Aucune session. Créez la première.</p>`}
+        <td class="actions"><button class="iconbtn" data-qr="${s.id}" title="QR code" aria-label="QR code">▦</button>${admin ? `<button class="iconbtn danger" data-del="${s.id}" title="Supprimer" aria-label="Supprimer">✕</button>` : ""}</td>
+      </tr>`).join("")}</tbody></table>` : `<p class="empty">${admin ? "Aucune session. Créez la première." : T("Aucune session ne vous est attribuée pour l'instant.")}</p>`}
     </div>`;
 
   const form = $("#newForm", root);
+  // Attribution d'une session (admin) : la fiche intervenant·e choisie donne accès au compte qui porte son adresse
+  $$("[data-assign]", root).forEach((sel) => (sel.onchange = () => guard(() => api.updateSession(sel.dataset.assign, { trainer_id: sel.value || null }), "Attribution enregistrée.")));
+  if (!admin) { form.remove(); } else
   $("#newBtn", root).onclick = () => { form.hidden = false; $("#nTitle", root).focus(); };
-  $("#nCancel", root).onclick = () => (form.hidden = true);
-  form.onsubmit = async (e) => {
+  if (admin) $("#nCancel", root).onclick = () => (form.hidden = true);
+  if (admin) form.onsubmit = async (e) => {
     e.preventDefault();
     const format = $("#nFmt", root).value;
     const s = await guard(() => api.createSession({
       title: $("#nTitle", root).value.trim(), client: $("#nClient", root).value.trim(),
       date: $("#nDate", root).value || null, format, activities: defaultActivities(format),
+      trainer_id: $("#nTr", root).value || null, skin_id: $("#nSk", root).value || null,
     }), "Session créée.");
     if (!s) return;
     const emails = parseEmails($("#nInv", root).value);

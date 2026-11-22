@@ -16,6 +16,7 @@ import { modulesFor, daysOf, typeLabel, hasCadrage } from "../lib/content.js";
 import { parseConducteur, conducteurMarkdown } from "../lib/conducteur.js";
 import { loadSkins, skinFor, applySkin, currentSkin } from "../lib/skin.js";
 import { samsaHtml } from "../lib/brand.js";
+import { isAdmin } from "../lib/roles.js";
 import { morph } from "../lib/morph.js";
 import { parsePages, slideEmbedUrl, deckId, deckKind } from "../deck.js";
 
@@ -57,6 +58,7 @@ export async function loadScreenData(api, session) {
 }
 
 export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
+  const admin = isAdmin(ctx.me); // l'attribution, l'habillage et la duplication restent à l'administration
   const { api, go } = ctx;
   let session = await api.getSession(sid);
   if (!session) { root.innerHTML = `<div class="card"><h2>Session introuvable</h2><a class="btn" href="#/admin">Retour</a></div>`; return; }
@@ -104,8 +106,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
           <label class="f" for="gT">Titre affiché aux stagiaires</label><input type="text" id="gT" required maxlength="140" value="${esc(session.title)}">
           <label class="f" for="gF">Intitulé de la formation</label><input type="text" id="gF" maxlength="140" value="${esc(session.formation)}">
           <label class="f" for="gSk">Habillage (centre de formation)</label>
-          <select id="gSk"><option value="">Par défaut · ${esc(skinData.skins.find((k) => k.id === skinData.def)?.name || "Samsa")}</option>${skinData.skins.map((k) => `<option value="${k.id}"${session.skin_id === k.id ? " selected" : ""}>${esc(k.name)}</option>`).join("")}</select>
-          <p class="small muted" style="margin-top:4px">${T("Couleur d'accent et logo du centre, appliqués à l'espace stagiaire, aux slides d'entrée et à l'écran. ")}<a href="#/admin/reglages">Gérer les habillages</a></p>
+          <select id="gSk"${admin ? "" : " disabled"}><option value="">Par défaut · ${esc(skinData.skins.find((k) => k.id === skinData.def)?.name || "Samsa")}</option>${skinData.skins.map((k) => `<option value="${k.id}"${session.skin_id === k.id ? " selected" : ""}>${esc(k.name)}</option>`).join("")}</select>
+          <p class="small muted" style="margin-top:4px">${T("Couleur d'accent et logo du centre, appliqués à l'espace stagiaire, aux slides d'entrée et à l'écran. ")}${admin ? `<a href="#/admin/reglages">Gérer les habillages</a>` : "Choisi par l'administration."}</p>
           <label class="f">Format</label>
           <div class="chips" id="gFmt">${[["1", "Une journée"], ["2", "Deux journées"]].map(([v, l]) => `<label class="radio"><input type="radio" name="fmt" value="${v}"${session.format === v ? " checked" : ""}${session.programme?.modules?.length ? " disabled" : ""}> ${l}</label>`).join("")}</div>
           <p class="small muted">${T("Le format détermine le déroulé visible côté stagiaire : en une journée, seul le programme d'une journée est accessible.")}</p>
@@ -126,8 +128,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
           <div id="condPrev"></div>
         </div>
         <div class="card" style="margin-top:14px"><h3>Intervenant·e</h3>
-          <select id="gTr"><option value="">— Choisir une fiche —</option>${trainers.map((t) => `<option value="${t.id}"${session.trainer_id === t.id ? " selected" : ""}>${T(t.name)}</option>`).join("")}</select>
-          <p class="small muted">${T("Présenté·e sur la slide « Formateur ». ")}<a href="#/admin/formateurs">Gérer les fiches formateurs</a></p>
+          <select id="gTr"${admin ? "" : " disabled"}><option value="">— Choisir une fiche —</option>${trainers.map((t) => `<option value="${t.id}"${session.trainer_id === t.id ? " selected" : ""}>${T(t.name)}</option>`).join("")}</select>
+          <p class="small muted">${T("Présenté·e sur la slide « Formateur ». La fiche choisie donne aussi accès à la session au compte qui porte son adresse de connexion. ")}${admin ? `<a href="#/admin/formateurs">Gérer les fiches formateurs</a>` : T("Attribution faite par l'administration.")}</p>
         </div>
         <div class="card" style="margin-top:14px"><h3>Entreprise cliente</h3>
           <div class="brand-pick" id="gBrand">
@@ -245,7 +247,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         title: $("#gT", box).value.trim(), formation: $("#gF", box).value.trim() || "Prendre en main les IA génératives",
         format, date: $("#gD1", box).value || null, date2: format === "2" ? $("#gD2", box).value || null : null,
         start_time: $("#gS", box).value || "09:30", end_time: $("#gE", box).value || "17:30",
-        brand_id: box.querySelector('input[name="brand"]:checked')?.value || null, trainer_id: $("#gTr", box).value || null, skin_id: $("#gSk", box).value || null,
+        brand_id: box.querySelector('input[name="brand"]:checked')?.value || null, ...(admin ? { trainer_id: $("#gTr", box).value || null, skin_id: $("#gSk", box).value || null } : {}),
         emargement_url: $("#gEm", box).value.trim() || null, emargement_qr: emQr, emargement_label: $("#gEl", box).value.trim() || null,
         emargement2_enabled: $("#gE2", box).checked, emargement2_text: $("#gEt", box).value.trim() || null,
         slides_url: $("#gSl", box).value.trim() || null, support_unlocked: $("#gSuF", box).checked, decks,
@@ -586,7 +588,7 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
 
       <div class="card" id="emarg" style="margin-top:14px"><h3>Émargement</h3>
         ${roster.length ? `<table class="tbl"><thead><tr><th>Présent·e</th><th>Nom</th><th>E-mail</th><th>Cadrage</th></tr></thead><tbody>${roster.map((r) => `<tr><td><input type="checkbox" data-att="${r.user_id}"${r.attended ? " checked" : ""} aria-label="Présence de ${esc(r.full_name || r.email)}"></td><td>${T(r.full_name || "—")}</td><td class="small">${esc(r.email)}</td><td class="small">${r.project_status === "validated" ? "Validé" : r.project_id ? `${r.project_steps}/${STEPS.length}` : "—"}</td></tr>`).join("")}</tbody></table>` : `<p class="empty">Aucun participant.</p>`}
-        <div class="chips" style="margin-top:12px"><button class="btn sm" id="csv">Exporter le bilan (CSV)</button><button class="btn sm ghost" id="dup">Dupliquer la session</button></div>
+        <div class="chips" style="margin-top:12px"><button class="btn sm" id="csv">Exporter le bilan (CSV)</button>${admin ? `<button class="btn sm ghost" id="dup">Dupliquer la session</button>` : ""}</div>
         <p class="small muted">${T("Le bilan reprend présence, profil, état du cadrage, progression dans le déroulé et scores aux quiz. La duplication reprend la séquence, les ressources et les intitulés des accès (sans les valeurs), sans participant·es.")}</p></div>
 
       <div class="card" id="resultats" style="margin-top:14px"><h3>Résultats des activités</h3><div id="resBox" class="grid g2"><p class="small muted">Chargement…</p></div></div>
@@ -601,7 +603,7 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
       </div>`;
     const reload = () => go(location.hash);
     $$("[data-att]", box).forEach((c) => (c.onchange = () => guard(() => api.setAttended(sid, c.dataset.att, c.checked))));
-    $("#dup", box).onclick = async () => { const id = await guard(() => api.duplicateSession(sid), "Session dupliquée."); if (id) go(`#/admin/s/${id}`); };
+    if ($("#dup", box)) $("#dup", box).onclick = async () => { const id = await guard(() => api.duplicateSession(sid), "Session dupliquée."); if (id) go(`#/admin/s/${id}`); };
     $("#csv", box).onclick = () => {
       const quizzes = Object.keys(QUIZ);
       const head = ["Nom", "E-mail", "Présent", "Métier", "Niveau IA", "Cadrage", "Cas d'usage", "Retour formateur", "Déroulé (séquences cochées)", ...quizzes.map((q) => "Quiz " + QUIZ[q].titre)];
