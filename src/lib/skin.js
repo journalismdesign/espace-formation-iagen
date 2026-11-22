@@ -16,7 +16,7 @@ export const isHex = (v) => /^#[0-9a-fA-F]{6}$/.test(String(v || ""));
 const lum = (hex) => { const c = rgb(hex); if (!c) return 0; const [r, g, b] = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
 
 const NEUTRAL_DARK = "#1F2328";
-const VARS = ["--navy", "--blue", "--sky", "--prat", "--comp", "--tint", "--muted", "--line", "--light", "--dark", "--on-dark", "--on-dark2", "--on-accent"];
+const VARS = ["--navy", "--blue", "--sky", "--prat", "--comp", "--tint", "--muted", "--line", "--light", "--dark", "--on-dark", "--on-dark2", "--on-accent", "--ink"];
 
 /** Applique un habillage à toute la page (null : palette Samsa par défaut) */
 export function applySkin(skin) {
@@ -34,6 +34,8 @@ export function applySkin(skin) {
   set("--muted", "#5B6170"); set("--line", "#D5D8DE"); set("--light", "#F4F5F7"); set("--dark", "#202227");
   set("--on-dark", "#E3E5E9"); set("--on-dark2", "#B9BDC6");
   set("--on-accent", lum(accent) > 0.45 ? "#111111" : "#ffffff");
+  // Textes de couleur (titres, intitulés, chiffres clés) : l'accent, assombri s'il est trop clair pour être lu sur fond blanc
+  set("--ink", lum(accent) > 0.3 ? mix(accent, lum(accent) > 0.55 ? -0.55 : -0.35) : accent);
 }
 
 /** Couleur sombre en cours (QR codes) */
