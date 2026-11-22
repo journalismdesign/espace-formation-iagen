@@ -71,10 +71,15 @@ grant insert, update, delete on public.brands, public.app_settings, public.sessi
 grant select on public.brands, public.app_settings to authenticated;
 grant select on public.session_support to authenticated;
 
+drop policy if exists "logo : lire" on public.brands;
 create policy "logo : lire" on public.brands for select using (auth.uid() is not null);
+drop policy if exists "logo : formateur" on public.brands;
 create policy "logo : formateur" on public.brands for all using (public.is_trainer()) with check (public.is_trainer());
+drop policy if exists "réglage : lire" on public.app_settings;
 create policy "réglage : lire" on public.app_settings for select using (auth.uid() is not null);
+drop policy if exists "réglage : formateur" on public.app_settings;
 create policy "réglage : formateur" on public.app_settings for all using (public.is_trainer()) with check (public.is_trainer());
+drop policy if exists "support : formateur" on public.session_support;
 create policy "support : formateur" on public.session_support for all using (public.is_trainer()) with check (public.is_trainer());
 
 -- ---------------------------------------------------------------------
@@ -111,7 +116,8 @@ begin
 end $$;
 
 -- Informations publiques d'une session (slide d'ouverture, avant connexion)
-create or replace function public.session_public(p_code text)
+drop function if exists public.session_public(text);
+create function public.session_public(p_code text)
 returns table (id uuid, title text, formation text, client text, date date, date2 date, start_time time, end_time time,
                format text, status text, client_logo text, org_name text, org_logo text)
 language sql stable security definer set search_path = public as $$

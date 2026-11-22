@@ -1,6 +1,7 @@
 -- =====================================================================
 -- Espace formation IA générative : schéma, droits (RLS) et fonctions
--- À exécuter une fois dans le SQL Editor de Supabase (ou `supabase db push`).
+-- À exécuter dans le SQL Editor de Supabase (ou `supabase db push`).
+-- Ré-exécutable sans erreur : chaque politique est supprimée puis recréée.
 -- Principe : un·e stagiaire ne voit que ses sessions, son cadrage, ses
 -- réponses ; les résultats collectifs passent par des fonctions qui ne
 -- renvoient que des agrégats. Les formateur·ices voient tout.
@@ -213,54 +214,80 @@ grant insert (thread_id, session_id, body), delete on public.posts to authentica
 -- Politiques RLS
 -- =====================================================================
 -- profils
+drop policy if exists "profil : soi ou formateur" on public.profiles;
 create policy "profil : soi ou formateur" on public.profiles for select
   using (id = auth.uid() or public.is_trainer());
+drop policy if exists "profil : modifier le sien" on public.profiles;
 create policy "profil : modifier le sien" on public.profiles for update
   using (id = auth.uid()) with check (id = auth.uid());
 
 -- sessions
+drop policy if exists "session : lire si membre ou formateur" on public.sessions;
 create policy "session : lire si membre ou formateur" on public.sessions for select
   using (public.can_see(id));
+drop policy if exists "session : formateur écrit" on public.sessions;
 create policy "session : formateur écrit" on public.sessions for insert with check (public.is_trainer());
+drop policy if exists "session : formateur modifie" on public.sessions;
 create policy "session : formateur modifie" on public.sessions for update using (public.is_trainer()) with check (public.is_trainer());
+drop policy if exists "session : formateur supprime" on public.sessions;
 create policy "session : formateur supprime" on public.sessions for delete using (public.is_trainer());
 
 -- membres
+drop policy if exists "membre : soi ou formateur" on public.session_members;
 create policy "membre : soi ou formateur" on public.session_members for select
   using (user_id = auth.uid() or public.is_trainer());
+drop policy if exists "membre : sa progression" on public.session_members;
 create policy "membre : sa progression" on public.session_members for update
   using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists "membre : formateur retire" on public.session_members;
 create policy "membre : formateur retire" on public.session_members for delete using (public.is_trainer());
 
 -- invitations, ressources, accès
+drop policy if exists "invitation : formateur" on public.session_invites;
 create policy "invitation : formateur" on public.session_invites for all using (public.is_trainer()) with check (public.is_trainer());
+drop policy if exists "ressource : lire" on public.resources;
 create policy "ressource : lire" on public.resources for select using (public.can_see(session_id));
+drop policy if exists "ressource : formateur" on public.resources;
 create policy "ressource : formateur" on public.resources for all using (public.is_trainer()) with check (public.is_trainer());
+drop policy if exists "accès : lire" on public.session_secrets;
 create policy "accès : lire" on public.session_secrets for select using (public.can_see(session_id));
+drop policy if exists "accès : formateur" on public.session_secrets;
 create policy "accès : formateur" on public.session_secrets for all using (public.is_trainer()) with check (public.is_trainer());
 
 -- cadrages
+drop policy if exists "cadrage : soi ou formateur" on public.projects;
 create policy "cadrage : soi ou formateur" on public.projects for select
   using (user_id = auth.uid() or public.is_trainer());
+drop policy if exists "cadrage : créer le sien" on public.projects;
 create policy "cadrage : créer le sien" on public.projects for insert
   with check (user_id = auth.uid() and public.is_member(session_id));
+drop policy if exists "cadrage : modifier le sien" on public.projects;
 create policy "cadrage : modifier le sien" on public.projects for update
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- réponses
+drop policy if exists "réponse : soi ou formateur" on public.responses;
 create policy "réponse : soi ou formateur" on public.responses for select
   using (user_id = auth.uid() or public.is_trainer());
+drop policy if exists "réponse : répondre" on public.responses;
 create policy "réponse : répondre" on public.responses for insert
   with check (user_id = auth.uid() and public.is_member(session_id));
+drop policy if exists "réponse : changer d'avis" on public.responses;
 create policy "réponse : changer d'avis" on public.responses for update
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- discussion
+drop policy if exists "fil : lire" on public.threads;
 create policy "fil : lire" on public.threads for select using (public.can_see(session_id));
+drop policy if exists "fil : écrire" on public.threads;
 create policy "fil : écrire" on public.threads for insert with check (author = auth.uid() and public.can_see(session_id));
+drop policy if exists "fil : supprimer" on public.threads;
 create policy "fil : supprimer" on public.threads for delete using (author = auth.uid() or public.is_trainer());
+drop policy if exists "message : lire" on public.posts;
 create policy "message : lire" on public.posts for select using (public.can_see(session_id));
+drop policy if exists "message : écrire" on public.posts;
 create policy "message : écrire" on public.posts for insert with check (author = auth.uid() and public.can_see(session_id));
+drop policy if exists "message : supprimer" on public.posts;
 create policy "message : supprimer" on public.posts for delete using (author = auth.uid() or public.is_trainer());
 
 -- =====================================================================
@@ -360,9 +387,14 @@ grant execute on function public.join_session(text), public.claim_invites(), pub
 -- =====================================================================
 -- Temps réel
 -- =====================================================================
-do $$ begin
+-- Ajout table par table : une table déjà publiée ne bloque pas une seconde exécution
+do $$ declare t text; begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    alter publication supabase_realtime add table public.sessions, public.responses, public.threads,
-      public.posts, public.projects, public.session_members;
+    foreach t in array array['sessions','responses','threads','posts','projects','session_members'] loop
+      begin
+        execute format('alter publication supabase_realtime add table public.%I', t);
+      exception when duplicate_object then null;
+      end;
+    end loop;
   end if;
 end $$;
