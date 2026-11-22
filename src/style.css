@@ -199,7 +199,8 @@ main#view.withside{max-width:none;padding:0;display:grid;grid-template-columns:2
 label.f.inline{display:flex;gap:8px;align-items:center;font-weight:500}
 label.f.inline input{width:auto}
 hr{border:0;border-top:1px solid var(--line);margin:16px 0}
-select{appearance:auto}
+select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%278%27 viewBox=%270 0 12 8%27%3E%3Cpath d=%27M1 1.5l5 5 5-5%27 fill=%27none%27 stroke=%27%235B6170%27 stroke-width=%271.6%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:12px 8px;padding-right:36px !important}
+select::-ms-expand{display:none}
 /* Connexion */
 .login{position:fixed;inset:0;z-index:40;overflow-y:auto;display:grid;place-items:center;padding:30px 16px;background:linear-gradient(160deg,var(--navy),var(--blue))}
 .login-card{max-width:440px;width:100%;padding:28px}
@@ -794,3 +795,4 @@ select.assign{max-width:180px;font-size:13px;padding:4px 6px}
 .staff-grid td{vertical-align:middle}
 .staff-grid td select{width:170px;min-width:0;height:38px;box-sizing:border-box;padding:0 30px 0 12px;font-size:14px;line-height:38px;margin:0}
 .staff-grid td select:disabled{color:var(--ink);background-color:var(--light);opacity:1;cursor:not-allowed}
+select:disabled{background-image:none;padding-right:12px !important}
