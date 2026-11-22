@@ -37,8 +37,9 @@ export function createSupabaseApi(url, anonKey) {
     /* ---------- Identité visuelle et réglages ---------- */
     async listBrands() { return ok(await sb.from("brands").select("*").order("sort").order("name")); },
     async saveBrand(b) {
-      if (b.id) return ok(await sb.from("brands").update({ name: b.name, logo: b.logo ?? null }).eq("id", b.id).select().single());
-      return ok(await sb.from("brands").insert({ name: b.name, logo: b.logo ?? null }).select().single());
+      const row = { name: b.name, logo: b.logo ?? null, logo_light: b.logo_light ?? null };
+      if (b.id) return ok(await sb.from("brands").update(row).eq("id", b.id).select().single());
+      return ok(await sb.from("brands").insert(row).select().single());
     },
     async deleteBrand(id) { ok(await sb.from("brands").delete().eq("id", id)); },
     async getSettings() { return Object.fromEntries(ok(await sb.from("app_settings").select("*")).map((r) => [r.key, r.value])); },

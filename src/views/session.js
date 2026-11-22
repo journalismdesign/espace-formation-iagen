@@ -85,14 +85,15 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
       <div class="pagehead"><div><div class="kicker-d">Le jour J · ${T(dateFr(session.date))}</div><h1>La formation en direct</h1></div></div>
       <div class="card live" id="liveCard"></div>
       <h2 style="margin:22px 0 8px">Le déroulé</h2>
-      <p class="muted small" style="margin-top:0">${T(`Cochez les séquences au fil de la journée. Progression : `)}<b id="pp">${parcoursPct(session.format, progress)}${NB}%</b></p>
+      <p class="muted small" style="margin-top:0">${T(`Cochez les séquences au fil de la journée. Progression : `)}<b id="pp">${parcoursPct(session.format, progress, session.live?.module)}${NB}%</b></p>
       <div id="parcours"></div>`;
     const save = debounce((p) => membership && api.saveProgress(sid, p).catch(() => {}), 600);
     let lastMod;
     const drawParcours = () => {
       if (lastMod === (session.live?.module || null)) return; // ne redessine que si la séquence change
       lastMod = session.live?.module || null;
-      renderParcours($("#parcours", body), session.format, progress, (p) => { $("#pp", body).textContent = parcoursPct(session.format, p) + NB + "%"; save(p); }, { currentId: lastMod });
+      renderParcours($("#parcours", body), session.format, progress, (p) => { $("#pp", body).textContent = parcoursPct(session.format, p, lastMod) + NB + "%"; save(p); }, { currentId: lastMod });
+      $("#pp", body).textContent = parcoursPct(session.format, progress, lastMod) + NB + "%";
     };
     drawParcours();
     onSession.add(drawParcours);

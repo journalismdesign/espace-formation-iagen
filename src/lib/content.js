@@ -109,10 +109,11 @@ export function renderParcours(root, format, progress, onChange, opts = {}) {
 function modHtml(m, progress, nm, rel = null) {
   const dur = mins(m.t[1]) - mins(m.t[0]);
   const isNow = rel === null ? nm >= mins(m.t[0]) && nm < mins(m.t[1]) : rel === 0;
-  const tag = rel === null || rel === 0 ? "" : rel > 0 ? `<span class="pill">À venir</span>` : "";
+  const passed = rel !== null && rel < 0; // séquence dépassée par le formateur : validée d'office
+  const tag = rel === null || rel === 0 ? "" : rel > 0 ? `<span class="pill">À venir</span>` : `<span class="pill passed">✓ Validé</span>`;
   if (m.type === "pause") return `<div class="mod" data-type="pause"><div class="time"><b>${hfr(m.t[0])}</b></div><div class="body"><div class="mhead"><div class="meta"><span class="pill pause">${m.titre}</span><span class="small muted">${fmtMin(dur)}</span></div></div></div></div>`;
-  const done = !!progress.done?.[m.id];
-  return `<div class="mod${done ? " done" : ""}${isNow ? " now" : ""}${rel !== null && rel > 0 ? " later" : ""}" data-type="${m.type}" data-id="${m.id}">
+  const done = !!progress.done?.[m.id] || passed;
+  return `<div class="mod${done ? " done" : ""}${passed ? " passed" : ""}${isNow ? " now" : ""}${rel !== null && rel > 0 ? " later" : ""}" data-type="${m.type}" data-id="${m.id}">
     <div class="time"><b>${hfr(m.t[0])}</b>${hfr(m.t[1])}</div>
     <div class="body">
       <div class="mhead" role="button" tabindex="0" aria-expanded="false">
@@ -143,7 +144,14 @@ function detail(m, progress) {
   if (m.live && PRESETS[m.live]) h += `<p class="small muted" style="margin:0">Activité en salle prévue : « ${T(PRESETS[m.live].q)} ».</p>`;
   return h;
 }
-export function parcoursPct(format, progress) {
+// Séquences déjà passées dans le déroulé piloté par le formateur
+export function passedIds(format, currentId) {
+  const all = modulesFor(format), i = all.findIndex((m) => m.id === currentId);
+  return new Set(i < 0 ? [] : all.slice(0, i).map((m) => m.id));
+}
+export function parcoursPct(format, progress, currentId = null) {
+  const passed = passedIds(format, currentId);
+  progress = { ...progress, done: { ...(progress?.done || {}), ...Object.fromEntries([...passed].map((id) => [id, true])) } };
   const list = modulesFor(format).filter((m) => m.type !== "pause");
   const qz = [...new Set(list.filter((m) => m.quiz).map((m) => m.quiz))];
   const total = list.length + qz.length;

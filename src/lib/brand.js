@@ -15,24 +15,29 @@ export const samsaHtml = (onDark = true, cls = "") => onDark
 export async function resolveBranding(api, session) {
   if (session.org_name !== undefined) {
     // déjà résolue par session_public
-    return { client: { name: session.client || "", logo: session.client_logo || null }, org: { name: session.org_name || "", logo: session.org_logo || null } };
+    return { client: { name: session.client || "", logo: session.client_logo || null, logoLight: session.client_logo_light || null },
+      org: { name: session.org_name || "", logo: session.org_logo || null, logoLight: session.org_logo_light || null } };
   }
   const [brands, settings] = await Promise.all([api.listBrands().catch(() => []), api.getSettings().catch(() => ({}))]);
   const b = brands.find((x) => x.id === session.brand_id);
   return {
-    client: { name: session.client || b?.name || "", logo: session.client_logo || b?.logo || null },
-    org: { name: settings.org_name || "", logo: settings.org_logo || null },
+    client: { name: session.client || b?.name || "", logo: session.client_logo || b?.logo || null, logoLight: session.client_logo_light || b?.logo_light || null },
+    org: { name: settings.org_name || "", logo: settings.org_logo || null, logoLight: settings.org_logo_light || null },
   };
 }
 
 // Bloc « Une formation pour » + logo de l'entreprise cliente.
 // onDark : posé sur fond bleu ; withOrg : ajoute le logo de l'organisme
 // (seulement là où le bandeau bleu avec Samsa n'est pas visible).
+// Version du logo adaptée au fond : claire sur marine, sombre sur fond clair
+export const pickLogo = (x, onDark) => (onDark ? x.logoLight || x.logo : x.logo || x.logoLight) || null;
+
 export function logosHtml(br, cls = "", onDark = false, withOrg = false) {
-  const c = br.client;
+  const c = { ...br.client, logo: pickLogo(br.client, onDark) };
   const tile = c.logo ? `<span class="logo-tile ${cls}"><img src="${esc(c.logo)}" alt="${esc(c.name)}"></span>` : c.name ? `<span class="logo-tile text ${cls}">${T(c.name)}</span>` : "";
   const client = tile ? `<div class="for-client ${cls}${onDark ? " dark" : ""}"><span class="for-label">Une formation pour</span>${tile}</div>` : "";
-  const org = withOrg ? (br.org.logo ? `<span class="logo-tile ${cls}"><img src="${esc(br.org.logo)}" alt="${esc(br.org.name)}"></span>` : samsaHtml(onDark, cls)) : "";
+  const ol = pickLogo(br.org, onDark);
+  const org = withOrg ? (ol ? `<span class="logo-tile ${cls}"><img src="${esc(ol)}" alt="${esc(br.org.name)}"></span>` : samsaHtml(onDark, cls)) : "";
   return client || org ? `<div class="logos">${org}${client}</div>` : "";
 }
 

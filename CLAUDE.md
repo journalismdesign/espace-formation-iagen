@@ -15,7 +15,8 @@ Plateforme de formation de Gerald Holubowicz (journalism.design). Elle comprend 
 - Design : palette marine et bleu du deck (`--navy #0A2D4E`, `--blue #124F90`, accent jaune `--yel`), Montserrat et IBM Plex Mono **auto-hébergées** (@fontsource). Le design system Synth a été essayé puis **refusé** : ne pas le réappliquer sans demande.
 - Logo Samsa (organisme, blanc) : `src/assets/samsa-logo.png`, **toujours présent dans le bandeau bleu** (en-tête, slides d'entrée). Sur fond clair, il est teinté en marine par masque CSS (`samsaHtml(false)`). Un logo d'organisme déposé dans les réglages le remplace dans les blocs de logos, jamais dans le bandeau.
 - Écran projeté et slides d'entrée : **DA du support Google Slides**. Format 16:9 dimensionné en `cqw`. Marine #0A2D4E, bleu #124F90, panneau #F2F4F7, surtitres #C3CADD (fond marine) ou #4A6A95 (fond clair), titres en capitales grasses, pastilles carrées alternées bleu/marine, pied bleu avec Samsa et « JOURNALISME & IA · année ». Voir `src/lib/screen.js`.
-- Logo de l'entreprise cliente : toujours sans cadre ni fond, sous « Une formation pour ».
+- Logos en deux versions : `logo` (sombre, pour fonds clairs) et `logo_light` (claire, pour fonds marine), pour les entreprises (`brands`), la session (`client_logo`/`client_logo_light`) et l'organisme (`org_logo`/`org_logo_light`). Le choix se fait par `pickLogo(x, onDark)`. Le logo client est toujours sans cadre, sous « Une formation pour ».
+- Parcours stagiaire : toute séquence antérieure à celle lancée par le formateur est validée d'office, en vert (« ✓ Validé »), et compte dans la progression.
 - Émargement : deux créneaux par jour, à l'arrivée (heure de début) et à la reprise (fin de la pause déjeuner). Ils sont insérés dans le déroulé du pilotage, avec un rappel de 15 min avant à 30 min après. Ce qui a été présenté est conservé dans `live.emarg`.
 - Sobriété : pas de dépendance lourde, pas de traceur, pas de ressource tierce au chargement.
 
@@ -31,6 +32,7 @@ Plateforme de formation de Gerald Holubowicz (journalism.design). Elle comprend 
 - `session_members` : progression et émargement. `session_invites` sert à l'invitation par e-mail. `join_session(code)` sert au code ou au QR.
 - `projects` : cadrage. Le champ `data` contient `{mode, besoin, pourqui, pistes, choix, retenu, analyse:{v1,v2}, steps}`. `trainer_comment` s'écrit via `comment_project`.
 - `responses` : une réponse par personne et par activité. Pour un quiz, la clé est `quizId#index`. La lecture collective passe uniquement par `live_results`.
+- Migrations, dans l'ordre : `…_init.sql`, `…_v3_acces_pilotage.sql`, `…_logos_clair_sombre.sql`.
 - v3 : `sessions.date2/start_time/end_time/brand_id/client_logo/slides_url/emargement_url/emargement_qr/support_unlocked`, `brands`, `app_settings` (org_name, org_logo), `session_support` (lien lu via `support_status`), `access_codes` (empreintes, purge à expiration et à la clôture), `session_public(code)` lisible sans connexion.
 - `threads`/`posts` pour la discussion, `resources`/`session_secrets` pour les ressources de la session, `ai_usage` pour le quota IA.
 

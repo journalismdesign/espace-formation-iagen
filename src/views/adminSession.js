@@ -8,6 +8,7 @@ import { screenHtml } from "../lib/screen.js";
 import { openSheet } from "../lib/content.js";
 import { joinUrl, qr, showQr, parseEmails } from "./admin.js";
 import { STATUS } from "./home.js";
+import { logoPair } from "./settings.js";
 import { STEPS, SENSIB } from "./cadrageModel.js";
 import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml } from "../lib/brand.js";
 import { modulesFor, typeLabel } from "../lib/content.js";
@@ -81,7 +82,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
      ================================================================= */
   async function phaseReglages() {
     const [brands, sup] = await Promise.all([api.listBrands(), api.supportStatus(sid).catch(() => ({}))]);
-    let clientLogo = session.client_logo || null, emQr = session.emargement_qr || null;
+    let clientLogo = session.client_logo || null, clientLogoLight = session.client_logo_light || null, emQr = session.emargement_qr || null;
     box.innerHTML = `
     <form id="regF" class="grid adm2">
       <div>
@@ -100,12 +101,12 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         </div>
         <div class="card" style="margin-top:14px"><h3>Entreprise cliente</h3>
           <div class="brand-pick" id="gBrand">
-            ${brands.map((b) => `<label class="brand-opt"><input type="radio" name="brand" value="${b.id}"${session.brand_id === b.id ? " checked" : ""}><span class="logo-tile">${b.logo ? `<img src="${esc(b.logo)}" alt="">` : T(b.name)}</span><small>${T(b.name)}</small></label>`).join("")}
+            ${brands.map((b) => `<label class="brand-opt"><input type="radio" name="brand" value="${b.id}"${session.brand_id === b.id ? " checked" : ""}><span class="logo-tile">${b.logo || b.logo_light ? `<img src="${esc(b.logo || b.logo_light)}" alt="">` : T(b.name)}</span><small>${T(b.name)}</small></label>`).join("")}
             <label class="brand-opt"><input type="radio" name="brand" value=""${!session.brand_id ? " checked" : ""}><span class="logo-tile text">—</span><small>Autre</small></label>
           </div>
           <label class="f" for="gC">Nom affiché (si « Autre » ou pour préciser un service)</label><input type="text" id="gC" maxlength="80" value="${esc(session.client || "")}">
           <label class="f">Logo propre à cette session (facultatif, prioritaire)</label>
-          <div style="display:flex;gap:10px;align-items:center"><input type="file" id="gL" accept="image/*"><span id="gLprev">${clientLogo ? `<img src="${clientLogo}" alt="" class="thumb">` : ""}</span>${clientLogo ? `<button type="button" class="linkbtn small" id="gLdel">Retirer</button>` : ""}</div>
+          <div id="gLpair">${logoPair("sess", clientLogo, clientLogoLight)}</div>
           <p class="small muted">${T("Les logos de Radio France, France Télévisions et Libération se déposent une fois pour toutes dans ")}<a href="#/admin/reglages">Réglages généraux</a>.</p>
         </div>
       </div>
@@ -137,8 +138,19 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     };
     $("#gEm", box).oninput = debounce(drawEm, 400); drawEm();
     $("#gEq", box).onchange = async (e) => { const f = e.target.files[0]; if (f) { emQr = await guard(() => fileToDataUrl(f, 800)) || emQr; drawEm(); } };
-    $("#gL", box).onchange = async (e) => { const f = e.target.files[0]; if (f) { clientLogo = await guard(() => fileToDataUrl(f)) || clientLogo; $("#gLprev", box).innerHTML = clientLogo ? `<img src="${clientLogo}" alt="" class="thumb">` : ""; } };
-    $("#gLdel", box)?.addEventListener("click", () => { clientLogo = null; $("#gLprev", box).innerHTML = ""; });
+    const bindPair = () => {
+      $$("#gLpair [data-up]", box).forEach((inp) => (inp.onchange = async () => {
+        const f = inp.files[0]; if (!f) return;
+        const url = await guard(() => fileToDataUrl(f)); if (!url) return;
+        if (inp.dataset.kind === "dark") clientLogo = url; else clientLogoLight = url;
+        $("#gLpair", box).innerHTML = logoPair("sess", clientLogo, clientLogoLight); bindPair();
+      }));
+      $$("#gLpair [data-rm]", box).forEach((b) => (b.onclick = () => {
+        if (b.dataset.kind === "dark") clientLogo = null; else clientLogoLight = null;
+        $("#gLpair", box).innerHTML = logoPair("sess", clientLogo, clientLogoLight); bindPair();
+      }));
+    };
+    bindPair();
     if (sup.url) $("#gSu", box).value = sup.url;
     const supInfo = (st) => (st.unlock_at ? T(`Téléchargeable par les stagiaires à partir du ${new Date(st.unlock_at).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "full", timeStyle: "short" })} (une heure avant la fin). La page Support reste visible dans leur menu.`) : T("Renseignez la date et l'heure de fin pour programmer le déblocage."));
     $("#supInfo", box).innerHTML = supInfo(sup);
@@ -150,7 +162,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         title: $("#gT", box).value.trim(), formation: $("#gF", box).value.trim() || "Prendre en main les IA génératives",
         format, date: $("#gD1", box).value || null, date2: format === "2" ? $("#gD2", box).value || null : null,
         start_time: $("#gS", box).value || "09:30", end_time: $("#gE", box).value || "17:30",
-        brand_id: box.querySelector('input[name="brand"]:checked')?.value || null, client: $("#gC", box).value.trim(), client_logo: clientLogo,
+        brand_id: box.querySelector('input[name="brand"]:checked')?.value || null, client: $("#gC", box).value.trim(), client_logo: clientLogo, client_logo_light: clientLogoLight,
         emargement_url: $("#gEm", box).value.trim() || null, emargement_qr: emQr,
         slides_url: $("#gSl", box).value.trim() || null, support_unlocked: $("#gSuF", box).checked,
       };

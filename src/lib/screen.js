@@ -8,7 +8,7 @@
 import { T, esc } from "./dom.js";
 import { QUIZ } from "../data.js";
 import { currentAct, quizQ, countOf } from "./activities.js";
-import { datesFr, hhmm, samsaHtml } from "./brand.js";
+import { datesFr, hhmm, samsaHtml, pickLogo } from "./brand.js";
 import { modulesFor, typeLabel } from "./content.js";
 import { slideEmbedUrl } from "../deck.js";
 
@@ -26,8 +26,10 @@ const light = (session, panel, main, right, cls = "") => `<div class="deck-slide
 
 // Bloc client « Une formation pour » (tuile blanche, comme sur le titre du support)
 function clientBlock(branding) {
-  const c = branding?.client; if (!c || (!c.logo && !c.name)) return "";
-  return `<div class="ds-client"><span class="ds-kick">Une formation pour</span><span class="ds-tile">${c.logo ? `<img src="${esc(c.logo)}" alt="${esc(c.name)}">` : T(c.name)}</span></div>`;
+  const c = branding?.client; if (!c) return "";
+  const logo = pickLogo(c, true); // slide de titre : fond marine → version claire
+  if (!logo && !c.name) return "";
+  return `<div class="ds-client"><span class="ds-kick">Une formation pour</span><span class="ds-tile">${logo ? `<img src="${esc(logo)}" alt="${esc(c.name)}">` : T(c.name)}</span></div>`;
 }
 
 // Réponses : lignes à pastilles carrées alternées

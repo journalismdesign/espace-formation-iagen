@@ -3,7 +3,7 @@
    compte (sessionStorage) : ouvrez un onglet formateur et un onglet
    stagiaire pour tester le direct. Aucune donnée ne quitte la machine. */
 
-const KEY = "iagen-demo-db-v3";
+const KEY = "iagen-demo-db-v4";
 const USER_KEY = "iagen-demo-user";
 const bc = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("iagen-demo") : null;
 const uid = () => crypto.randomUUID();
@@ -15,14 +15,14 @@ function load() {
   try { const raw = localStorage.getItem(KEY); if (raw) return JSON.parse(raw); } catch {}
   return null;
 }
-export const SESSION_DEFAULTS = { date2: null, start_time: "09:30", end_time: "17:30", brand_id: null, client_logo: null,
+export const SESSION_DEFAULTS = { date2: null, start_time: "09:30", end_time: "17:30", brand_id: null, client_logo: null, client_logo_light: null,
   slides_url: "https://docs.google.com/presentation/d/1G-exjcmMujp3XtEAOMCyzR9Plk3OzgS1qnVdTI0rJkg/edit", emargement_url: "", emargement_qr: null, support_unlocked: false };
 
 function seed(defaultActivities) {
   const sid = uid();
-  const brands = [["Radio France", 1], ["France Télévisions", 2], ["Libération", 3]].map(([name, sort]) => ({ id: uid(), name, logo: null, sort }));
+  const brands = [["Radio France", 1], ["France Télévisions", 2], ["Libération", 3]].map(([name, sort]) => ({ id: uid(), name, logo: null, logo_light: null, sort }));
   const db = {
-    brands, settings: { org_name: "Samsa", org_logo: null }, support: { [sid]: "https://exemple.fr/support-formation.pdf" }, codes: [],
+    brands, settings: { org_name: "Samsa", org_logo: null, org_logo_light: null }, support: { [sid]: "https://exemple.fr/support-formation.pdf" }, codes: [],
     profiles: [], sessions: [{
       ...SESSION_DEFAULTS, id: sid, title: "Prendre en main les IA génératives", formation: "Prendre en main les IA génératives",
       client: "", brand_id: brands[2].id, date: new Date(Date.now() + 86400000 * 10).toISOString().slice(0, 10), format: "1",
@@ -69,7 +69,8 @@ export function createDemoApi({ defaultActivities }) {
     const b = db.brands.find((y) => y.id === x.brand_id);
     return { id: x.id, title: x.title, formation: x.formation, client: x.client || b?.name || "", date: x.date, date2: x.format === "2" ? x.date2 : null,
       start_time: x.start_time, end_time: x.end_time, format: x.format, status: x.status, client_logo: x.client_logo || b?.logo || null,
-      org_name: db.settings.org_name, org_logo: db.settings.org_logo };
+      client_logo_light: x.client_logo_light || b?.logo_light || null,
+      org_name: db.settings.org_name, org_logo: db.settings.org_logo, org_logo_light: db.settings.org_logo_light };
   };
 
   const api = {
@@ -110,8 +111,8 @@ export function createDemoApi({ defaultActivities }) {
     async listBrands() { return [...db.brands].sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name)); },
     async saveBrand(b) {
       needTrainer();
-      if (b.id) { const x = db.brands.find((y) => y.id === b.id); x.name = b.name; x.logo = b.logo ?? null; commit(); return x; }
-      const x = { id: uid(), name: b.name, logo: b.logo ?? null, sort: 100 }; db.brands.push(x); commit(); return x;
+      if (b.id) { const x = db.brands.find((y) => y.id === b.id); x.name = b.name; x.logo = b.logo ?? null; x.logo_light = b.logo_light ?? null; commit(); return x; }
+      const x = { id: uid(), name: b.name, logo: b.logo ?? null, logo_light: b.logo_light ?? null, sort: 100 }; db.brands.push(x); commit(); return x;
     },
     async deleteBrand(id) { needTrainer(); db.brands = db.brands.filter((y) => y.id !== id); commit(); },
     async getSettings() { return { ...db.settings }; },
@@ -179,7 +180,7 @@ export function createDemoApi({ defaultActivities }) {
       needTrainer();
       const s = db.sessions.find((x) => x.id === id);
       const n = await api.createSession({ title: s.title + " (copie)", formation: s.formation, client: s.client, format: s.format, activities: s.activities,
-        brand_id: s.brand_id, client_logo: s.client_logo, slides_url: s.slides_url, start_time: s.start_time, end_time: s.end_time, emargement_url: s.emargement_url, emargement_qr: s.emargement_qr });
+        brand_id: s.brand_id, client_logo: s.client_logo, client_logo_light: s.client_logo_light, slides_url: s.slides_url, start_time: s.start_time, end_time: s.end_time, emargement_url: s.emargement_url, emargement_qr: s.emargement_qr });
       if (db.support[id]) db.support[n.id] = db.support[id];
       db.resources.filter((r) => r.session_id === id).forEach((r) => db.resources.push({ ...r, id: uid(), session_id: n.id }));
       db.secrets.filter((r) => r.session_id === id).forEach((r) => db.secrets.push({ ...r, id: uid(), session_id: n.id, value: "" }));
