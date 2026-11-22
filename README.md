@@ -65,7 +65,12 @@ Supabase fournit l'authentification, la base Postgres, le temps réel et les fon
    supabase secrets set AI_MODEL=claude-sonnet-5-5 AI_DAILY_LIMIT=60 ALLOWED_ORIGIN=https://votre-site.fr
    ```
    La clé ne quitte jamais le serveur. Chaque appel est authentifié et vérifie l'accès à la session. Il est plafonné par jour et par personne (`AI_DAILY_LIMIT`), et les pistes du cadrage sont limitées à trois générations. Sans la fonction, l'assistant bascule sur une recherche locale dans les ressources.
-9. **Construire et héberger** : `npm run build`, puis publier le dossier `dist/` sur n'importe quel hébergement statique (Netlify, Vercel, GitHub Pages, OVH…). Le routage par ancre (`#/…`) ne demande aucune règle de réécriture.
+9. **Héberger sur GitHub Pages (le plus simple)** : poussez le dépôt sur GitHub, puis :
+   - Settings → Pages → Source : « GitHub Actions » ;
+   - Settings → Secrets and variables → Actions → onglet Variables : `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`.
+
+   Chaque envoi sur `main` lance les tests SQL, construit le site et le publie (`.github/workflows/deploy.yml`). Le domaine personnalisé se règle dans Settings → Pages, par exemple `formation.journalism.design` avec un enregistrement CNAME vers `<compte>.github.io`. Ajoutez cette adresse dans Supabase → Authentication → URL Configuration.
+10. **Ou héberger ailleurs** : `npm run build`, puis publier le dossier `dist/` sur n'importe quel hébergement statique (Netlify, Vercel, GitHub Pages, OVH…). Le routage par ancre (`#/…`) ne demande aucune règle de réécriture.
 
 ## Données et droits
 
