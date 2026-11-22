@@ -25,8 +25,16 @@ grant insert (session_id, title, body), delete on public.threads to authenticate
 grant insert (thread_id, session_id, body), delete on public.posts to authenticated;
 grant insert, update, delete on public.brands, public.app_settings, public.session_support, public.trainers to authenticated;
 
--- Jamais lisibles depuis le navigateur
-revoke all on public.trainer_emails, public.ai_usage, public.access_codes, public.private_settings from anon, authenticated;
+-- Jamais lisibles depuis le navigateur (on ignore les tables pas encore créées)
+do $$
+declare t text;
+begin
+  foreach t in array array['trainer_emails','ai_usage','access_codes','private_settings'] loop
+    if to_regclass('public.' || t) is not null then
+      execute format('revoke all on public.%I from anon, authenticated', t);
+    end if;
+  end loop;
+end $$;
 
 -- Fonctions Edge (clé service_role) : accès complet
 grant all on all tables in schema public to service_role;
