@@ -33,6 +33,8 @@ Plateforme de formation de Gerald Holubowicz (journalism.design). Elle comprend 
 - Présentations supplémentaires : `sessions.decks` (`[{id,title,url}]`) accepte Google Slides (navigation par page depuis le pilotage) ou un fichier Drive (PDF dans la visionneuse `/preview`, qu'on ne peut pas piloter page par page). Vue `live.view = 'deck'` avec `live.deck` et `live.page`.
 - Slides Drive : `src/deck.js` contient l'ordre des 135 slides du support par défaut (identifiants de page) et `parsePages("11 à 16, 18")`. Pour un autre support, l'affichage se fait par numéro de page.
 
+- Formulaires longs (réglages de session, fiche intervenant·e) : brouillon automatique dans `localStorage` (`src/lib/draft.js`, `keepDraft(form, clé)`), restauré à l'affichage, effacé à l'enregistrement, avec « Tout réinitialiser » (deux clics, vide les champs texte sans rien enregistrer). `main.js` ne redessine plus la page quand Supabase réémet la connexion au retour sur l'onglet (même utilisateur·ice).
+
 ## Modèle de données (résumé)
 - `profiles` : rôle `trainee` ou `trainer`. Le rôle formateur est attribué si l'e-mail figure dans `trainer_emails`.
 - `sessions` : `activities` contient la séquence du jour J, `live` l'état diffusé (`{act, qi, reveal, options}`), `status` vaut draft, live ou closed.

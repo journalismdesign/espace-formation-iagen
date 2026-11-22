@@ -1,6 +1,7 @@
 /* Back-office d'une session, en trois temps :
    Avant (accès, invitations, cadrages), Jour J (animation en direct),
    Après (projets, émargement, bilan, duplication, résultats, ressources). */
+import { keepDraft } from "../lib/draft.js";
 import { $, $$, T, esc, NB, guard, toast, debounce, dateFr, download, copyText } from "../lib/dom.js";
 import { QUIZ } from "../data.js";
 import { ACT_TYPES, currentAct, respKey, renderResults, defaultActivities, countOf } from "../lib/activities.js";
@@ -213,6 +214,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     if (sup.url) $("#gSu", box).value = sup.url;
     const supInfo = (st) => (st.unlock_at ? T(`Téléchargeable par les stagiaires à partir du ${new Date(st.unlock_at).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "full", timeStyle: "short" })} (une heure avant la fin). La page Support reste visible dans leur menu.`) : T("Renseignez la date et l'heure de fin pour programmer le déblocage."));
     $("#supInfo", box).innerHTML = supInfo(sup);
+    keepDraft($("#regF", box), `reglages:${sid}`); // brouillon automatique + « Tout réinitialiser »
     $("#regF", box).onsubmit = async (e) => {
       e.preventDefault();
       const format = fmt();

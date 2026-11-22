@@ -52,6 +52,17 @@ async def main():
         await tr.wait_for_selector("#deckList .prow")
         await tr.click("#regF button[type=submit]"); await tr.wait_for_timeout(500)
         await shot(tr, "02b-reglages")
+        # Brouillon automatique : la saisie survit à un changement de page, « Tout réinitialiser » vide les champs
+        await tr.click("details[data-acc='em'] summary"); await tr.fill("#gEt", "Texte en cours de saisie"); await tr.wait_for_timeout(700)
+        await tr.goto(URL + f"#/admin/s/{sid}/avant"); await tr.wait_for_selector("#invF")
+        await tr.goto(URL + f"#/admin/s/{sid}/reglages"); await tr.wait_for_selector("#regF .draft-warn")
+        assert await tr.input_value("#gEt") == "Texte en cours de saisie", "brouillon restauré"
+        await shot(tr, "02d-brouillon")
+        await tr.click(".draft-reset"); await tr.click(".draft-reset"); await tr.wait_for_timeout(200)
+        assert await tr.input_value("#gEt") == "" and await tr.input_value("#gT") == "", "champs vidés"
+        await tr.goto(URL + f"#/admin/s/{sid}/avant"); await tr.wait_for_selector("#invF")
+        await tr.goto(URL + f"#/admin/s/{sid}/reglages"); await tr.wait_for_selector("#regF")
+        assert await tr.input_value("#gEt") == "Signez via le lien reçu de la DRH", "réinitialiser n'enregistre rien"
         await tr.goto(URL + f"#/admin/s/{sid}/avant"); await tr.wait_for_selector("#invF")
         assert (await tr.inner_text("#jl")).strip().endswith("/DEMO42"), "lien court attendu"
         await tr.fill("#invT", "alice@demo.fr"); await tr.click("#invF button"); await tr.wait_for_timeout(300)

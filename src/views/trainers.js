@@ -1,5 +1,6 @@
 /* Fiches des intervenant·es : photo, fonctions, accroche, contacts.
    Elles alimentent la slide « L'intervenant » des écrans de session. */
+import { keepDraft } from "../lib/draft.js";
 import { $, $$, T, esc, guard, toast } from "../lib/dom.js";
 import { fileToDataUrl } from "../lib/brand.js";
 import { trainerSlideHtml } from "../lib/screen.js";
@@ -74,4 +75,5 @@ export async function viewTrainers(root, [id], { api, go }) {
     if (saved && !cur.id) go(`#/admin/formateurs/${saved.id}`);
   };
   drawRows();
+  keepDraft($("#tF", root), `formateur:${cur.id || "nouveau"}`);
 }

@@ -104,6 +104,16 @@ async function render() {
 }
 
 // Le parcours d'entrée gère lui-même la connexion : pas de rendu forcé pendant celui-ci
-api.onAuthChange((u) => { if (!u) { me = null; booted = false; } if (u && currentRoute?.any) return; render(); });
+// Supabase réémet un événement de connexion quand l'onglet reprend le focus (rafraîchissement du jeton) :
+// on ne redessine la page que si l'utilisateur·ice a réellement changé, sinon la saisie en cours serait perdue.
+let authUid;
+api.onAuthChange((u) => {
+  const uid = u?.id || null;
+  if (uid === authUid) return;
+  authUid = uid;
+  if (!u) { me = null; booted = false; }
+  if (u && currentRoute?.any) return;
+  render();
+});
 window.addEventListener("hashchange", render);
 render();

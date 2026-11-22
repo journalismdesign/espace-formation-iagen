@@ -714,3 +714,9 @@ details.acc-set:first-of-type{margin-top:0}
 details.acc-set{padding:0 18px}
 details.acc-set>summary{padding:14px 0}
 details.acc-set>*:not(summary){margin-left:0;margin-right:0}
+/* Brouillon automatique des formulaires */
+.draftbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;min-height:22px;margin:0 0 10px}
+.draftbar .draft-warn{color:var(--navy);background:#FFF6D6;border-left:3px solid var(--yel,#F5C400);padding:4px 8px;border-radius:4px}
+.draftbar .draft-reset{margin-left:auto}
+.draftbar .draft-reset.danger{color:var(--ko);font-weight:600}
+.draftbar{grid-column:1/-1}
