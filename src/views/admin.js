@@ -12,7 +12,12 @@ export const joinUrlLabel = (code) => joinUrl(code).replace(/^https?:\/\//, "");
 export const qr = (text, size = 320) => QRCode.toDataURL(text, { width: size, margin: 1, color: { dark: "#0A2D4E", light: "#ffffff" } });
 
 export async function viewAdmin(root, _p, { api, go }) {
-  const [sessions, counts] = await Promise.all([api.listSessions(), api.memberCounts()]);
+  const [sessions, counts, brands] = await Promise.all([api.listSessions(), api.memberCounts(), api.listBrands().catch(() => [])]);
+  // Client : entreprise préenregistrée (brands) ou nom saisi avec « Autre »
+  const clientOf = (s) => {
+    const b = s.brand_id && brands.find((x) => x.id === s.brand_id);
+    return b ? { name: b.name, logo: b.logo || b.logo_light || null } : { name: s.client || "", logo: s.client_logo || null };
+  };
   root.innerHTML = `
     <div class="pagehead"><div><div class="kicker-d">Back-office formateur</div><h1>Sessions</h1></div>
       <div class="head-actions"><a class="btn ghost" href="#/admin/formateurs">Formateurs</a><a class="btn ghost" href="#/admin/reglages">Réglages généraux</a><button class="btn" id="newBtn">+ Démarrer une session</button></div></div>
@@ -30,9 +35,10 @@ export async function viewAdmin(root, _p, { api, go }) {
       <div style="display:flex;gap:8px"><button class="btn" type="submit">Créer la session</button><button class="btn ghost" type="button" id="nCancel">Annuler</button></div>
     </form>
     <div class="card table-card">
-      ${sessions.length ? `<table class="tbl"><thead><tr><th>Session</th><th>État</th><th>Formation</th><th>Date</th><th>Code</th><th>Participants</th><th></th></tr></thead><tbody>
+      ${sessions.length ? `<table class="tbl"><thead><tr><th>Session</th><th>Client</th><th>État</th><th>Formation</th><th>Date</th><th>Code</th><th>Participants</th><th></th></tr></thead><tbody>
       ${sessions.map((s) => `<tr>
-        <td><a href="#/admin/s/${s.id}"><b>${T(s.title)}</b></a>${s.client ? `<div class="small muted">${T(s.client)}</div>` : ""}</td>
+        <td><a href="#/admin/s/${s.id}"><b>${T(s.title)}</b></a></td>
+        <td class="client-cell">${(() => { const c = clientOf(s); return c.name ? `${c.logo ? `<img src="${esc(c.logo)}" alt="" class="client-logo">` : ""}<span>${T(c.name)}</span>` : `<span class="muted">—</span>`; })()}</td>
         <td><span class="state ${s.status}">${STATUS[s.status]}</span></td>
         <td class="small">${T(s.formation)}${s.format === "2" ? " · 2 jours" : ""}</td>
         <td class="small mono">${s.date || "—"}</td>

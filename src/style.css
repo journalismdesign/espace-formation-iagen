@@ -724,3 +724,7 @@ details.acc-set>*:not(summary){margin-left:0;margin-right:0}
 .draftbar.sticky{position:sticky;top:0;z-index:20;background:var(--light);padding:10px 0;margin:-10px 0 6px;border-bottom:1px solid rgba(10,45,78,.08)}
 .draftbar .draft-reset{margin-left:auto}
 .draftbar .draft-save{white-space:nowrap}
+/* Colonne Client du tableau des sessions */
+.client-cell{white-space:nowrap}
+.client-cell .client-logo{height:18px;max-width:70px;object-fit:contain;vertical-align:middle;margin-right:8px}
+.client-cell span{vertical-align:middle;font-size:14px}
