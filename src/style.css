@@ -612,3 +612,8 @@ input[type=url],input[type=email],input[type=date],input[type=time],input[type=n
 .mod.passed .check{background:var(--ok);border-color:var(--ok)}
 .mod.passed .body{border-left-color:var(--ok)!important}
 .pill.passed{background:var(--ok);color:#fff}
+/* Slide de titre : respiration entre logo client, titre et logo Samsa */
+.ds-center .ds-client{margin-bottom:3.4cqw}
+.ds-center .samsa.big{margin:3.4cqw auto 2.2cqw}
+.slide-page.title .for-client{margin-bottom:34px}
+.slide-page.title .samsa.slidebig{margin:30px auto 18px}
