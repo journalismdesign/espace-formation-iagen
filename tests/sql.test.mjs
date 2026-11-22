@@ -17,9 +17,9 @@ create function auth.uid() returns uuid language sql stable as $$ select nullif(
 create function auth.jwt() returns jsonb language sql stable as $$ select jsonb_build_object('email', current_setting('test.email', true)) $$;
 grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid(), auth.jwt() to anon, authenticated;
-alter default privileges in schema public grant all on tables to anon, authenticated; -- comme Supabase
+-- Pas de droits par défaut : comme les projets Supabase récents, les migrations doivent tout accorder elles-mêmes
 `);
-for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql", "20261122080000_premiere_connexion.sql"]) {
+for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql", "20261122080000_premiere_connexion.sql", "20261122090000_droits_explicites.sql"]) {
   try { await db.exec(readFileSync(new URL("../supabase/migrations/" + f, import.meta.url), "utf8")); }
   catch (e) { console.error("Migration", f, ":", e.message, e.where || ""); process.exit(1); }
 }
@@ -140,6 +140,8 @@ await db.exec(`reset role; set role anon;`);
 ok((await db.query(`select public.check_trainer_code('Nouveau-2026') ok`)).rows[0].ok === true, "code choisi après première connexion");
 await as(B, "bob@exemple.fr");
 ok((await db.query(`select public.claim_trainer() ok`)).rows[0].ok === false, "un stagiaire ne se promeut pas");
+ok((await db.query(`select email from profiles`)).rows.length === 1, "sans droits par défaut : un·e stagiaire lit son profil et lui seul");
+await fails(`select * from trainer_emails`, "liste des formateurs illisible");
 
 // Anonyme : rien
 await db.exec(`reset role; set test.uid=''; set role anon;`);

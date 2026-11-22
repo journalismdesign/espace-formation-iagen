@@ -39,7 +39,7 @@ Plateforme de formation de Gerald Holubowicz (journalism.design). Elle comprend 
 - `session_members` : progression et émargement. `session_invites` sert à l'invitation par e-mail. `join_session(code)` sert au code ou au QR.
 - `projects` : cadrage. Le champ `data` contient `{mode, besoin, pourqui, pistes, choix, retenu, analyse:{v1,v2}, steps}`. `trainer_comment` s'écrit via `comment_project`.
 - `responses` : une réponse par personne et par activité. Pour un quiz, la clé est `quizId#index`. La lecture collective passe uniquement par `live_results`.
-- Migrations, dans l'ordre : `…_init.sql`, `…_v3_acces_pilotage.sql`, `…_logos_clair_sombre.sql`, `…_emargement_libelle.sql`, `…_presentations.sql`, `…_emargement_second.sql`, `…_evaluation.sql`, `…_code_formateur.sql`, `…_formateurs.sql`, `…_premiere_connexion.sql`.
+- Migrations, dans l'ordre : `…_init.sql`, `…_v3_acces_pilotage.sql`, `…_logos_clair_sombre.sql`, `…_emargement_libelle.sql`, `…_presentations.sql`, `…_emargement_second.sql`, `…_evaluation.sql`, `…_code_formateur.sql`, `…_formateurs.sql`, `…_premiere_connexion.sql`, `…_droits_explicites.sql`. Les projets Supabase récents n'accordent plus de droits par défaut : toute nouvelle table doit recevoir ses `grant` explicitement (les tests SQL tournent sans droits par défaut).
 - v3 : `sessions.date2/start_time/end_time/brand_id/client_logo/slides_url/emargement_url/emargement_qr/support_unlocked`, `brands`, `app_settings` (org_name, org_logo), `session_support` (lien lu via `support_status`), `access_codes` (empreintes, purge à expiration et à la clôture), `session_public(code)` lisible sans connexion.
 - `threads`/`posts` pour la discussion, `resources`/`session_secrets` pour les ressources de la session, `ai_usage` pour le quota IA.
 
