@@ -727,7 +727,7 @@ details.acc-set>*:not(summary){margin-left:0;margin-right:0}
 .draftbar .draft-save{white-space:nowrap}
 /* Colonne Client du tableau des sessions */
 .client-cell{white-space:nowrap}
-.client-cell .client-logo{height:18px;max-width:70px;object-fit:contain;vertical-align:middle;margin-right:8px}
+.client-cell .client-logo{height:24px;max-width:110px;object-fit:contain;vertical-align:middle;display:block}
 .client-cell span{vertical-align:middle;font-size:14px}
 /* Choix de l'entreprise cliente : logo contenu dans une vignette blanche de taille fixe */
 .brand-opt{min-width:0;overflow:hidden;justify-content:flex-start}

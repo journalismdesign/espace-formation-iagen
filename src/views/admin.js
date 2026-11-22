@@ -39,7 +39,7 @@ export async function viewAdmin(root, _p, { api, go }) {
       ${sessions.length ? `<table class="tbl"><thead><tr><th>Session</th><th>Client</th><th>État</th><th>Formation</th><th>Date</th><th>Code</th><th>Participants</th><th></th></tr></thead><tbody>
       ${sessions.map((s) => `<tr>
         <td><a href="#/admin/s/${s.id}"><b>${T(s.title)}</b></a></td>
-        <td class="client-cell">${(() => { const c = clientOf(s); return c.name ? `${c.logo ? `<img src="${esc(c.logo)}" alt="" class="client-logo">` : ""}<span>${T(c.name)}</span>` : `<span class="muted">—</span>`; })()}</td>
+        <td class="client-cell">${(() => { const c = clientOf(s); return c.logo ? `<img src="${esc(c.logo)}" alt="${esc(c.name)}" title="${esc(c.name)}" class="client-logo">` : c.name ? `<span>${T(c.name)}</span>` : `<span class="muted">—</span>`; })()}</td>
         <td><span class="state ${s.status}">${STATUS[s.status]}</span></td>
         <td class="small">${T(s.formation)}${s.format === "2" ? " · 2 jours" : ""}</td>
         <td class="small mono">${s.date || "—"}</td>
