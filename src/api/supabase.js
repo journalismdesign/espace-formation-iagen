@@ -169,9 +169,7 @@ export function createSupabaseApi(url, anonKey) {
 
     /* ---------- Activités en direct ---------- */
     async respond(sid, activityId, value) {
-      const u = await api.currentUser();
-      ok(await sb.from("responses").upsert({ session_id: sid, user_id: u.id, activity_id: activityId, value, created_at: new Date().toISOString() },
-        { onConflict: "session_id,user_id,activity_id" }));
+      ok(await sb.rpc("submit_response", { p_session: sid, p_activity: activityId, p_value: value }));
     },
     async myResponse(sid, activityId) {
       const u = await api.currentUser();

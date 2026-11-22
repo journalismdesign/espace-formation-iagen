@@ -19,7 +19,7 @@ grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid(), auth.jwt() to anon, authenticated;
 -- Pas de droits par défaut : comme les projets Supabase récents, les migrations doivent tout accorder elles-mêmes
 `);
-for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql", "20261122080000_premiere_connexion.sql", "20261122090000_droits_explicites.sql", "20261122100000_conducteur_habillages.sql", "20261123000000_roles_admin.sql"]) {
+for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql", "20261122080000_premiere_connexion.sql", "20261122090000_droits_explicites.sql", "20261122100000_conducteur_habillages.sql", "20261123000000_roles_admin.sql", "20261123010000_reponses.sql"]) {
   try { await db.exec(readFileSync(new URL("../supabase/migrations/" + f, import.meta.url), "utf8")); }
   catch (e) { console.error("Migration", f, ":", e.message, e.where || ""); process.exit(1); }
 }
@@ -49,8 +49,9 @@ ok((await db.query(`select public.claim_invites() n`)).rows[0].n === 1, "invitat
 ok((await db.query(`select count(*)::int n from sessions`)).rows[0].n === 1, "Alice voit sa session");
 ok((await db.query(`select count(*)::int n from resources`)).rows[0].n === 1, "Alice voit les ressources");
 await db.exec(`insert into projects (session_id, data) values ('${sid}', '{"retenu":{"titre":"Veille municipale"},"steps":["profil"]}')`);
-await db.exec(`insert into responses (session_id, activity_id, value) values ('${sid}','niveau','1')
-  on conflict (session_id,user_id,activity_id) do update set value = excluded.value`);
+await db.exec(`select public.submit_response('${sid}', 'niveau', '1'::jsonb)`);
+await db.exec(`select public.submit_response('${sid}', 'niveau', '2'::jsonb)`);
+ok((await db.query(`select value from responses where activity_id='niveau'`)).rows[0].value === 2, "réponse enregistrée puis modifiée (submit_response)");
 await fails(`update profiles set role='trainer' where id='${A}'`, "Alice ne peut pas se promouvoir formatrice");
 await fails(`update session_members set attended=true where user_id='${A}'`, "Alice ne peut pas s'auto-émarger");
 await fails(`update projects set trainer_comment='parfait' where user_id='${A}'`, "Alice ne peut pas écrire le retour formateur");
@@ -64,7 +65,7 @@ ok((await db.query(`select count(*)::int n from sessions`)).rows[0].n === 0, "Bo
 await db.query(`select public.join_session('${code.toLowerCase()}')`);
 ok((await db.query(`select count(*)::int n from projects`)).rows[0].n === 0, "Bob ne voit pas le cadrage d'Alice");
 ok((await db.query(`select count(*)::int n from responses`)).rows[0].n === 0, "Bob ne voit pas la réponse nominative d'Alice");
-await db.exec(`insert into responses (session_id, activity_id, value) values ('${sid}','niveau','1')`);
+await db.exec(`select public.submit_response('${sid}', 'niveau', '2'::jsonb)`);
 const agg = await db.query(`select * from public.live_results('${sid}','niveau')`);
 ok(agg.rows.length === 1 && Number(agg.rows[0].n) === 2, "résultats agrégés visibles (2 réponses)");
 ok((await db.query(`select count(*)::int n from threads`)).rows[0].n === 1, "Bob lit la discussion");
