@@ -14,7 +14,7 @@ import { STEPS, SENSIB } from "./cadrageModel.js";
 import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml, EM2_DEFAULT, evaluationQr, EVAL_TITLE, EVAL_TEXT } from "../lib/brand.js";
 import { modulesFor, daysOf, typeLabel } from "../lib/content.js";
 import { parseConducteur, conducteurMarkdown } from "../lib/conducteur.js";
-import { loadSkins, skinFor, applySkin } from "../lib/skin.js";
+import { loadSkins, skinFor, applySkin, currentSkin } from "../lib/skin.js";
 import { samsaHtml } from "../lib/brand.js";
 import { parsePages, slideEmbedUrl, deckId, deckKind } from "../deck.js";
 
@@ -257,6 +257,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       if (!saved) return;
       session = saved;
       applySkin(skinFor(session, skinData.skins, skinData.def)); // l'habillage choisi s'applique aussitôt
+      const kk = document.querySelector(".brand-wrap .kicker"); if (kk) kk.textContent = `Espace formation · ${currentSkin()?.name || "Journalisme & IA"}`;
       document.querySelector(".brand-wrap > :first-child")?.replaceWith(Object.assign(document.createElement("span"), { innerHTML: samsaHtml(true, "head") }).firstElementChild);
       await guard(() => api.setSupport(sid, $("#gSu", box).value.trim() || null));
       const st = await api.supportStatus(sid).catch(() => ({}));
