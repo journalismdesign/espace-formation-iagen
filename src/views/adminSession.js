@@ -430,7 +430,11 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const V = session.status === "live" ? live.view : null;
       $("#opening", box).innerHTML = [["title", "Slide de titre", "Titre, logos, dates, QR"], ["trainer", "Formateur", session.trainer_id ? "Fiche de l'intervenant" : "À choisir"], ["emargement", "Émargement", session.emargement_url || session.emargement_qr ? "QR de l'organisme" : "À configurer"], ["support", "Support", "Annonce du téléchargement"], ["evaluation", "Évaluation", session.evaluation_url || session.evaluation_qr ? "QR et lien du formulaire" : "À configurer"], ["", "Écran d'attente", "Rien de projeté"]]
         .map(([v, l, sub]) => `<button class="act${(V || "") === v && !act ? " on" : ""}" data-view="${v}"><span>${v ? "▣" : "□"}</span>${l}<small>${T(sub)}</small></button>`).join("");
-      $$("[data-view]", box).forEach((b) => (b.onclick = () => (b.dataset.view ? show(b.dataset.view) : setLive({ ...keep(), view: null }))));
+      $$("[data-view]", box).forEach((b) => (b.onclick = () => {
+        // Écran « Formateur » sans fiche choisie : on prévient au lieu de projeter une slide vide
+        if (b.dataset.view === "trainer" && !session.trainer_id) return toast("Aucune fiche intervenant n'est enregistrée pour cette session : choisissez-la dans Réglages → Intervenant·e, puis enregistrez.", "ko");
+        return b.dataset.view ? show(b.dataset.view) : setLive({ ...keep(), view: null });
+      }));
       // Émargements : arrivée du matin (début de journée) et reprise de l'après-midi (fin du déjeuner)
       const all = modulesFor(session);
       const days = session.format === "2" ? [1, 2] : [1];
