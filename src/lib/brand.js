@@ -64,6 +64,19 @@ export function datesFr(s) {
     return `${day(d1)} et ${day(d2)} ${b.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}`;
   return `${dateFr(d1, { day: "numeric", month: "long" })} et ${dateFr(d2, { day: "numeric", month: "long", year: "numeric" })}`;
 }
+// Date de la slide de titre, sans heure : « 2 décembre 2026 » ou « 1 – 2 décembre 2026 »
+// (mois et année répétés seulement quand ils changent : « 30 novembre – 1 décembre 2026 »)
+export function titleDate(s) {
+  const d1 = s.date, d2 = s.format === "2" ? s.date2 : null;
+  if (!d1) return "Date à fixer";
+  const a = new Date(d1 + "T12:00:00");
+  const full = (d) => d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  if (!d2 || d2 === d1) return full(a);
+  const b = new Date(d2 + "T12:00:00");
+  if (a.getFullYear() !== b.getFullYear()) return `${full(a)} – ${full(b)}`;
+  if (a.getMonth() !== b.getMonth()) return `${a.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })} – ${full(b)}`;
+  return `${a.getDate()} – ${full(b)}`;
+}
 export const hhmm = (t) => String(t || "").slice(0, 5).replace(/^0/, "").replace(":", " h ");
 
 // QR code d'émargement : image fournie, sinon généré depuis le lien

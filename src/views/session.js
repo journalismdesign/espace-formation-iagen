@@ -1,9 +1,9 @@
 /* Espace d'une session côté stagiaire : barre latérale + onglets.
    Onglets : direct (le jour J), cadrage, ressources, fiches, outils,
-   discussion, assistant. */
+   discussion. */
 import { $, $$, T, esc, fr, NB, matches, dateFr, guard, toast, bindCopy, copyText, download, debounce } from "../lib/dom.js";
 import { FICHES, GLOSS, PROMPTS, CASES } from "../data.js";
-import { renderParcours, parcoursPct, ficheById, ficheHtml, bindRefs, openPrompt, toolsHtml, bindTools, corpus, corpusMarkdown, SYS, linkify, localSearch } from "../lib/content.js";
+import { renderParcours, parcoursPct, ficheById, ficheHtml, bindRefs, openPrompt, toolsHtml, bindTools, corpusMarkdown } from "../lib/content.js";
 import { currentAct, renderInput, renderResults, respKey } from "../lib/activities.js";
 import { renderCadrage } from "./cadrage.js";
 import { STATUS } from "./home.js";
@@ -13,7 +13,7 @@ import { supportBlock } from "./entry.js";
 
 const TABS = [
   ["direct", "Le jour J"], ["cadrage", "Mon cadrage"], ["ressources", "Ressources du jour"], ["fiches", "Fiches pratiques"],
-  ["outils", "Outils d'exercice"], ["discussion", "Discussion"], ["assistant", "Assistant"],
+  ["outils", "Outils d'exercice"], ["discussion", "Discussion"],
   ["support", "Support de formation"], ["emargement", "Émargement"],
 ];
 export const FICHE_CATS = [
@@ -73,7 +73,7 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   else if (tab === "fiches") tabFiches();
   else if (tab === "outils") { body.innerHTML = `<div class="pagehead"><div><h1>Outils d'exercice</h1><p class="muted">${T("De quoi s'entraîner pendant les temps de pratique, et après. Rien de ce que vous tapez ici ne quitte votre navigateur.")}</p></div></div>${toolsHtml()}`; bindTools(body); }
   else if (tab === "discussion") await tabDiscussion();
-  else if (tab === "assistant") tabAssistant();
+  else if (tab === "assistant") ctx.go(`#/s/${sid}/ressources`); // assistant IA retiré
   else if (tab === "support") await tabSupport();
   else if (tab === "emargement") await tabEmargement();
 
@@ -289,31 +289,5 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
       <div class="card" style="max-width:820px">${emargementStepsHtml(session, qr, emargementLabels(session, br))}</div>`;
   }
 
-  /* ---------------- Assistant ---------------- */
-  function tabAssistant() {
-    let hist = [], busy = false;
-    body.innerHTML = `
-      <div class="pagehead"><div><h1>Assistant d'apprentissage</h1><p class="muted" id="askMode">${T(api.mode === "demo" ? "Mode démonstration : l'assistant propose les fiches, termes et prompts les plus proches de votre question." : "L'assistant répond à partir des seules ressources de cette formation, et renvoie vers les fiches. Vérifiez ses réponses comme n'importe quelle source.")}</p></div></div>
-      <div class="card"><div class="chat" id="chat"></div>
-        <div class="sugg">${["C'est quoi un connecteur ?", "Que puis-je verser dans Gemini Notebook ?", "Explique-moi R·M·C·T·F", "Différence entre projet et skill ?", "Comment éviter l'injection de prompt ?"].map((s) => `<button class="chip" data-s="${esc(s)}">${T(s)}</button>`).join("")}</div>
-        <form class="askrow" id="askF"><input type="text" id="askIn" placeholder="Votre question" aria-label="Votre question"><button class="btn" id="askBtn" type="submit">Envoyer</button></form>
-      </div>`;
-    const add = (role, html) => { const d = document.createElement("div"); d.className = "msg " + role; d.innerHTML = html; $("#chat", body).appendChild(d); d.scrollIntoView({ block: "nearest" }); return d; };
-    const ask = async (q) => {
-      if (busy || !q.trim()) return;
-      add("u", T(q));
-      busy = true; $("#askBtn", body).disabled = true;
-      const el = add("a", "…");
-      try {
-        const msgs = [...hist, { role: "user", content: q }];
-        const txt = await api.ai("assistant", sid, { system: SYS, corpus: corpus(), messages: msgs });
-        if (txt == null) { el.innerHTML = localSearch(q); }
-        else { el.innerHTML = linkify(txt); hist = [...msgs, { role: "assistant", content: txt }].slice(-12); }
-      } catch (e) { el.innerHTML = T(e.message) + "\n\n" + localSearch(q); }
-      bindRefs(el);
-      busy = false; $("#askBtn", body).disabled = false;
-    };
-    $("#askF", body).onsubmit = (e) => { e.preventDefault(); const q = $("#askIn", body).value; $("#askIn", body).value = ""; ask(q); };
-    $$("[data-s]", body).forEach((b) => (b.onclick = () => ask(b.dataset.s)));
-  }
+
 }

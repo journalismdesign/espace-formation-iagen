@@ -3,7 +3,7 @@
 Plateforme de formation en deux faces :
 
 - **Back-office formateur** : sessions, invitations, QR code, suivi des cadrages avec retour écrit, animation du jour J (nuage de mots, sondages, quiz, vote, mur des projets) avec écran projeté, émargement, bilan CSV, duplication, ressources et accès par session.
-- **Espace stagiaire** : une session par stagiaire invité·e (ou rejointe par code), « À faire maintenant », préparation, cadrage du cas d'usage en cinq étapes (pistes et analyse produites par l'IA), direct, déroulé avec quiz, fiches pratiques, glossaire, prompts, outils R·M·C·T·F et S·V·E, discussion, assistant d'apprentissage.
+- **Espace stagiaire** : une session par stagiaire invité·e (ou rejointe par code), « À faire maintenant », préparation, cadrage du cas d'usage en quatre étapes (sans IA, commenté par le formateur), direct, déroulé avec quiz, fiches pratiques, glossaire, prompts, outils R·M·C·T·F et S·V·E, discussion.
 
 **Stagiaires** : ils entrent par le lien ou le QR code de la session. Le parcours d'entrée s'affiche en slides plein écran :
 1. titre de la formation (logos de l'entreprise et de l'organisme, une ou deux dates) ;
@@ -57,13 +57,7 @@ Supabase fournit l'authentification, la base Postgres, le temps réel et les fon
    ```
    Exécutez aussi `supabase/migrations/20261122000000_v3_acces_pilotage.sql` puis `20261122010000_logos_clair_sombre.sql` `20261122020000_emargement_libelle.sql` , `20261122030000_presentations.sql` , `20261122040000_emargement_second.sql` , `20261122050000_evaluation.sql` , `20261122060000_code_formateur.sql`, `20261122070000_formateurs.sql`, `20261122080000_premiere_connexion.sql`, `20261122090000_droits_explicites.sql` et `20261122100000_conducteur_habillages.sql`. Activez pg_cron (Database → Extensions) pour la purge horaire des codes expirés. Sans pg_cron, les codes expirés sont refusés et purgés à chaque demande.
 7. **Logos** : dans Back-office → Réglages généraux, déposez une fois pour toutes les logos de Radio France, France Télévisions, Libération et de votre organisme, chacun en version sombre (fonds clairs) et en version claire (fonds marine). Utilisez les fichiers officiels fournis par les clients.
-8. **Assistant IA** (pistes, analyse du cadrage, assistant d'apprentissage) :
-   ```bash
-   supabase functions deploy assistant
-   supabase secrets set ANTHROPIC_API_KEY=sk-ant-...      # obligatoire
-   supabase secrets set AI_MODEL=claude-sonnet-5-5 AI_DAILY_LIMIT=60 ALLOWED_ORIGIN=https://votre-site.fr
-   ```
-   La clé ne quitte jamais le serveur. Chaque appel est authentifié et vérifie l'accès à la session. Il est plafonné par jour et par personne (`AI_DAILY_LIMIT`), et les pistes du cadrage sont limitées à trois générations. Sans la fonction, l'assistant bascule sur une recherche locale dans les ressources.
+8. **Pas d'assistant IA** : retiré pour son coût. La fonction `supabase/functions/assistant` reste dans le dépôt pour mémoire ; inutile de la déployer.
 9. **Héberger sur GitHub Pages (le plus simple)** : poussez le dépôt sur GitHub, puis :
    - Settings → Pages → Source : « GitHub Actions » ;
    - Settings → Secrets and variables → Actions → onglet Variables : `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`.
@@ -98,7 +92,7 @@ python3 tests/e2e.py             # parcours complet formateur + stagiaire en mod
 index.html, src/main.js     entrée, authentification, routage #/…
 src/api/                    supabase.js (production) · demo.js (navigateur) · index.js (choix)
 src/data.js                 contenus pédagogiques (fiches, glossaire, prompts, quiz, déroulés)
-src/lib/                    dom.js (utilitaires) · content.js (parcours, fiches, outils, assistant)
+src/lib/                    dom.js (utilitaires) · content.js (parcours, fiches, outils)
                             activities.js (activités du direct) · screen.js (écran projeté)
 src/views/                  login, home (mon espace), profile, session (espace stagiaire), cadrage,
                             admin (sessions), adminSession (avant / jour J / après), screen

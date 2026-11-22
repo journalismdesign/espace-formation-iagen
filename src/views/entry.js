@@ -5,7 +5,7 @@
    4. support de formation (téléchargeable une heure avant la fin)
    → tableau de bord de la session. */
 import { $, T, esc, guard, toast } from "../lib/dom.js";
-import { resolveBranding, logosHtml, datesFr, hhmm, emargementQr, samsaHtml, emargementLabels, emargementStepsHtml } from "../lib/brand.js";
+import { resolveBranding, logosHtml, datesFr, hhmm, titleDate, emargementQr, samsaHtml, emargementLabels, emargementStepsHtml } from "../lib/brand.js";
 import { skinFooter } from "../lib/skin.js";
 
 export async function viewEntry(root, [code], ctx) {
@@ -28,7 +28,7 @@ export async function viewEntry(root, [code], ctx) {
         <div class="slide-title">${T(pub.formation)}</div>
         ${samsaHtml(true, "slidebig")}
         ${pub.title && pub.title !== pub.formation ? `<p class="slide-sub">${T(pub.title)}</p>` : ""}
-        <p class="slide-date">${T(datesFr(pub))}${pub.start_time ? ` · ${hhmm(pub.start_time)} – ${hhmm(pub.end_time)}` : ""}</p>
+        <p class="slide-date">${T(titleDate(pub))}</p>
         <button class="btn light big" id="go">Commencer →</button>`, "title");
       $("#go").onclick = async () => {
         if (!user) { step = "login"; return draw(); }

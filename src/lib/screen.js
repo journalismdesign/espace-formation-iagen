@@ -8,7 +8,7 @@
 import { T, esc } from "./dom.js";
 import { QUIZ } from "../data.js";
 import { currentAct, quizQ, countOf } from "./activities.js";
-import { datesFr, hhmm, samsaHtml, pickLogo, emargementLabels, MAIL_ICON, evaluationInfo } from "./brand.js";
+import { datesFr, hhmm, titleDate, samsaHtml, pickLogo, emargementLabels, MAIL_ICON, evaluationInfo } from "./brand.js";
 import { modulesFor, typeLabel } from "./content.js";
 import { slideEmbedUrl, deckEmbedUrl } from "../deck.js";
 import { skinFooter } from "./skin.js";
@@ -90,7 +90,7 @@ export function screenHtml(d, compact = false) {
         ${clientBlock(branding)}
         <div class="ds-title xl">${T(session.formation)}</div>
         ${samsaHtml(true, "big")}
-        <div class="ds-sub">${session.title && session.title !== session.formation ? T(session.title) + "<br>" : ""}${T(datesFr(session))} · ${hhmm(session.start_time)} – ${hhmm(session.end_time)}</div>
+        <div class="ds-sub">${session.title && session.title !== session.formation ? T(session.title) + "<br>" : ""}${T(titleDate(session))}</div>
       </div>${joinBox(session, qrUrl)}`, right, cls);
   }
 

@@ -10,7 +10,7 @@ import { openSheet } from "../lib/content.js";
 import { joinUrl, joinUrlLabel, qr, showQr, parseEmails } from "./admin.js";
 import { STATUS } from "./home.js";
 import { logoPair } from "./settings.js";
-import { STEPS, SENSIB } from "./cadrageModel.js";
+import { STEPS, SENSIB, VERIF } from "./cadrageModel.js";
 import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml, EM2_DEFAULT, evaluationQr, EVAL_TITLE, EVAL_TEXT } from "../lib/brand.js";
 import { modulesFor, daysOf, typeLabel } from "../lib/content.js";
 import { parseConducteur, conducteurMarkdown } from "../lib/conducteur.js";
@@ -364,7 +364,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       <div class="sec"><h4>Besoin</h4><p style="margin:0;white-space:pre-wrap">${T(d.besoin || "—")}</p>${d.pourqui ? `<p class="small">Pour : ${T(d.pourqui)}</p>` : ""}</div>
       <div class="sec"><h4>Cas retenu</h4><p style="margin:0;white-space:pre-wrap">${T(d.retenu?.description || "—")}</p>
         <p class="small">Outil : ${T(d.retenu?.outil || "—")} · Documents : ${T(d.retenu?.donnees || "—")} · Code couleur : <b>${T(SENSIB.find((s) => s[0] === d.retenu?.sensibilite)?.[1] || "—")}</b></p></div>
-      ${a.v1 ? `<div class="sec"><h4>Analyse ${a.v2 ? "V2" : "V1"}</h4><div class="analysis small">${T(a.v2 || a.v1)}</div></div>` : ""}
+      ${d.verif ? `<div class="sec"><h4>Points de vigilance</h4><ul class="small" style="margin:0;padding-left:18px">${VERIF.map(([k, l]) => `<li>${d.verif[k] ? "✓" : "○"} ${T(l)}</li>`).join("")}</ul>${d.verif.consigne ? `<h4 style="margin-top:10px">Première consigne</h4><div class="analysis small">${T(d.verif.consigne)}</div>` : ""}</div>` : ""}
+      ${a.v1 ? `<div class="sec"><h4>Analyse (ancienne version)</h4><div class="analysis small">${T(a.v2 || a.v1)}</div></div>` : ""}
       ${p.question ? `<div class="sec disc"><h4>Question au formateur</h4><p style="margin:0">${T(p.question)}</p></div>` : ""}
       <div class="sec"><h4>Votre retour</h4><textarea id="fbT" maxlength="4000" style="min-height:110px">${esc(p.trainer_comment || "")}</textarea><button class="btn sm" id="fbS" style="margin-top:8px">Envoyer le retour</button></div>`);
     $("#fbS").onclick = async () => { await guard(() => api.commentProject(pid, $("#fbT").value.trim()), "Retour enregistré : la personne le verra en haut de son cadrage."); after?.(); };

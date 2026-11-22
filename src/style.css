@@ -778,3 +778,6 @@ details.acc-set>*:not(summary){margin-left:0;margin-right:0}
 .skin-prev .sp-btn{background:var(--a);color:#fff;border-radius:6px;padding:5px 10px;font-weight:700}
 .skin-prev .sp-pill{border:1px solid var(--a);color:var(--a);border-radius:20px;padding:2px 8px;font-weight:700}
 .skin-prev .sp-tint{background:var(--t);border-left:3px solid var(--a);padding:4px 8px;border-radius:4px}
+/* Cadrage : points de vigilance */
+.vcheck{display:flex;gap:10px;align-items:flex-start;margin:8px 0;font-size:14px;cursor:pointer}
+.vcheck input{width:18px;height:18px;margin-top:2px;flex:none;accent-color:var(--blue)}

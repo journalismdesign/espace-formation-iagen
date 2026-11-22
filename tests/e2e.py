@@ -163,24 +163,25 @@ async def main():
         await st.click("[data-chips=metier] .pick >> nth=0"); await st.click("[data-chips=niveau] .pick >> nth=1"); await st.click("[data-chips=outils] .pick >> nth=0")
         await st.click("#modes .pick >> nth=2")
         await st.fill("#cBesoin", "Je lis chaque semaine les délibérations du conseil municipal, des PDF de 80 pages.")
-        await st.click("#genP"); await st.wait_for_selector("#pistes .piste", timeout=5000)
-        await st.click("#pistes .piste >> nth=0"); await st.wait_for_timeout(300)
-        await st.click("#rSens .pick >> nth=0")
-        await st.click("#anaBtn"); await st.wait_for_selector(".analysis", timeout=5000)
+        assert await st.locator("#genP, #anaBtn").count() == 0, "plus aucun appel à l'IA dans le cadrage"
+        await st.fill("#rTitre", "Revue des délibérations"); await st.fill("#rDesc", "Résumer chaque délibération publiée et repérer les votes.")
+        await st.click("#rOutil .pick >> nth=0"); await st.click("#rSens .pick >> nth=0")
+        for k in ["donnees", "controle", "prompt"]: await st.check(f"[data-vk='{k}']")
+        await st.fill("#vPrompt", "Rôle : secrétaire de rédaction. Mission : résumer chaque délibération en trois lignes.")
         await st.wait_for_timeout(1200)
         await shot(st, "09-cadrage")
         await st.click("#cVal"); await st.wait_for_timeout(600)
         assert "Projet validé" in await st.inner_text("#cadAside"), "le projet doit être validé"
         await st.evaluate("window.scrollTo(0,0)"); await shot(st, "10-cadrage-valide")
 
-        # Stagiaire : mon espace, fiches, discussion, assistant, ressources
+        # Stagiaire : mon espace, fiches, discussion, ressources
         await st.goto(URL + "#/"); await st.wait_for_selector(".prep-square"); await shot(st, "11-mon-espace")
         assert "100" in await st.inner_text(".prep-square")
         await st.goto(URL + f"#/s/{sid}/fiches"); await st.wait_for_selector(".fcard"); await shot(st, "12-fiches")
         await st.click(".fcard >> nth=0"); await st.wait_for_selector("article");
         await st.goto(URL + f"#/s/{sid}/discussion/new"); await st.fill("#tTitle", "Gemini garde-t-il mes documents ?"); await st.click("#newT button")
         await st.wait_for_selector("#reply"); await st.fill("#rBody", "Question pour la pause."); await st.click("#reply button"); await st.wait_for_selector(".post")
-        await st.goto(URL + f"#/s/{sid}/assistant"); await st.click("[data-s] >> nth=0"); await st.wait_for_selector(".msg.a .ref", timeout=5000); await shot(st, "13-assistant")
+        assert await st.locator("a[href$='/assistant']").count() == 0, "onglet Assistant retiré"
         await st.goto(URL + f"#/s/{sid}/ressources"); await st.wait_for_selector("details.acc"); await shot(st, "14-ressources")
         await st.goto(URL + f"#/s/{sid}/direct"); await st.wait_for_selector(".mod[data-id]")
         await st.click(".mod[data-id] .check >> nth=0"); await st.wait_for_timeout(800)
