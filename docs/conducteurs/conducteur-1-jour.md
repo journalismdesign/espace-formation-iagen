@@ -152,6 +152,7 @@ pages: 100 à 103
 temps fort: 2
 quiz: rmctf
 fiches: rmctf
+outil: rmctf
 
 ### Objectifs
 - Écrire une demande complète en cinq questions.
@@ -208,6 +209,7 @@ pages: 104 à 108
 temps fort: 2
 quiz: sve
 fiches: sve, projet, configuration
+outil: sve
 
 ### Objectifs
 - Passer d'une demande ponctuelle à un travail organisé sur plusieurs sessions.

@@ -3,7 +3,7 @@
    discussion. */
 import { $, $$, T, esc, fr, NB, matches, dateFr, guard, toast, bindCopy, copyText, download, debounce } from "../lib/dom.js";
 import { FICHES, GLOSS, PROMPTS, CASES } from "../data.js";
-import { renderParcours, parcoursPct, ficheById, ficheHtml, bindRefs, openPrompt, toolsHtml, bindTools, corpusMarkdown } from "../lib/content.js";
+import { renderParcours, parcoursPct, ficheById, ficheHtml, bindRefs, openPrompt, toolsHtml, bindTools, corpusMarkdown, unlockedTools, TOOL_IDS } from "../lib/content.js";
 import { currentAct, renderInput, renderResults, respKey } from "../lib/activities.js";
 import { renderCadrage } from "./cadrage.js";
 import { STATUS } from "./home.js";
@@ -36,6 +36,8 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   const project = await api.myProject(sid).catch(() => null);
   const live = () => session.status === "live" && !!(session.live?.act || session.live?.view || session.live?.module);
   const br = await resolveBranding(api, session);
+  // Outils d'exercice : visibles dès que le formateur a lancé l'exercice qui les utilise (toujours visibles en aperçu formateur)
+  const toolsVisible = () => trainerPreview || unlockedTools(session).size > 0;
 
   root.classList.add("withside");
   root.innerHTML = `
@@ -50,7 +52,7 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
       </div>
       <div id="sideExtra"></div>
       <div class="side-label">Ressources</div>
-      <nav class="side-nav">${TABS.filter(([k]) => !["direct", "cadrage"].includes(k)).map(([k, l]) => `<a href="#/s/${sid}/${k}"${k === tab ? ' aria-current="page"' : ""}>${l}<span>›</span></a>`).join("")}</nav>
+      <nav class="side-nav">${TABS.filter(([k]) => !["direct", "cadrage"].includes(k)).map(([k, l]) => `<a href="#/s/${sid}/${k}"${k === tab ? ' aria-current="page"' : ""}${k === "outils" ? ` id="navOutils"${toolsVisible() ? "" : " hidden"}` : ""}>${l}<span>›</span></a>`).join("")}</nav>
       ${trainerPreview ? `<p class="small muted" style="margin-top:14px">Aperçu formateur : vos clics ne sont pas enregistrés. <a href="#/admin/s/${sid}">Retour au back-office</a></p>` : ""}
     </aside>
     <section class="sidemain" id="tabBody"></section>`;
@@ -65,13 +67,27 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
     onSession.forEach((f) => f());
   }, 150);
   const onSession = new Set();
+  onSession.add(() => { const n = $("#navOutils", root); if (n) n.hidden = !toolsVisible(); });
   cleanups.push(api.watch(sid, (e) => { if (e.table === "sessions" || e.table === "*") refreshSession(); }));
 
   if (tab === "direct") await tabDirect();
   else if (tab === "cadrage") await renderCadrage(body, $("#sideExtra", root), ctx, session, trainerPreview);
   else if (tab === "ressources") await tabRessources();
   else if (tab === "fiches") tabFiches();
-  else if (tab === "outils") { body.innerHTML = `<div class="pagehead"><div><h1>Outils d'exercice</h1><p class="muted">${T("De quoi s'entraîner pendant les temps de pratique, et après. Rien de ce que vous tapez ici ne quitte votre navigateur.")}</p></div></div>${toolsHtml()}`; bindTools(body); }
+  else if (tab === "outils") {
+    const drawTools = () => {
+      const open = unlockedTools(session);
+      if (!trainerPreview && !open.size) { body.innerHTML = `<div class="pagehead"><div><h1>Outils d'exercice</h1></div></div><p class="empty">${T("Les outils apparaîtront ici quand le formateur lancera l'exercice qui s'en sert. Ils resteront ensuite disponibles.")}</p>`; return; }
+      if (body.dataset.tools === [...open].sort().join() && $("#toolRmctf", body)) return; // déjà affichés : on ne perd pas la saisie
+      body.dataset.tools = [...open].sort().join();
+      body.innerHTML = `<div class="pagehead"><div><h1>Outils d'exercice</h1><p class="muted">${T("De quoi s'entraîner pendant les temps de pratique, et après. Rien de ce que vous tapez ici ne quitte votre navigateur.")}</p>${trainerPreview ? `<p class="small muted">${T(`Aperçu formateur : tous les outils sont affichés. Les stagiaires ne voient que ceux des exercices déjà lancés (${open.size ? [...open].map((t) => (t === "toolRmctf" ? "R·M·C·T·F" : "S·V·E")).join(", ") : "aucun pour l'instant"}).`)}</p>` : ""}</div></div>${toolsHtml()}`;
+      bindTools(body);
+      // les outils pas encore proposés restent masqués (ils sont dans la page pour que les liaisons fonctionnent)
+      if (!trainerPreview) TOOL_IDS.forEach((id) => { const c = $(`#${id}`, body); if (c && !open.has(id)) c.hidden = true; });
+    };
+    drawTools();
+    onSession.add(drawTools);
+  }
   else if (tab === "discussion") await tabDiscussion();
   else if (tab === "assistant") ctx.go(`#/s/${sid}/ressources`); // assistant IA retiré
   else if (tab === "support") await tabSupport();

@@ -131,6 +131,14 @@ async def main():
         await st.wait_for_timeout(800); ptxt = await st.inner_text("#parcours")
         assert "En ce moment" in ptxt or "EN CE MOMENT" in ptxt, "la séquence pilotée doit être signalée"
         assert await st.locator(".mod.passed[data-id='j1-accueil']").count() == 1, "la séquence passée doit être validée en vert"
+        # Outils d'exercice : masqués tant que l'exercice n'est pas lancé, puis disponibles pour de bon
+        assert await st.locator("#navOutils[hidden]").count() == 1, "outils masqués avant l'exercice"
+        await tr.click("[data-mod='j1-rmctf']"); await st.wait_for_selector("#navOutils:not([hidden])", timeout=5000)
+        await tr.click("[data-mod='j1-etat']"); await st.wait_for_timeout(1200)
+        assert await st.locator("#navOutils:not([hidden])").count() == 1, "les outils restent disponibles"
+        await st.goto(URL + f"#/s/{sid}/outils"); await st.wait_for_selector("#toolRmctf")
+        assert await st.locator("#toolRmctf:visible").count() == 1 and await st.locator("#toolSve:visible").count() == 0, "seul l'outil de l'exercice lancé"
+        await st.goto(URL + f"#/s/{sid}/direct"); await st.wait_for_selector("#liveCard")
         await tr.click("[data-a='niveau']"); await tr.wait_for_timeout(500)
         await st.wait_for_selector("#liveIn .opt", timeout=5000)
         await st.click("#liveIn .opt >> nth=2"); await st.wait_for_timeout(600)

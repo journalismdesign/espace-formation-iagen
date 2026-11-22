@@ -18,6 +18,7 @@ activité: niveau                                   ← activité en salle (nive
 quiz: llm                                          ← llm, redac, notebook, jargon, rmctf, sve, donnees
 fiches: notebook, donnees                          ← fiches pratiques liées
 exemples: oui                                      ← affiche la liste des exemples de rédactions
+outil: rmctf                                       ← outil d'exercice (rmctf ou sve) qui apparaît aux stagiaires quand la séquence est lancée
 
 ### Objectifs
 - …

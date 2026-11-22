@@ -221,7 +221,7 @@ temps fort: 2
 activité: lettre
 quiz: rmctf
 fiches: rmctf
-outil: toolRmctf
+outil: rmctf
 
 ### Objectifs
 - Écrire une demande complète en cinq questions.
@@ -262,7 +262,7 @@ type: pratique
 pages: 104 à 107, 110 à 112
 temps fort: 2
 fiches: sve
-outil: toolSve
+outil: sve
 
 ### Objectifs
 - Transmettre le but réel, découper, faire lister les hypothèses.

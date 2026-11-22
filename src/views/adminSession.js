@@ -405,13 +405,19 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     $("#pjQ", box).onclick = async () => showQr(session, await qr(joinUrl(session.code), 900));
     $("#closeDay", box).onchange = async (e) => { session = await guard(() => api.updateSession(sid, e.target.checked ? { status: "closed", live: {} } : { status: "live" }), e.target.checked ? "Journée close." : "Session rouverte.") || session; draw(); };
 
+    // Outils d'exercice débloqués : on ajoute celui de la séquence lancée, sans jamais en retirer
+    const withTools = (live) => {
+      const m = live.module ? modulesFor(session).find((x) => x.id === live.module) : null;
+      return { ...live, tools: [...new Set([...(session.live?.tools || []), ...(live.tools || []), ...(m?.outil ? [m.outil] : [])])] };
+    };
     const setLive = async (live, extra = {}) => {
+      live = withTools(live);
       if (session.status !== "live") { if (!confirm("La salle est fermée. L'ouvrir et lancer l'activité ?")) return; }
       session = await guard(() => api.updateSession(sid, { status: "live", live, ...extra })) || session;
       draw();
     };
     // la séquence en cours et les émargements déjà présentés survivent à chaque changement d'écran
-    const keep = () => ({ module: session.live?.module || null, emarg: session.live?.emarg || {} });
+    const keep = () => ({ module: session.live?.module || null, emarg: session.live?.emarg || {}, tools: session.live?.tools || [] });
     // Écrans d'ouverture et de clôture : projetables salle fermée, sans l'ouvrir. Les stagiaires ne les voient
     // dans leur espace qu'une fois la salle ouverte (session active).
     const show = async (view, extra = {}) => {

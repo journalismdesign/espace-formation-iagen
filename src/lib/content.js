@@ -153,6 +153,17 @@ function detail(m, progress) {
   return h;
 }
 // Séquences déjà passées dans le déroulé piloté par le formateur
+/* Outils d'exercice : ils apparaissent côté stagiaire quand le formateur lance (ou dépasse) la séquence
+   qui les propose, puis restent disponibles. Après la session (close), tous restent accessibles. */
+export const TOOL_IDS = ["toolRmctf", "toolSve"];
+export function unlockedTools(session) {
+  if (!session) return new Set();
+  if (session.status === "closed") return new Set(TOOL_IDS);
+  const mods = modulesFor(session), i = mods.findIndex((m) => m.id === session.live?.module);
+  const reached = i < 0 ? [] : mods.slice(0, i + 1);
+  return new Set([...(session.live?.tools || []), ...reached.map((m) => m.outil).filter(Boolean)].filter((t) => TOOL_IDS.includes(t)));
+}
+
 export function passedIds(format, currentId) {
   const all = modulesFor(format), i = all.findIndex((m) => m.id === currentId);
   return new Set(i < 0 ? [] : all.slice(0, i).map((m) => m.id));
