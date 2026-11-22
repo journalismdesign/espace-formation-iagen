@@ -736,3 +736,6 @@ details.acc-set>*:not(summary){margin-left:0;margin-right:0}
 .brand-opt small{text-align:center;line-height:1.25;font-size:13px}
 .brand-opt:has(input:checked) .logo-tile{border-color:var(--navy)}
 .brand-pick{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+/* Logos clients sans liseré */
+.brand-opt .logo-tile,.brand-opt:has(input:checked) .logo-tile{border:0;box-shadow:none;padding:4px 6px}
+.brand-opt .logo-tile.text{border:0}
