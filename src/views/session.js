@@ -43,13 +43,14 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
       ${logosHtml(br, "sm")}
       <div class="side-head"><div><b>${T(session.title)}</b><div class="small muted">${T(datesFr(session))}</div></div></div>
       <div class="side-live${live() ? " on" : ""}" id="sideLive"><span class="dot${live() ? " on" : ""}"></span>${live() ? "En direct" : STATUS[session.status]}</div>
-      <nav class="side-nav">${TABS.filter(([k]) => !["direct", "cadrage"].includes(k)).map(([k, l]) => `<a href="#/s/${sid}/${k}"${k === tab ? ' aria-current="page"' : ""}>${l}<span>›</span></a>`).join("")}</nav>
       <div class="side-label">Le parcours</div>
       <div class="side-path">
         <a href="#/s/${sid}/cadrage" class="${tab === "cadrage" ? "cur" : ""}"><span class="ring${project?.status === "validated" ? " on" : ""}">${project?.status === "validated" ? "✓" : ""}</span><div><b>Mon cadrage</b><div class="small muted">${project?.status === "validated" ? "Cas validé" : "Avant la formation"}</div></div></a>
         <a href="#/s/${sid}/direct" class="${tab === "direct" ? "cur" : ""}"><span class="ring"></span><div><b>Le jour J</b><div class="small muted">La formation en direct</div></div></a>
       </div>
       <div id="sideExtra"></div>
+      <div class="side-label">Ressources</div>
+      <nav class="side-nav">${TABS.filter(([k]) => !["direct", "cadrage"].includes(k)).map(([k, l]) => `<a href="#/s/${sid}/${k}"${k === tab ? ' aria-current="page"' : ""}>${l}<span>›</span></a>`).join("")}</nav>
       ${trainerPreview ? `<p class="small muted" style="margin-top:14px">Aperçu formateur : vos clics ne sont pas enregistrés. <a href="#/admin/s/${sid}">Retour au back-office</a></p>` : ""}
     </aside>
     <section class="sidemain" id="tabBody"></section>`;

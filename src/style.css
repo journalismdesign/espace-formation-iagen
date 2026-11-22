@@ -654,3 +654,4 @@ input[type=url],input[type=email],input[type=date],input[type=time],input[type=n
 .card.live .kicker-d{color:var(--live)}
 @media (prefers-reduced-motion:reduce){.dot.on,.state.live::before{animation:none}}
 .live-tag{color:var(--live);display:inline-flex;align-items:center;gap:5px}
+.side #sideExtra:not(:empty){margin-bottom:6px}
