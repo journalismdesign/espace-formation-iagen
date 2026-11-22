@@ -29,3 +29,22 @@ export function parsePages(s) {
   });
   return [...new Set(out)];
 }
+
+/* ---------- Présentations supplémentaires ---------- */
+// Fichier Drive (PDF, etc.) : https://drive.google.com/file/d/<id>/view
+export function driveFileId(url) {
+  const m = String(url || "").match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([\w-]{20,})/);
+  return m ? m[1] : null;
+}
+// Type de présentation : « slides » (navigation par page) ou « pdf » (aperçu Drive)
+export function deckKind(url) {
+  if (deckId(url) && /presentation/.test(url)) return "slides";
+  if (driveFileId(url)) return "pdf";
+  return null;
+}
+export function deckEmbedUrl(url, page = 1) {
+  const k = deckKind(url);
+  if (k === "slides") return slideEmbedUrl(url, page);
+  if (k === "pdf") return `https://drive.google.com/file/d/${driveFileId(url)}/preview`;
+  return null;
+}

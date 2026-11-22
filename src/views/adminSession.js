@@ -12,7 +12,7 @@ import { logoPair } from "./settings.js";
 import { STEPS, SENSIB } from "./cadrageModel.js";
 import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml } from "../lib/brand.js";
 import { modulesFor, typeLabel } from "../lib/content.js";
-import { parsePages, slideEmbedUrl, deckId } from "../deck.js";
+import { parsePages, slideEmbedUrl, deckId, deckKind } from "../deck.js";
 
 const PHASES = [["reglages", "Réglages"], ["avant", "Avant — inscription et cadrage"], ["jour", "Jour J — pilotage"], ["apres", "Après — suivi"]];
 const hhmmT = (t) => t.replace(/^0/, "").replace(":", " h ");
@@ -82,6 +82,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
      ================================================================= */
   async function phaseReglages() {
     const [brands, sup] = await Promise.all([api.listBrands(), api.supportStatus(sid).catch(() => ({}))]);
+    let decks = [...(session.decks || [])];
     let clientLogo = session.client_logo || null, clientLogoLight = session.client_logo_light || null, emQr = session.emargement_qr || null;
     box.innerHTML = `
     <form id="regF" class="grid adm2">
@@ -126,10 +127,25 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         <div class="card" style="margin-top:14px"><h3>Slides projetées</h3>
           <label class="f" for="gSl">Présentation Google Slides</label><input type="url" id="gSl" placeholder="https://docs.google.com/presentation/d/…" value="${esc(session.slides_url || "")}">
           <p class="small muted">${T("Appelées pendant les séquences « Comprendre » depuis l'onglet Jour J. L'écran projeté doit être ouvert dans un navigateur connecté à un compte Google qui a accès à la présentation : inutile de la rendre publique.")}</p>
+          <label class="f" style="margin-top:14px">Autres présentations à projeter</label>
+          <p class="small muted" style="margin-top:0">${T("Google Slides ou PDF déposé sur Drive (lien « Partager »). Le PDF s'affiche dans la visionneuse Drive : on change de page directement sur l'écran projeté.")}</p>
+          <div id="deckList"></div>
+          <div class="askrow" style="margin-top:6px"><input type="text" id="dkT" maxlength="80" placeholder="Titre (ex. Étude de cas Ouest-France)"><input type="url" id="dkU" placeholder="https://drive.google.com/file/d/…"><button type="button" class="btn sm" id="dkAdd">Ajouter</button></div>
         </div>
         <button class="btn" type="submit" style="margin-top:14px;width:100%">Enregistrer les réglages</button>
       </div>
     </form>`;
+    const drawDecks = () => {
+      $("#deckList", box).innerHTML = decks.map((d, i) => `<div class="prow"><span><span class="pill">${deckKind(d.url) === "pdf" ? "PDF" : "Slides"}</span> ${T(d.title)}</span><button type="button" class="iconbtn danger" data-dk="${i}" aria-label="Retirer">✕</button></div>`).join("") || `<p class="small muted">Aucune.</p>`;
+      $$("[data-dk]", box).forEach((b) => (b.onclick = () => { decks.splice(+b.dataset.dk, 1); drawDecks(); }));
+    };
+    drawDecks();
+    $("#dkAdd", box).onclick = () => {
+      const url = $("#dkU", box).value.trim(), title = $("#dkT", box).value.trim() || "Présentation";
+      if (!deckKind(url)) return toast("Lien non reconnu : collez un lien Google Slides ou un lien de fichier Drive.", "ko");
+      decks.push({ id: "d" + Date.now().toString(36), title, url }); $("#dkU", box).value = ""; $("#dkT", box).value = ""; drawDecks();
+      toast("Ajoutée : pensez à enregistrer les réglages.");
+    };
     const fmt = () => box.querySelector('input[name="fmt"]:checked').value;
     const syncD2 = () => ($("#d2wrap", box).style.visibility = fmt() === "2" ? "visible" : "hidden");
     box.querySelectorAll('input[name="fmt"]').forEach((r) => (r.onchange = syncD2)); syncD2();
@@ -166,7 +182,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         start_time: $("#gS", box).value || "09:30", end_time: $("#gE", box).value || "17:30",
         brand_id: box.querySelector('input[name="brand"]:checked')?.value || null, client: $("#gC", box).value.trim(), client_logo: clientLogo, client_logo_light: clientLogoLight,
         emargement_url: $("#gEm", box).value.trim() || null, emargement_qr: emQr, emargement_label: $("#gEl", box).value.trim() || null,
-        slides_url: $("#gSl", box).value.trim() || null, support_unlocked: $("#gSuF", box).checked,
+        slides_url: $("#gSl", box).value.trim() || null, support_unlocked: $("#gSuF", box).checked, decks,
       };
       if (patch.slides_url && !deckId(patch.slides_url)) return toast("Lien Google Slides non reconnu.", "ko");
       const fmtChanged = format !== session.format;
@@ -256,6 +272,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <div class="acts" id="opening"></div>
             <div class="kicker-d" style="margin:16px 0 6px">Déroulé · ce que voient les stagiaires et l'écran</div>
             <div id="modules"></div>
+            <div id="decksBox"></div>
             <div class="kicker-d" style="margin:16px 0 6px">Activités en direct</div>
             <div class="acts" id="acts"></div>
             <div id="ctrl" style="margin:12px 0"></div>
@@ -347,6 +364,16 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         const j = b.dataset.sl === "next" ? Math.min(pages.length - 1, i + 1) : Math.max(0, i - 1);
         goPage(pages[j]);
       }));
+      // Présentations supplémentaires (Google Slides ou PDF Drive)
+      const decks = session.decks || [];
+      $("#decksBox", box).innerHTML = decks.length ? `<div class="kicker-d" style="margin:16px 0 6px">Présentations</div><div class="modlist">${decks.map((d) => {
+        const on = V === "deck" && live.deck === d.id, k = deckKind(d.url);
+        return `<div class="modrow${on ? " on" : ""}"><button type="button" data-deck="${d.id}"><span class="pill">${k === "pdf" ? "PDF" : "Slides"}</span><b>${T(d.title)}</b></button>
+          ${on && k === "slides" ? `<div class="slidebar"><button type="button" class="iconbtn" data-dp="-1" aria-label="Page précédente">←</button><span class="mono small">page ${live.page || 1}</span><button type="button" class="iconbtn" data-dp="1" aria-label="Page suivante">→</button></div>` : ""}
+          ${on && k === "pdf" ? `<div class="small muted" style="padding:2px 10px 8px">${T("Changez de page directement sur l'écran projeté (visionneuse Drive).")}</div>` : ""}</div>`;
+      }).join("")}</div>` : "";
+      $$("[data-deck]", box).forEach((b) => (b.onclick = () => show("deck", { deck: b.dataset.deck, page: 1 })));
+      $$("[data-dp]", box).forEach((b) => (b.onclick = () => show("deck", { deck: live.deck, page: Math.max(1, (live.page || 1) + +b.dataset.dp) })));
       $("#acts", box).innerHTML = session.activities.map((a, i) => `<button class="act${act?.id === a.id ? " on" : ""}" data-a="${esc(a.id)}"><span>${i + 1}</span>${T(a.titre)}<small>${ACT_TYPES[a.type]}</small></button>`).join("");
       $$("[data-a]", box).forEach((b) => (b.onclick = () => launch(session.activities.find((a) => a.id === b.dataset.a))));
       let c = "";

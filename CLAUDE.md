@@ -26,6 +26,7 @@ Plateforme de formation de Gerald Holubowicz (journalism.design). Elle comprend 
 - Entrée stagiaire : `#/join/CODE` (`src/views/entry.js`), en slides plein écran. Étapes : titre, prénom et e-mail, code, émargement, support, puis le tableau de bord. Le drapeau `progress.intro` évite de rejouer l'intro. Le code passe par la fonction Edge `access` (request/verify), qui ouvre une session Supabase via `generateLink`, puis `verifyOtp` côté navigateur.
 - Formateur : `#/formateur` (lien magique ou Google). Back-office : `#/admin` (sessions), `#/admin/reglages` (organisme et logos clients), `#/admin/s/:id/{reglages|avant|jour|apres}`, `#/ecran/:id` (écran projeté, à ouvrir depuis le back-office).
 - `sessions.live = {view, module, slide, act, qi, reveal, options}`. `view` vaut title, emargement, support, module, slide ou activity. `currentAct()` ne renvoie une activité que si `view` vaut activity.
+- Présentations supplémentaires : `sessions.decks` (`[{id,title,url}]`) accepte Google Slides (navigation par page depuis le pilotage) ou un fichier Drive (PDF dans la visionneuse `/preview`, qu'on ne peut pas piloter page par page). Vue `live.view = 'deck'` avec `live.deck` et `live.page`.
 - Slides Drive : `src/deck.js` contient l'ordre des 135 slides du support par défaut (identifiants de page) et `parsePages("11 à 16, 18")`. Pour un autre support, l'affichage se fait par numéro de page.
 
 ## Modèle de données (résumé)
@@ -34,7 +35,7 @@ Plateforme de formation de Gerald Holubowicz (journalism.design). Elle comprend 
 - `session_members` : progression et émargement. `session_invites` sert à l'invitation par e-mail. `join_session(code)` sert au code ou au QR.
 - `projects` : cadrage. Le champ `data` contient `{mode, besoin, pourqui, pistes, choix, retenu, analyse:{v1,v2}, steps}`. `trainer_comment` s'écrit via `comment_project`.
 - `responses` : une réponse par personne et par activité. Pour un quiz, la clé est `quizId#index`. La lecture collective passe uniquement par `live_results`.
-- Migrations, dans l'ordre : `…_init.sql`, `…_v3_acces_pilotage.sql`, `…_logos_clair_sombre.sql`, `…_emargement_libelle.sql`.
+- Migrations, dans l'ordre : `…_init.sql`, `…_v3_acces_pilotage.sql`, `…_logos_clair_sombre.sql`, `…_emargement_libelle.sql`, `…_presentations.sql`.
 - v3 : `sessions.date2/start_time/end_time/brand_id/client_logo/slides_url/emargement_url/emargement_qr/support_unlocked`, `brands`, `app_settings` (org_name, org_logo), `session_support` (lien lu via `support_status`), `access_codes` (empreintes, purge à expiration et à la clôture), `session_public(code)` lisible sans connexion.
 - `threads`/`posts` pour la discussion, `resources`/`session_secrets` pour les ressources de la session, `ai_usage` pour le quota IA.
 

@@ -118,6 +118,7 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
           const qr = await emargementQr(session);
           h = `<h3>Deux étapes pour émarger</h3>${emargementStepsHtml(session, qr, emargementLabels(session, br))}`;
         } else if (L.view === "support") h = `<h3>Le support de la formation</h3>${supportBlock(await api.supportStatus(sid).catch(() => ({})))}`;
+        else if (L.view === "deck") { const d = (session.decks || []).find((x) => x.id === L.deck); h = `<h3>${T(d?.title || "Présentation")}</h3><p class="muted">Le formateur projette une présentation.</p>`; }
         else if (L.view === "slide") h = `<h3>${T(mod?.titre || "Présentation")}</h3><p class="muted">${T(`Le formateur présente la page ${L.slide} du support.`)}</p>`;
         else h = `<h3>${T(mod?.titre || "")}</h3>${mod?.obj ? `<ul class="small">${mod.obj.map((x) => `<li>${T(x)}</li>`).join("")}</ul>` : ""}`;
         card.innerHTML = `<div class="kicker-d"><span class="dot on"></span> En direct</div>${h}`;
