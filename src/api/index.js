@@ -5,7 +5,8 @@ import { createSupabaseApi } from "./supabase.js";
 import { createDemoApi } from "./demo.js";
 import { defaultActivities } from "../lib/activities.js";
 
-const URL = import.meta.env.VITE_SUPABASE_URL;
-const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Tolère une URL copiée avec /rest/v1/ ou une barre finale : seule la racine du projet compte
+const URL = (import.meta.env.VITE_SUPABASE_URL || "").trim().replace(/\/(rest|auth|storage|functions)\/v1\/?.*$/, "").replace(/\/+$/, "");
+const KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
 
 export const api = URL && KEY ? createSupabaseApi(URL, KEY) : createDemoApi({ defaultActivities });
