@@ -41,6 +41,7 @@ export async function loadScreenData(api, session) {
     emQr: view === "emargement" ? await emargementQr(session, 700) : null,
     support: view === "support" ? await api.supportStatus(session.id).catch(() => null) : null,
     evalQr: view === "evaluation" ? await evaluationQr(session, 700) : null,
+    trainer: view === "trainer" && session.trainer_id ? (await api.listTrainers().catch(() => [])).find((t) => t.id === session.trainer_id) || null : null,
     rows, participants: roster.length,
     projects: projects.filter((p) => p.status === "validated").map((p) => ({ titre: p.data?.retenu?.titre || "Sans titre", description: p.data?.retenu?.description, auteur: byUser[p.user_id] ? firstName(byUser[p.user_id]) : "" })),
   };
@@ -82,7 +83,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
      RÉGLAGES : format, dates, horaires, logo, support, émargement, slides
      ================================================================= */
   async function phaseReglages() {
-    const [brands, sup] = await Promise.all([api.listBrands(), api.supportStatus(sid).catch(() => ({}))]);
+    const [brands, sup, trainers] = await Promise.all([api.listBrands(), api.supportStatus(sid).catch(() => ({})), api.listTrainers().catch(() => [])]);
     let decks = [...(session.decks || [])];
     let evQr = session.evaluation_qr || null;
     let clientLogo = session.client_logo || null, clientLogoLight = session.client_logo_light || null, emQr = session.emargement_qr || null;
@@ -102,19 +103,25 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <div><label class="f" for="gE">Fin</label><input type="time" id="gE" value="${esc(String(session.end_time || "17:30").slice(0, 5))}"></div>
           </div>
         </div>
+        <div class="card" style="margin-top:14px"><h3>Intervenant·e</h3>
+          <select id="gTr"><option value="">— Choisir une fiche —</option>${trainers.map((t) => `<option value="${t.id}"${session.trainer_id === t.id ? " selected" : ""}>${T(t.name)}</option>`).join("")}</select>
+          <p class="small muted">${T("Présenté·e sur la slide « Formateur ». ")}<a href="#/admin/formateurs">Gérer les fiches formateurs</a></p>
+        </div>
         <div class="card" style="margin-top:14px"><h3>Entreprise cliente</h3>
           <div class="brand-pick" id="gBrand">
             ${brands.map((b) => `<label class="brand-opt"><input type="radio" name="brand" value="${b.id}"${session.brand_id === b.id ? " checked" : ""}><span class="logo-tile">${b.logo || b.logo_light ? `<img src="${esc(b.logo || b.logo_light)}" alt="">` : T(b.name)}</span><small>${T(b.name)}</small></label>`).join("")}
             <label class="brand-opt"><input type="radio" name="brand" value=""${!session.brand_id ? " checked" : ""}><span class="logo-tile text">—</span><small>Autre</small></label>
           </div>
-          <label class="f" for="gC">Nom affiché (si « Autre » ou pour préciser un service)</label><input type="text" id="gC" maxlength="80" value="${esc(session.client || "")}">
-          <label class="f">Logo propre à cette session (facultatif, prioritaire)</label>
-          <div id="gLpair">${logoPair("sess", clientLogo, clientLogoLight)}</div>
-          <p class="small muted">${T("Les logos de Radio France, France Télévisions et Libération se déposent une fois pour toutes dans ")}<a href="#/admin/reglages">Réglages généraux</a>.</p>
+          <div id="otherFields">
+            <label class="f" for="gC">Nom de l'entreprise</label><input type="text" id="gC" maxlength="80" value="${esc(session.client || "")}">
+            <label class="f">Logo de l'entreprise</label>
+            <div id="gLpair">${logoPair("sess", clientLogo, clientLogoLight)}</div>
+          </div>
+          <p class="small muted">${T("Les entreprises récurrentes et leurs logos se gèrent dans ")}<a href="#/admin/reglages">Réglages généraux</a>.</p>
         </div>
       </div>
       <div>
-        <div class="card"><h3>Émargement</h3>
+        <details class="card acc-set" name="regacc" data-acc="em" open><summary><h3>Émargement</h3></summary>
           <label class="f" for="gEm">Lien de l'outil d'émargement</label><input type="url" id="gEm" placeholder="https://…" value="${esc(session.emargement_url || "")}">
           <label class="f">ou image du QR code fourni par l'organisme</label><input type="file" id="gEq" accept="image/*">
           <div class="em2box">
@@ -126,28 +133,32 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             </div>
           </div>
           <div id="emPrev" style="margin-top:10px"></div>
-        </div>
-        <div class="card" style="margin-top:14px"><h3>Support à télécharger</h3>
-          <label class="f" for="gSu">Lien du support (PDF sur Drive, etc.)</label><input type="url" id="gSu" placeholder="https://…">
-          <p class="small muted" id="supInfo"></p>
-          <label class="f inline"><input type="checkbox" id="gSuF"${session.support_unlocked ? " checked" : ""}> Débloquer dès maintenant</label>
-        </div>
-        <div class="card" style="margin-top:14px"><h3>Évaluation de fin de stage</h3>
-          <label class="f" for="gEvU">Lien du formulaire</label><input type="url" id="gEvU" placeholder="https://bit.ly/…" value="${esc(session.evaluation_url || "")}">
-          <label class="f">ou image du QR code fourni</label><input type="file" id="gEvQ" accept="image/*">
-          <div id="evPrev" style="margin-top:8px"></div>
-          <label class="f" for="gEvT">Titre</label><input type="text" id="gEvT" maxlength="160" placeholder="${esc(EVAL_TITLE)}" value="${esc(session.evaluation_title || "")}">
-          <label class="f" for="gEvX">Texte</label><textarea id="gEvX" maxlength="500" placeholder="${esc(EVAL_TEXT)}">${esc(session.evaluation_text || "")}</textarea>
-          <p class="small muted">${T("Projetée depuis le pilotage (bouton « Évaluation » et créneau en fin de déroulé). Les stagiaires la retrouvent aussi au-dessus du téléchargement du support.")}</p>
-        </div>
-        <div class="card" style="margin-top:14px"><h3>Slides projetées</h3>
+        
+        </details>
+        <details class="card acc-set" name="regacc" data-acc="sl"><summary><h3>Slides projetées</h3></summary>
           <label class="f" for="gSl">Présentation Google Slides</label><input type="url" id="gSl" placeholder="https://docs.google.com/presentation/d/…" value="${esc(session.slides_url || "")}">
           <p class="small muted">${T("Appelées pendant les séquences « Comprendre » depuis l'onglet Jour J. L'écran projeté doit être ouvert dans un navigateur connecté à un compte Google qui a accès à la présentation : inutile de la rendre publique.")}</p>
           <label class="f" style="margin-top:14px">Autres présentations à projeter</label>
           <p class="small muted" style="margin-top:0">${T("Google Slides ou PDF déposé sur Drive (lien « Partager »). Le PDF s'affiche dans la visionneuse Drive : on change de page directement sur l'écran projeté.")}</p>
           <div id="deckList"></div>
           <div class="askrow" style="margin-top:6px"><input type="text" id="dkT" maxlength="80" placeholder="Titre (ex. Étude de cas Ouest-France)"><input type="url" id="dkU" placeholder="https://drive.google.com/file/d/…"><button type="button" class="btn sm" id="dkAdd">Ajouter</button></div>
-        </div>
+        
+        </details>
+        <details class="card acc-set" name="regacc" data-acc="ev"><summary><h3>Évaluation de fin de stage</h3></summary>
+          <label class="f" for="gEvU">Lien du formulaire</label><input type="url" id="gEvU" placeholder="https://bit.ly/…" value="${esc(session.evaluation_url || "")}">
+          <label class="f">ou image du QR code fourni</label><input type="file" id="gEvQ" accept="image/*">
+          <div id="evPrev" style="margin-top:8px"></div>
+          <label class="f" for="gEvT">Titre</label><input type="text" id="gEvT" maxlength="160" placeholder="${esc(EVAL_TITLE)}" value="${esc(session.evaluation_title || "")}">
+          <label class="f" for="gEvX">Texte</label><textarea id="gEvX" maxlength="500" placeholder="${esc(EVAL_TEXT)}">${esc(session.evaluation_text || "")}</textarea>
+          <p class="small muted">${T("Projetée depuis le pilotage (bouton « Évaluation » et créneau en fin de déroulé). Les stagiaires la retrouvent aussi au-dessus du téléchargement du support.")}</p>
+        
+        </details>
+        <details class="card acc-set" name="regacc" data-acc="su"><summary><h3>Support à télécharger</h3></summary>
+          <label class="f" for="gSu">Lien du support (PDF sur Drive, etc.)</label><input type="url" id="gSu" placeholder="https://…">
+          <p class="small muted" id="supInfo"></p>
+          <label class="f inline"><input type="checkbox" id="gSuF"${session.support_unlocked ? " checked" : ""}> Débloquer dès maintenant</label>
+        
+        </details>
         <button class="btn" type="submit" style="margin-top:14px;width:100%">Enregistrer les réglages</button>
       </div>
     </form>`;
@@ -162,6 +173,11 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       decks.push({ id: "d" + Date.now().toString(36), title, url }); $("#dkU", box).value = ""; $("#dkT", box).value = ""; drawDecks();
       toast("Ajoutée : pensez à enregistrer les réglages.");
     };
+    // Champs « Autre » : visibles seulement sans entreprise préenregistrée
+    const syncBrand = () => ($("#otherFields", box).hidden = !!box.querySelector('input[name="brand"]:checked')?.value);
+    box.querySelectorAll('input[name="brand"]').forEach((r) => (r.onchange = syncBrand)); syncBrand();
+    // Accordéons : un seul ouvert à la fois (repli JS si l'attribut name n'est pas géré)
+    $$("details.acc-set", box).forEach((d) => d.addEventListener("toggle", () => { if (d.open) $$("details.acc-set", box).forEach((o) => o !== d && (o.open = false)); }));
     const syncE2 = () => ($("#e2fields", box).style.display = $("#gE2", box).checked ? "" : "none");
     $("#gE2", box).onchange = syncE2; syncE2();
     const drawEv = async () => {
@@ -205,7 +221,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         title: $("#gT", box).value.trim(), formation: $("#gF", box).value.trim() || "Prendre en main les IA génératives",
         format, date: $("#gD1", box).value || null, date2: format === "2" ? $("#gD2", box).value || null : null,
         start_time: $("#gS", box).value || "09:30", end_time: $("#gE", box).value || "17:30",
-        brand_id: box.querySelector('input[name="brand"]:checked')?.value || null, client: $("#gC", box).value.trim(), client_logo: clientLogo, client_logo_light: clientLogoLight,
+        brand_id: box.querySelector('input[name="brand"]:checked')?.value || null, trainer_id: $("#gTr", box).value || null,
         emargement_url: $("#gEm", box).value.trim() || null, emargement_qr: emQr, emargement_label: $("#gEl", box).value.trim() || null,
         emargement2_enabled: $("#gE2", box).checked, emargement2_text: $("#gEt", box).value.trim() || null,
         slides_url: $("#gSl", box).value.trim() || null, support_unlocked: $("#gSuF", box).checked, decks,
@@ -214,6 +230,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       };
       if (patch.slides_url && !deckId(patch.slides_url)) return toast("Lien Google Slides non reconnu.", "ko");
       if (patch.evaluation_url && !/^https?:\/\//i.test(patch.evaluation_url)) return toast("Le lien de l'évaluation doit commencer par https://", "ko");
+      // Entreprise préenregistrée : ses nom et logos viennent des réglages généraux
+      Object.assign(patch, patch.brand_id ? { client: "", client_logo: null, client_logo_light: null } : { client: $("#gC", box).value.trim(), client_logo: clientLogo, client_logo_light: clientLogoLight });
       const fmtChanged = format !== session.format;
       if (fmtChanged) patch.activities = defaultActivities(format);
       const saved = await guard(() => api.updateSession(sid, patch));
@@ -348,7 +366,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const act = currentAct(session), live = session.live || {};
       $("#hint", box).textContent = session.status === "live" ? "La salle est ouverte. Chaque clic change l'écran projeté et ce que voient les stagiaires dans leur espace." : "La salle est fermée : le premier clic l'ouvrira.";
       const V = session.status === "live" ? live.view : null;
-      $("#opening", box).innerHTML = [["title", "Slide de titre", "Titre, logos, dates, QR"], ["emargement", "Émargement", session.emargement_url || session.emargement_qr ? "QR de l'organisme" : "À configurer"], ["support", "Support", "Annonce du téléchargement"], ["evaluation", "Évaluation", session.evaluation_url || session.evaluation_qr ? "QR et lien du formulaire" : "À configurer"], ["", "Écran d'attente", "Rien de projeté"]]
+      $("#opening", box).innerHTML = [["title", "Slide de titre", "Titre, logos, dates, QR"], ["trainer", "Formateur", session.trainer_id ? "Fiche de l'intervenant" : "À choisir"], ["emargement", "Émargement", session.emargement_url || session.emargement_qr ? "QR de l'organisme" : "À configurer"], ["support", "Support", "Annonce du téléchargement"], ["evaluation", "Évaluation", session.evaluation_url || session.evaluation_qr ? "QR et lien du formulaire" : "À configurer"], ["", "Écran d'attente", "Rien de projeté"]]
         .map(([v, l, sub]) => `<button class="act${(V || "") === v && !act ? " on" : ""}" data-view="${v}"><span>${v ? "▣" : "□"}</span>${l}<small>${T(sub)}</small></button>`).join("");
       $$("[data-view]", box).forEach((b) => (b.onclick = () => (b.dataset.view ? show(b.dataset.view) : setLive({ ...keep(), view: null }))));
       // Émargements : arrivée du matin (début de journée) et reprise de l'après-midi (fin du déjeuner)

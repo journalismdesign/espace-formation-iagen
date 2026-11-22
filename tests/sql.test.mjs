@@ -19,7 +19,7 @@ grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid(), auth.jwt() to anon, authenticated;
 alter default privileges in schema public grant all on tables to anon, authenticated; -- comme Supabase
 `);
-for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql"]) {
+for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql"]) {
   try { await db.exec(readFileSync(new URL("../supabase/migrations/" + f, import.meta.url), "utf8")); }
   catch (e) { console.error("Migration", f, ":", e.message, e.where || ""); process.exit(1); }
 }
@@ -105,6 +105,14 @@ await db.exec(`update sessions set status = 'closed' where id = '${sid}'`);
 await db.exec(`reset role;`);
 ok((await db.query(`select count(*)::int n from access_codes where session_id='${sid}'`)).rows[0].n === 0, "codes détruits à la clôture");
 ok((await db.query(`select count(*)::int n from public.session_public('${code}')`)).rows[0].n === 0, "session close invisible publiquement");
+
+// Profils intervenant·es
+await as(T, "formateur@exemple.fr");
+await db.exec(`insert into trainers (name, roles) values ('Gerald Holubowicz', '[{"label":"Formateur","value":"samsa.fr"}]')`);
+await as(B, "bob@exemple.fr");
+ok((await db.query(`select count(*)::int n from trainers`)).rows[0].n === 1, "le stagiaire lit la fiche de l'intervenant");
+await db.exec(`update trainers set name = 'pirate'`);
+ok((await db.query(`select count(*)::int n from trainers where name = 'pirate'`)).rows[0].n === 0, "le stagiaire ne modifie pas la fiche");
 
 // Code formateur
 await db.exec(`reset role; set test.uid=''; set request.jwt.claims='';`);

@@ -119,6 +119,12 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
           const EL = emargementLabels(session, br);
           h = `<h3>${EL.second && EL.client ? "Deux étapes pour émarger" : "Émargement"}</h3>${emargementStepsHtml(session, qr, emargementLabels(session, br))}`;
         } else if (L.view === "support") h = `<h3>Le support de la formation</h3>${supportBlock(await api.supportStatus(sid).catch(() => ({})))}`;
+        else if (L.view === "trainer") {
+          const t = session.trainer_id ? (await api.listTrainers().catch(() => [])).find((x) => x.id === session.trainer_id) : null;
+          h = t ? `<div class="tr-card">${t.photo ? `<img src="${esc(t.photo)}" alt="">` : ""}<div><div class="small muted">L'intervenant</div><h3 style="margin:2px 0 6px">${T(t.name)}</h3>
+            <ul class="small" style="margin:0;padding-left:18px">${(t.roles || []).map((r) => `<li>${T(r.label)} ${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${T(r.value)}</a>` : T(r.value || "")}</li>`).join("")}</ul>
+            <p class="small" style="margin:8px 0 0">${t.email ? `<a href="mailto:${esc(t.email)}">${esc(t.email)}</a>` : ""}${t.website ? ` · <a href="${esc(t.website)}" target="_blank" rel="noopener noreferrer">${esc(t.website.replace(/^https?:\/\//, ""))}</a>` : ""}${(t.socials || []).map((x) => ` · ${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.label)}</a>` : esc(x.label)}`).join("")}</p></div></div>` : `<h3>L'intervenant</h3>`;
+        }
         else if (L.view === "evaluation") h = `<h3>Évaluation de fin de stage</h3>${evaluationHtml(session, await evaluationQr(session)) || `<p class="muted">Le formateur vous indique comment évaluer la formation.</p>`}`;
         else if (L.view === "deck") { const d = (session.decks || []).find((x) => x.id === L.deck); h = `<h3>${T(d?.title || "Présentation")}</h3><p class="muted">Le formateur projette une présentation.</p>`; }
         else if (L.view === "slide") h = `<h3>${T(mod?.titre || "Présentation")}</h3><p class="muted">${T(`Le formateur présente la page ${L.slide} du support.`)}</p>`;

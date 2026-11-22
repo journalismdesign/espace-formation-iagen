@@ -53,9 +53,27 @@ function deckCloud(rows) {
 }
 const joinBox = (session, qrUrl) => (qrUrl ? `<div class="ds-join"><img src="${qrUrl}" alt="QR code pour rejoindre"><div>Rejoindre<br><b class="mono">${esc(session.code)}</b></div></div>` : "");
 
-// d = { session, rows, participants, qrUrl, projects, branding, emQr, support }
+// Accroche : les **passages** entre doubles astérisques passent en bleu
+const highlight = (t) => T(t || "").replace(/\*\*(.+?)\*\*/g, '<span class="hl">$1</span>');
+const bare = (u) => String(u || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
+
+// Slide « L'intervenant », sur le modèle de la page 5 du support
+export function trainerSlideHtml(session, t, cls = "", right = "") {
+  if (!t) return dark(session, `<div class="ds-left"><div class="ds-kick">L'intervenant</div><div class="ds-title xxl">Fiche à choisir</div><div class="ds-sub">Onglet Réglages de la session.</div></div>`, right, cls);
+  const contacts = [t.email ? `<a>${esc(t.email)}</a>` : "", t.website ? `<span>${esc(t.website)}</span>` : "", ...(t.socials || []).map((x) => `<a>${esc(x.label)}</a>`)].filter(Boolean).join("<br>");
+  return light(session, `<div class="ds-kick barred">L'intervenant</div><div class="ds-title ds-black">${T(t.name)}</div>
+      ${contacts ? `<div class="ds-contact"><div class="ds-kick">Contact pro</div><div class="ds-contact-l">${contacts}</div></div>` : ""}`,
+    `<div class="ds-trainer">
+      <div class="ds-banner"><span class="ds-banner-logo">${samsaHtml(true, "banner")}</span>${t.photo ? `<img class="ds-photo" src="${esc(t.photo)}" alt="${esc(t.name)}">` : ""}</div>
+      <div class="ds-roles">${(t.roles || []).map((r) => `<div class="ds-role"><span>${T(r.label)}</span>${r.value ? `<i>▸</i><u>${T(r.value)}</u>` : ""}</div>`).join("")}</div>
+      ${t.tagline ? `<div class="ds-tagline">${highlight(t.tagline)}</div>` : ""}
+      ${t.tagline_sub ? `<div class="ds-tagline-sub">${T(t.tagline_sub)}</div>` : ""}
+    </div>`, right, cls);
+}
+
+// d = { session, rows, participants, qrUrl, projects, branding, emQr, support, trainer }
 export function screenHtml(d, compact = false) {
-  const { session, rows = [], participants = 0, qrUrl = "", projects = [], branding = null, emQr = null, support = null, evalQr = null } = d;
+  const { session, rows = [], participants = 0, qrUrl = "", projects = [], branding = null, emQr = null, support = null, evalQr = null, trainer = null } = d;
   const cls = compact ? "compact" : "";
   const live = session.live || {};
   const isLive = session.status === "live";
@@ -107,6 +125,8 @@ export function screenHtml(d, compact = false) {
         ${L.second && L.client ? `<div class="ds-em-col"><div class="ds-em-h">Pour ${T(L.client)}</div><div class="ds-em-t">${T(L.text)}</div><div class="ds-mail">${MAIL_ICON}</div></div>` : ""}
       </div>`, right, cls);
   }
+
+  if (view === "trainer") return trainerSlideHtml(session, trainer, cls, right);
 
   // Évaluation de fin de stage (modèle de la page « Avant de télécharger la présentation »)
   if (view === "evaluation") {

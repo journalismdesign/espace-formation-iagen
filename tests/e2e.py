@@ -35,11 +35,22 @@ async def main():
         sid = tr.url.split("/admin/s/")[1].split("/")[0]
         # Réglages : horaires, émargement, support
         await tr.goto(URL + f"#/admin/s/{sid}/reglages"); await tr.wait_for_selector("#regF")
-        await tr.fill("#gE", "17:30"); await tr.fill("#gEm", "https://exemple.fr/emargement-qualiopi"); await tr.fill("#gEl", "FTV"); await tr.fill("#gEt", "Signez via le lien reçu de la DRH")
-        await tr.fill("#gEvU", "https://bit.ly/outilsIA-FranceTV"); await tr.wait_for_selector("#evPrev img")
+        # Accordéons : émargement ouvert à l'arrivée, un seul ouvert à la fois
+        assert await tr.locator("details[data-acc='em'][open]").count() == 1
+        await tr.click("details[data-acc='sl'] summary"); await tr.wait_for_timeout(200)
+        assert await tr.locator("details.acc-set[open]").count() == 1 and await tr.locator("details[data-acc='sl'][open]").count() == 1, "un seul accordéon ouvert"
+        # Entreprise : champs « Autre » masqués quand une entreprise préenregistrée est choisie
+        assert await tr.locator("#otherFields").is_hidden()
+        await tr.click("input[name='brand'][value=''] >> xpath=.."); assert await tr.locator("#otherFields").is_visible()
+        await tr.click("input[name='brand'] >> nth=2 >> xpath=.."); assert await tr.locator("#otherFields").is_hidden()
+        for k in ["em", "ev"]:
+            await tr.click(f"details[data-acc='{k}'] summary"); await tr.wait_for_timeout(150)
+            if k == "em": await tr.fill("#gE", "17:30"); await tr.fill("#gEm", "https://exemple.fr/emargement-qualiopi"); await tr.fill("#gEl", "FTV"); await tr.fill("#gEt", "Signez via le lien reçu de la DRH")
+            if k == "ev": await tr.fill("#gEvU", "https://bit.ly/outilsIA-FranceTV"); await tr.wait_for_selector("#evPrev img")
+        await tr.click("details[data-acc='sl'] summary"); await tr.wait_for_timeout(150)
         await tr.fill("#dkT", "Étude de cas (PDF)"); await tr.fill("#dkU", "https://drive.google.com/file/d/1cWhTM8HR0KR33QIud2ZQxYAw1JcxbKHE/view?usp=drive_link"); await tr.click("#dkAdd")
         await tr.wait_for_selector("#deckList .prow")
-        await tr.wait_for_selector("#emPrev img"); await tr.click("#regF button[type=submit]"); await tr.wait_for_timeout(500)
+        await tr.click("#regF button[type=submit]"); await tr.wait_for_timeout(500)
         await shot(tr, "02b-reglages")
         await tr.goto(URL + f"#/admin/s/{sid}/avant"); await tr.wait_for_selector("#invF")
         assert (await tr.inner_text("#jl")).strip().endswith("/DEMO42"), "lien court attendu"
@@ -74,6 +85,10 @@ async def main():
         await tr.goto(URL + f"#/admin/s/{sid}/jour"); await tr.wait_for_selector("#opening")
         await tr.click("[data-view='title']"); await tr.wait_for_selector("#preview .deck-slide.dark .samsa.big")
         await st.wait_for_selector("#liveCard h3:has-text('Bienvenue')", timeout=5000)
+        await tr.click("[data-view='trainer']"); await tr.wait_for_selector("#preview .ds-trainer")
+        assert "GERALD HOLUBOWICZ" in (await tr.inner_text("#preview")).upper()
+        await st.wait_for_selector("#liveCard .tr-card", timeout=5000)
+        await shot(tr, "05d-intervenant")
         await tr.click("[data-em='j1-matin']"); await tr.wait_for_selector("#preview .ds-qrbox img")
         assert "POUR FTV" in (await tr.inner_text("#preview")).upper()
         assert "lien reçu de la DRH" in await tr.inner_text("#preview"), "texte du second émargement modifiable"
@@ -163,6 +178,15 @@ async def main():
         txt = open(csv, encoding="utf-8-sig").read()
         assert "Bob Martin" in txt and "validé" in txt, "bilan CSV incomplet"
         await st.goto(URL + f"#/s/{sid}/cadrage"); await st.wait_for_selector(".card.fb"); await shot(st, "17-retour-formateur")
+
+        # Fiches formateurs : création avec aperçu
+        await tr.goto(URL + "#/admin/formateurs"); await tr.wait_for_selector(".trainer-card")
+        await tr.goto(URL + "#/admin/formateurs/nouveau"); await tr.wait_for_selector("#tF")
+        await tr.fill("#tN", "Camille Test"); await tr.locator("#tRoles .rl").first.fill("Journaliste"); await tr.locator("#tRoles .rv").first.fill("Le Média")
+        await tr.fill("#tTg", "Je forme **depuis 2020**")
+        assert "CAMILLE TEST" in (await tr.inner_text("#tPrev")).upper()
+        await tr.click("#tF button[type=submit]"); await tr.wait_for_url("**/formateurs/*-*")
+        await tr.goto(URL + "#/admin/formateurs"); assert await tr.locator(".trainer-card").count() == 2
 
         # Nouvelle session + duplication
         await tr.goto(URL + "#/admin"); await tr.click("#newBtn"); await tr.fill("#nTitle", "Test · deux jours"); await tr.select_option("#nFmt", "2"); await tr.click("#newForm button[type=submit]")

@@ -675,3 +675,42 @@ input[type=url],input[type=email],input[type=date],input[type=time],input[type=n
 .mcas{font-size:13.5px;color:var(--sky);margin-top:2px}
 .modtxt{display:flex;flex-direction:column}
 .modtxt small{color:var(--sky);font-size:12px;font-weight:500}
+/* Réglages : accordéons */
+details.acc-set{margin-top:14px;padding:0}
+details.acc-set>summary{list-style:none;cursor:pointer;padding:14px 18px;display:flex;justify-content:space-between;align-items:center}
+details.acc-set>summary::-webkit-details-marker{display:none}
+details.acc-set>summary h3{margin:0}
+details.acc-set>summary::after{content:"▸";color:var(--muted);transition:transform .2s}
+details.acc-set[open]>summary::after{transform:rotate(90deg)}
+details.acc-set>*:not(summary){margin-left:18px;margin-right:18px}
+details.acc-set[open]{padding-bottom:16px}
+details.acc-set:first-of-type{margin-top:0}
+/* Slide « L'intervenant » */
+.ds-contact{margin-top:auto}
+.ds-contact .ds-kick{font-weight:500;margin-bottom:1.4cqw}
+.ds-contact-l{font-size:1.45cqw;line-height:1.55;color:#000}
+.ds-contact-l a{text-decoration:underline}
+.ds-trainer{display:flex;flex-direction:column;align-items:flex-start;gap:1.2cqw;height:100%;justify-content:center}
+.ds-banner{display:flex;height:8.6cqw;background:var(--dblue);margin-bottom:1.4cqw}
+.ds-banner-logo{display:grid;place-items:center;width:20.5cqw}
+.samsa.banner{width:16cqw;height:auto}
+.ds-photo{height:8.6cqw;width:8.6cqw;object-fit:cover;display:block}
+.ds-roles{display:flex;flex-direction:column;gap:1.4cqw}
+.ds-role{font-size:2.55cqw;text-transform:uppercase;color:#000;font-weight:400;line-height:1.1;display:flex;align-items:baseline;gap:.9cqw}
+.ds-role i{font-style:normal;font-size:1.1cqw}
+.ds-role u{color:#9AA3AE;text-decoration-thickness:.12cqw;text-underline-offset:.3cqw}
+.ds-tagline{font-size:2.55cqw;font-weight:800;text-transform:uppercase;color:#000;line-height:1.15;margin-top:2.6cqw}
+.ds-tagline .hl{color:var(--dblue)}
+.ds-tagline-sub{font-size:1.5cqw;text-transform:uppercase;color:#6E5FA3;align-self:flex-end}
+/* Page formateurs */
+.trainer-card{display:flex;gap:12px;align-items:center;text-decoration:none;color:inherit}
+.trainer-card img,.tc-ph{width:64px;height:64px;object-fit:cover;flex:none;background:var(--tint);display:grid;place-items:center;font-weight:800;color:var(--navy)}
+.trainer-card b{color:var(--navy)}
+.row3{display:grid;grid-template-columns:1fr 1fr 1.2fr 34px;gap:6px;margin-bottom:6px}
+.row3.two{grid-template-columns:1fr 1.4fr 34px}
+.danger-btn{color:var(--ko);border-color:var(--ko)}
+.tr-card{display:flex;gap:14px;align-items:flex-start}
+.tr-card img{width:84px;height:84px;object-fit:cover;flex:none}
+details.acc-set{padding:0 18px}
+details.acc-set>summary{padding:14px 0}
+details.acc-set>*:not(summary){margin-left:0;margin-right:0}

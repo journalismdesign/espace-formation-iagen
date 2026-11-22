@@ -3,7 +3,7 @@
    compte (sessionStorage) : ouvrez un onglet formateur et un onglet
    stagiaire pour tester le direct. Aucune donnée ne quitte la machine. */
 
-const KEY = "iagen-demo-db-v8";
+const KEY = "iagen-demo-db-v9";
 const USER_KEY = "iagen-demo-user";
 const bc = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("iagen-demo") : null;
 const uid = () => crypto.randomUUID();
@@ -17,18 +17,23 @@ function load() {
   return null;
 }
 export const SESSION_DEFAULTS = { date2: null, start_time: "09:30", end_time: "17:30", brand_id: null, client_logo: null, client_logo_light: null,
-  slides_url: "https://docs.google.com/presentation/d/1G-exjcmMujp3XtEAOMCyzR9Plk3OzgS1qnVdTI0rJkg/edit", emargement_url: "", emargement_qr: null, emargement_label: null, support_unlocked: false, decks: [], emargement2_enabled: true, emargement2_text: null,
+  slides_url: "https://docs.google.com/presentation/d/1G-exjcmMujp3XtEAOMCyzR9Plk3OzgS1qnVdTI0rJkg/edit", emargement_url: "", emargement_qr: null, emargement_label: null, support_unlocked: false, decks: [], trainer_id: null, emargement2_enabled: true, emargement2_text: null,
   evaluation_url: null, evaluation_qr: null, evaluation_title: null, evaluation_text: null };
 
 function seed(defaultActivities) {
   const sid = uid();
+  const trainers = [{ id: uid(), name: "Gerald Holubowicz", photo: null,
+    roles: [{ label: "Fondateur de", value: "Synth", url: "https://synthmedia.fr" }, { label: "Consultant média", value: "journalism.design", url: "https://journalism.design" },
+      { label: "Enseignant", value: "Sciences Po", url: "" }, { label: "Formateur", value: "samsa.fr", url: "https://samsa.fr" }],
+    tagline: "Depuis **fin 2017**, je travaille sur **les médias synthétiques**", tagline_sub: "Deepfakes & IA génératives",
+    email: "hello@journalism.design", website: "https://journalism.design", socials: [{ label: "@gholubowicz", url: "" }], created_at: now() }];
   const brands = [["Radio France", 1], ["France Télévisions", 2], ["Libération", 3]].map(([name, sort]) => ({ id: uid(), name, logo: null, logo_light: null, sort }));
   const db = {
-    brands, settings: { org_name: "Samsa", org_logo: null, org_logo_light: null, trainer_code: DEMO_TRAINER_CODE }, support: { [sid]: "https://exemple.fr/support-formation.pdf" }, codes: [],
+    trainers, brands, settings: { org_name: "Samsa", org_logo: null, org_logo_light: null, trainer_code: DEMO_TRAINER_CODE }, support: { [sid]: "https://exemple.fr/support-formation.pdf" }, codes: [],
     profiles: [], sessions: [{
       ...SESSION_DEFAULTS, id: sid, title: "Prendre en main les IA génératives", formation: "Prendre en main les IA génératives",
       client: "", brand_id: brands[2].id, date: new Date(Date.now() + 86400000 * 10).toISOString().slice(0, 10), format: "1",
-      code: "DEMO42", status: "live", activities: defaultActivities("1"), live: {}, created_at: now(),
+      code: "DEMO42", status: "live", trainer_id: trainers[0].id, activities: defaultActivities("1"), live: {}, created_at: now(),
       emargement_url: "https://exemple.fr/emargement",
     }],
     members: [], invites: [], resources: [
@@ -110,6 +115,14 @@ export function createDemoApi({ defaultActivities }) {
       return true;
     },
 
+    async listTrainers() { if (!user()) throw new Error("Connectez-vous d'abord."); return [...(db.trainers || [])].sort((a, b) => a.name.localeCompare(b.name)); },
+    async saveTrainer(t) {
+      needTrainer(); db.trainers = db.trainers || [];
+      const row = { name: t.name, photo: t.photo ?? null, roles: t.roles || [], tagline: t.tagline || null, tagline_sub: t.tagline_sub || null, email: t.email || null, website: t.website || null, socials: t.socials || [] };
+      if (t.id) { const x = db.trainers.find((y) => y.id === t.id); Object.assign(x, row); commit(); return x; }
+      const x = { id: uid(), created_at: now(), ...row }; db.trainers.push(x); commit(); return x;
+    },
+    async deleteTrainer(id) { needTrainer(); db.trainers = db.trainers.filter((x) => x.id !== id); db.sessions.forEach((x) => x.trainer_id === id && (x.trainer_id = null)); commit(); },
     async trainerCodeConfigured() { return !!(db.settings.trainer_code ?? DEMO_TRAINER_CODE); },
     async checkTrainerCode(code) { await new Promise((r) => setTimeout(r, 300)); return String(code).trim() === (db.settings.trainer_code ?? DEMO_TRAINER_CODE); },
     async setTrainerCode(code) { needTrainer(); if (String(code).trim().length < 6) throw new Error("Le code doit compter au moins 6 caractères."); db.settings.trainer_code = String(code).trim(); commit(); return true; },
@@ -187,7 +200,7 @@ export function createDemoApi({ defaultActivities }) {
       const n = await api.createSession({ title: s.title + " (copie)", formation: s.formation, client: s.client, format: s.format, activities: s.activities,
         brand_id: s.brand_id, client_logo: s.client_logo, client_logo_light: s.client_logo_light, slides_url: s.slides_url, start_time: s.start_time, end_time: s.end_time, emargement_url: s.emargement_url, emargement_qr: s.emargement_qr,
         emargement_label: s.emargement_label, emargement2_enabled: s.emargement2_enabled, emargement2_text: s.emargement2_text, decks: s.decks,
-        evaluation_url: s.evaluation_url, evaluation_qr: s.evaluation_qr, evaluation_title: s.evaluation_title, evaluation_text: s.evaluation_text });
+        trainer_id: s.trainer_id, evaluation_url: s.evaluation_url, evaluation_qr: s.evaluation_qr, evaluation_title: s.evaluation_title, evaluation_text: s.evaluation_text });
       if (db.support[id]) db.support[n.id] = db.support[id];
       db.resources.filter((r) => r.session_id === id).forEach((r) => db.resources.push({ ...r, id: uid(), session_id: n.id }));
       db.secrets.filter((r) => r.session_id === id).forEach((r) => db.secrets.push({ ...r, id: uid(), session_id: n.id, value: "" }));

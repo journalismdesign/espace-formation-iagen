@@ -20,6 +20,7 @@ import { viewAdmin } from "./views/admin.js";
 import { viewAdminSession } from "./views/adminSession.js";
 import { viewScreen } from "./views/screen.js";
 import { viewSettings } from "./views/settings.js";
+import { viewTrainers } from "./views/trainers.js";
 
 const app = $("#app");
 let cleanup = null, me = null, booted = false, renderTok = 0, currentRoute = null;
@@ -34,6 +35,7 @@ const ROUTES = [
   [/^#\/s\/([\w-]+)(?:\/([\w-]+))?(?:\/([\w-]+))?$/, viewSession],
   [/^#\/admin$/, viewAdmin, { trainer: true }],
   [/^#\/admin\/reglages$/, viewSettings, { trainer: true }],
+  [/^#\/admin\/formateurs(?:\/([\w-]+))?$/, viewTrainers, { trainer: true }],
   [/^#\/admin\/s\/([\w-]+)(?:\/(\w+))?$/, viewAdminSession, { trainer: true }],
   [/^#\/ecran\/([\w-]+)$/, viewScreen, { trainer: true, bare: true }],
   [/^#?\/?$/, viewHome],

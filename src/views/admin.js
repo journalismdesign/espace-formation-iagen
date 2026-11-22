@@ -15,7 +15,7 @@ export async function viewAdmin(root, _p, { api, go }) {
   const [sessions, counts] = await Promise.all([api.listSessions(), api.memberCounts()]);
   root.innerHTML = `
     <div class="pagehead"><div><div class="kicker-d">Back-office formateur</div><h1>Sessions</h1></div>
-      <div class="head-actions"><a class="btn ghost" href="#/admin/reglages">Réglages généraux</a><button class="btn" id="newBtn">+ Démarrer une session</button></div></div>
+      <div class="head-actions"><a class="btn ghost" href="#/admin/formateurs">Formateurs</a><a class="btn ghost" href="#/admin/reglages">Réglages généraux</a><button class="btn" id="newBtn">+ Démarrer une session</button></div></div>
     <form class="card" id="newForm" hidden style="margin-bottom:14px">
       <h3>Nouvelle session</h3>
       <div class="grid g2">

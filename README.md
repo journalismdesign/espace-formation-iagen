@@ -58,7 +58,7 @@ Supabase fournit l'authentification, la base Postgres, le temps réel et les fon
    supabase functions deploy access --no-verify-jwt
    supabase secrets set BREVO_API_KEY=xkeysib-... MAIL_FROM=formation@journalism.design MAIL_FROM_NAME="Formation IA générative" CODE_PEPPER=$(openssl rand -hex 32)
    ```
-   Exécutez aussi `supabase/migrations/20261122000000_v3_acces_pilotage.sql` puis `20261122010000_logos_clair_sombre.sql` `20261122020000_emargement_libelle.sql` , `20261122030000_presentations.sql` , `20261122040000_emargement_second.sql` , `20261122050000_evaluation.sql` et `20261122060000_code_formateur.sql`. Activez pg_cron (Database → Extensions) pour la purge horaire des codes expirés. Sans pg_cron, les codes expirés sont refusés et purgés à chaque demande.
+   Exécutez aussi `supabase/migrations/20261122000000_v3_acces_pilotage.sql` puis `20261122010000_logos_clair_sombre.sql` `20261122020000_emargement_libelle.sql` , `20261122030000_presentations.sql` , `20261122040000_emargement_second.sql` , `20261122050000_evaluation.sql` , `20261122060000_code_formateur.sql` et `20261122070000_formateurs.sql`. Activez pg_cron (Database → Extensions) pour la purge horaire des codes expirés. Sans pg_cron, les codes expirés sont refusés et purgés à chaque demande.
 7. **Logos** : dans Back-office → Réglages généraux, déposez une fois pour toutes les logos de Radio France, France Télévisions, Libération et de votre organisme, chacun en version sombre (fonds clairs) et en version claire (fonds marine). Utilisez les fichiers officiels fournis par les clients.
 8. **Assistant IA** (pistes, analyse du cadrage, assistant d'apprentissage) :
    ```bash
