@@ -96,6 +96,16 @@ async def main():
         await tr.goto(URL + f"#/admin/s/{sid}/jour"); await tr.wait_for_selector("#opening")
         await tr.click("[data-view='title']"); await tr.wait_for_selector("#preview .deck-slide.dark .samsa.big")
         await st.wait_for_selector("#liveCard h3:has-text('Bienvenue')", timeout=5000)
+        # Salle fermée : les écrans d'ouverture se projettent sans ouvrir la salle et restent invisibles des stagiaires
+        await tr.click("[data-status='draft']"); await tr.wait_for_selector("[data-status='live']")
+        await tr.goto(URL + f"#/admin/s/{sid}/jour"); await tr.wait_for_selector("#opening")
+        await tr.click("[data-view='emargement']"); await tr.wait_for_selector("#preview .ds-em, #preview .deck-slide", timeout=5000)
+        assert await tr.locator("[data-status='live']").count() == 1, "la salle reste fermée"
+        await st.wait_for_selector("#liveCard .empty", timeout=5000)
+        assert "Bienvenue" not in await st.inner_text("#liveCard") and "émarger" not in (await st.inner_text("#liveCard")).lower(), "rien côté stagiaire salle fermée"
+        await tr.click("[data-status='live']"); await tr.wait_for_timeout(500)
+        await st.wait_for_selector("#liveCard .dot.on", timeout=5000)
+        await tr.goto(URL + f"#/admin/s/{sid}/jour"); await tr.wait_for_selector("#opening")
         await tr.click("[data-view='trainer']"); await tr.wait_for_selector("#preview .ds-trainer")
         assert "GERALD HOLUBOWICZ" in (await tr.inner_text("#preview")).upper()
         await st.wait_for_selector("#liveCard .tr-card", timeout=5000)

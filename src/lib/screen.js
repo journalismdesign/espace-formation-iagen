@@ -79,7 +79,8 @@ export function screenHtml(d, compact = false) {
   const live = session.live || {};
   const isLive = session.status === "live";
   const act = isLive ? currentAct(session) : null;
-  const view = isLive ? live.view : null;
+  // salle fermée : seuls les écrans d'ouverture et de clôture se projettent (les stagiaires, eux, ne les voient pas)
+  const view = isLive || ["title", "trainer", "emargement", "support", "evaluation"].includes(live.view) ? live.view : null;
   const mod = live.module ? modulesFor(session).find((m) => m.id === live.module) : null;
   const right = `Code ${esc(session.code)} · ${participants} participant${participants > 1 ? "s" : ""}`;
 
