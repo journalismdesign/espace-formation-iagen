@@ -50,7 +50,15 @@ async function sendMail(to: string, name: string, subject: string, html: string,
       to: [{ email: to, name }], subject, htmlContent: html, textContent: text,
     }),
   });
-  if (!r.ok) throw new Error("l'e-mail n'a pas pu partir (" + r.status + ")");
+  if (!r.ok) {
+    // Brevo explique la cause (clé inconnue, adresse IP non autorisée, expéditeur non validé…) : on la garde dans les journaux
+    const detail = await r.text().catch(() => "");
+    console.error("Brevo", r.status, detail);
+    let hint = "";
+    if (r.status === 401) hint = /ip/i.test(detail) ? " : adresse IP refusée par Brevo (désactivez le blocage des IP dans Brevo → Sécurité)" : " : clé Brevo refusée (BREVO_API_KEY doit être une clé API xkeysib-, pas une clé SMTP)";
+    else if (r.status === 400 && /sender/i.test(detail)) hint = " : expéditeur refusé (MAIL_FROM doit être une adresse du domaine validé dans Brevo)";
+    throw new Error("l'e-mail n'a pas pu partir (" + r.status + ")" + hint);
+  }
 }
 
 Deno.serve(async (req) => {
