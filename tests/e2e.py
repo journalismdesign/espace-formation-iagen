@@ -50,7 +50,7 @@ async def main():
         await tr.click("details[data-acc='sl'] summary"); await tr.wait_for_timeout(150)
         await tr.fill("#dkT", "Étude de cas (PDF)"); await tr.fill("#dkU", "https://drive.google.com/file/d/1cWhTM8HR0KR33QIud2ZQxYAw1JcxbKHE/view?usp=drive_link"); await tr.click("#dkAdd")
         await tr.wait_for_selector("#deckList .prow")
-        await tr.click("#regF button[type=submit]"); await tr.wait_for_timeout(500)
+        await tr.click("#regF .draft-save"); await tr.wait_for_timeout(500)
         await shot(tr, "02b-reglages")
         # Brouillon automatique : la saisie survit à un changement de page, « Tout réinitialiser » vide les champs
         await tr.click("details[data-acc='em'] summary"); await tr.fill("#gEt", "Texte en cours de saisie"); await tr.wait_for_timeout(700)
@@ -196,7 +196,7 @@ async def main():
         await tr.fill("#tN", "Camille Test"); await tr.locator("#tRoles .rl").first.fill("Journaliste"); await tr.locator("#tRoles .rv").first.fill("Le Média")
         await tr.fill("#tTg", "Je forme **depuis 2020**")
         assert "CAMILLE TEST" in (await tr.inner_text("#tPrev")).upper()
-        await tr.click("#tF button[type=submit]"); await tr.wait_for_url("**/formateurs/*-*")
+        await tr.click("#tF .draft-save"); await tr.wait_for_url("**/formateurs/*-*")
         await tr.goto(URL + "#/admin/formateurs"); assert await tr.locator(".trainer-card").count() == 2
 
         # Nouvelle session + duplication

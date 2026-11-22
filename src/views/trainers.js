@@ -75,5 +75,5 @@ export async function viewTrainers(root, [id], { api, go }) {
     if (saved && !cur.id) go(`#/admin/formateurs/${saved.id}`);
   };
   drawRows();
-  keepDraft($("#tF", root), `formateur:${cur.id || "nouveau"}`);
+  keepDraft($("#tF", root), `formateur:${cur.id || "nouveau"}`, { saveLabel: "Enregistrer la fiche" });
 }

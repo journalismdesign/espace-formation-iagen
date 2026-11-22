@@ -214,7 +214,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     if (sup.url) $("#gSu", box).value = sup.url;
     const supInfo = (st) => (st.unlock_at ? T(`Téléchargeable par les stagiaires à partir du ${new Date(st.unlock_at).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "full", timeStyle: "short" })} (une heure avant la fin). La page Support reste visible dans leur menu.`) : T("Renseignez la date et l'heure de fin pour programmer le déblocage."));
     $("#supInfo", box).innerHTML = supInfo(sup);
-    keepDraft($("#regF", box), `reglages:${sid}`); // brouillon automatique + « Tout réinitialiser »
+    keepDraft($("#regF", box), `reglages:${sid}`, { saveLabel: "Enregistrer les réglages" }); // brouillon automatique + « Tout réinitialiser »
     $("#regF", box).onsubmit = async (e) => {
       e.preventDefault();
       const format = fmt();

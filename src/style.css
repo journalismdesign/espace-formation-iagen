@@ -720,3 +720,7 @@ details.acc-set>*:not(summary){margin-left:0;margin-right:0}
 .draftbar .draft-reset{margin-left:auto}
 .draftbar .draft-reset.danger{color:var(--ko);font-weight:600}
 .draftbar{grid-column:1/-1}
+/* Barre d'enregistrement toujours visible en haut des formulaires longs */
+.draftbar.sticky{position:sticky;top:0;z-index:20;background:var(--light);padding:10px 0;margin:-10px 0 6px;border-bottom:1px solid rgba(10,45,78,.08)}
+.draftbar .draft-reset{margin-left:auto}
+.draftbar .draft-save{white-space:nowrap}

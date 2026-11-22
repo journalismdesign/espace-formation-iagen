@@ -21,11 +21,13 @@ const hhmm = (t) => new Date(t).toLocaleTimeString("fr-FR", { hour: "2-digit", m
 
 export function clearDraft(key) { store.del(key); }
 
-export function keepDraft(form, key) {
+export function keepDraft(form, key, { saveLabel } = {}) {
   if (!form) return () => {};
   const bar = document.createElement("div");
   bar.className = "draftbar small";
-  bar.innerHTML = `<span class="draft-st muted"></span><button type="button" class="linkbtn draft-reset">Tout réinitialiser</button>`;
+  bar.innerHTML = `<span class="draft-st muted"></span><button type="button" class="linkbtn draft-reset">Tout réinitialiser</button>`
+    + (saveLabel ? `<button type="submit" class="btn sm draft-save">${T(saveLabel)}</button>` : "");
+  if (saveLabel) bar.classList.add("sticky");
   form.prepend(bar);
   const st = bar.querySelector(".draft-st"), resetBtn = bar.querySelector(".draft-reset");
   const say = (txt, cls = "muted") => { st.className = "draft-st " + cls; st.innerHTML = T(txt); };
