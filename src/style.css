@@ -655,3 +655,9 @@ input[type=url],input[type=email],input[type=date],input[type=time],input[type=n
 @media (prefers-reduced-motion:reduce){.dot.on,.state.live::before{animation:none}}
 .live-tag{color:var(--live);display:inline-flex;align-items:center;gap:5px}
 .side #sideExtra:not(:empty){margin-bottom:6px}
+/* Slide de titre : écarts encore élargis autour du titre */
+.ds-center .ds-client{margin-bottom:5.5cqw}
+.ds-center .samsa.big{margin:5.5cqw auto 2.6cqw}
+.slide-page.title .for-client{margin-bottom:56px}
+.slide-page.title .samsa.slidebig{margin:50px auto 22px}
+@media (max-height:700px){.slide-page.title .for-client{margin-bottom:32px}.slide-page.title .samsa.slidebig{margin:30px auto 14px}}
