@@ -92,6 +92,7 @@ export function screenHtml(d, compact = false) {
     return dark(session, `<div class="ds-left">
         <div class="ds-kick">${T(typeLabel(mod.type))}${mod.tf ? ` · Temps fort ${mod.tf}` : ""} · ${T(mod.t[0].replace(":", " h "))} – ${T(mod.t[1].replace(":", " h "))}</div>
         <div class="ds-title xxl">${T(mod.titre)}</div>
+        ${mod.cas ? `<div class="ds-sub">${T(mod.cas)}</div>` : ""}
         ${mod.exo ? `<div class="ds-sub">Exercice : ${T(mod.exo.titre)} · ${mod.exo.duree} min</div>` : ""}
       </div>`, right, cls);
   }

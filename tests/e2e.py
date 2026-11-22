@@ -86,7 +86,7 @@ async def main():
         assert await tr.locator("[data-em='j1-eval']").count() == 1, "créneau d'évaluation en fin de déroulé"
         await tr.click("[data-deck]"); await tr.wait_for_selector("#preview iframe[src*='/preview']")
         await st.wait_for_selector("#liveCard h3:has-text('Étude de cas')", timeout=5000)
-        await tr.click("[data-mod='j1-comprendre']"); await tr.wait_for_selector("[data-page]")
+        await tr.click("[data-mod='j1-etat']"); await tr.wait_for_selector("[data-page]")
         await tr.click("[data-page] >> nth=2"); await tr.wait_for_selector("#preview iframe")
         await st.wait_for_selector("#liveCard:has-text('page')", timeout=5000)
         await shot(tr, "05a-formateur-pilotage"); await shot(st, "04a-stagiaire-sequence")

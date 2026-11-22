@@ -672,3 +672,6 @@ input[type=url],input[type=email],input[type=date],input[type=time],input[type=n
 .eval-txt{flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
 .eval-txt p{margin:0}
 .eval-block.dark .em-h,.eval-block.dark p{color:#fff}
+.mcas{font-size:13.5px;color:var(--sky);margin-top:2px}
+.modtxt{display:flex;flex-direction:column}
+.modtxt small{color:var(--sky);font-size:12px;font-weight:500}

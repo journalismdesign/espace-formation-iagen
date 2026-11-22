@@ -121,7 +121,7 @@ function modHtml(m, progress, nm, rel = null) {
         <div style="flex:1">
           <div class="meta"><span class="pill ${m.type}">${typeLabel(m.type)}</span>${m.tf ? `<span class="pill tf">Temps fort ${m.tf}</span>` : ""}<span class="small muted">${fmtMin(dur)}${m.exo ? ` · dont ${m.exo.duree}${NB}min d'exercice` : ""}</span>${isNow ? `<span class="pill" style="background:var(--yel)">En ce moment</span>` : tag}</div>
           <h3>${T(m.titre)}</h3>
-          ${m.pages ? `<div class="small muted">Support : pages ${T(m.pages)}</div>` : ""}
+          ${m.cas || m.pages ? `<div class="mcas">${m.cas ? T(m.cas) : ""}${m.cas && m.pages ? ` <span class="muted">·</span> ` : ""}${m.pages ? `<span class="muted">p.${NB}${T(m.pages.replace(/ à /g, " – "))}</span>` : ""}</div>` : ""}
         </div>
         <span class="chev">▸</span>
       </div>
@@ -264,7 +264,7 @@ export function bindTools(root) {
 export function corpus() {
   const mods = [...D1.map((m) => ({ fmt: "1 jour", ...m })), ...D2.map((m) => ({ fmt: "2 jours", ...m }))].filter((m) => m.type !== "pause");
   return [
-    "== DÉROULÉ ==", ...mods.map((m) => `[${m.fmt}${m.day ? " · jour " + m.day : ""}] ${m.t[0]}-${m.t[1]} ${typeLabel(m.type)}${m.tf ? " · temps fort " + m.tf : ""} : ${m.titre}${m.pages ? " (pages " + m.pages + ")" : ""}${m.exo ? " · exercice " + m.exo.duree + " min : " + m.exo.steps.join(" / ") : ""}`),
+    "== DÉROULÉ ==", ...mods.map((m) => `[${m.fmt}${m.day ? " · jour " + m.day : ""}] ${m.t[0]}-${m.t[1]} ${typeLabel(m.type)}${m.tf ? " · temps fort " + m.tf : ""} : ${m.titre}${m.cas ? " (exemple : " + m.cas + ")" : ""}${m.pages ? " (pages " + m.pages + ")" : ""}${m.exo ? " · exercice " + m.exo.duree + " min : " + m.exo.steps.join(" / ") : ""}`),
     "== FICHES (citer avec [[fiche:id]]) ==", ...FICHES.map((f) => `[[fiche:${f.id}]] ${f.titre} — ${f.resume} ${f.sections.map(([h, c]) => h + " : " + (Array.isArray(c) ? c.join(" ; ") : c)).join(" | ")} ${f.warn ? "À retenir : " + f.warn : ""} (pages ${f.pages})`),
     "== GLOSSAIRE ==", ...GLOSS.map((g) => `${g[0]} : ${g[1]} (p. ${g[3]})${g[2] ? " → [[fiche:" + g[2] + "]]" : ""}`),
     "== PROMPTS (citer avec [[prompt:id]]) ==", ...PROMPTS.map((p) => `[[prompt:${p.id}]] ${p.titre} (${p.tag}, p. ${p.page})`),
