@@ -1,7 +1,13 @@
 /* Connexion : lien magique par e-mail ou compte Google. */
 import { $, T, esc, guard } from "../lib/dom.js";
 
-export async function viewTrainerLogin(root, _p, { api }) {
+const GATE = "iagen-trainer-gate";
+
+export async function viewTrainerLogin(root, p, ctx) {
+  const { api } = ctx;
+  let passed = false;
+  try { passed = sessionStorage.getItem(GATE) === "1"; } catch {}
+  if (!passed) return trainerGate(root, ctx, () => viewTrainerLogin(root, p, ctx));
   const demo = api.mode === "demo";
   root.innerHTML = `
   <div class="login">
@@ -38,6 +44,32 @@ export async function viewTrainerLogin(root, _p, { api }) {
   if (demo) {
     $("#asTrainer").onclick = () => api.signInEmail("formateur@demo.fr", true);
   }
+}
+
+/* Code d'accès formateur, vérifié côté serveur avant d'afficher la connexion */
+async function trainerGate(root, { api, go }, onOk) {
+  const configured = await api.trainerCodeConfigured().catch(() => false);
+  root.innerHTML = `
+  <div class="login">
+    <div class="login-card card">
+      <div class="kicker" style="color:var(--muted)">Espace formateur</div>
+      <h1 style="color:var(--navy);margin:4px 0 6px">Code d'accès</h1>
+      ${configured ? `<p class="muted">${T("Saisissez le code d'accès de l'équipe pédagogique.")}</p>
+      <form id="gF"><input type="password" id="gC" required autocomplete="current-password" class="mono" placeholder="Code formateur" aria-label="Code formateur">
+        <button class="btn" type="submit" style="margin-top:10px;width:100%">Continuer</button></form>
+      <div id="gMsg" class="small" style="margin-top:8px;color:var(--ko)"></div>`
+      : `<div class="warn small">${T("Aucun code formateur n'est défini. Dans Supabase → SQL Editor, exécutez : select public.set_trainer_code('votre-code');")}</div>`}
+      <p class="small" style="margin-top:18px"><a href="#/login">← Espace stagiaire</a></p>
+    </div>
+  </div>`;
+  $("#gF")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#gF button"); btn.disabled = true; btn.textContent = "Vérification…";
+    const ok = await api.checkTrainerCode($("#gC").value).catch(() => false);
+    if (ok) { try { sessionStorage.setItem(GATE, "1"); } catch {} onOk(); }
+    else { $("#gMsg").textContent = "Code incorrect."; btn.disabled = false; btn.textContent = "Continuer"; $("#gC").select(); }
+  });
+  $("#gC")?.focus();
 }
 
 /* Entrée stagiaire sans lien : saisie du code de session */

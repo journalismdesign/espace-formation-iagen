@@ -27,11 +27,16 @@ export async function viewSettings(root, _p, { api, go }) {
         ${logoPair("org", settings.org_logo, settings.org_logo_light, samsaHtml(false))}
       </div>
     </div>
+    <form class="card" id="tcF" style="margin-top:14px"><h3>Code d'accès formateur</h3>
+      <p class="small muted" style="margin-top:0">${T("Demandé avant la page de connexion formateur. Il est vérifié par le serveur et stocké sous forme d'empreinte : personne ne peut le relire, notez-le.")}</p>
+      <div class="askrow" style="max-width:480px"><input type="password" id="tcN" minlength="6" required autocomplete="new-password" placeholder="Nouveau code (6 caractères au moins)"><button class="btn sm" type="submit">Changer le code</button></div>
+    </form>
     <div class="card" style="margin-top:14px"><h3>Entreprises clientes</h3>
       ${brands.map((b) => `<div class="brand-row"><div class="brand-name"><b>${T(b.name)}</b><button class="iconbtn danger" data-del="${b.id}" aria-label="Supprimer ${esc(b.name)}">✕</button></div>${logoPair(b.id, b.logo, b.logo_light)}</div>`).join("")}
       <form id="bF" class="askrow" style="margin-top:12px;max-width:480px"><input type="text" id="bN" maxlength="80" placeholder="Nouvelle entreprise" required><button class="btn sm" type="submit">Ajouter</button></form>
     </div>`;
   const reload = () => go(location.hash);
+  $("#tcF", root).onsubmit = async (e) => { e.preventDefault(); if (await guard(() => api.setTrainerCode($("#tcN", root).value), "Code formateur changé.") !== undefined) $("#tcN", root).value = ""; };
   const save = async (id, kind, url) => {
     if (id === "org") return guard(() => api.saveSetting(kind === "dark" ? "org_logo" : "org_logo_light", url));
     const b = brands.find((x) => x.id === id);

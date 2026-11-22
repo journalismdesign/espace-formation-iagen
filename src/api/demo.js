@@ -10,6 +10,7 @@ const uid = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
 const code6 = () => Math.random().toString(16).slice(2, 8).toUpperCase().padEnd(6, "0");
 export const DEMO_TRAINER = "formateur@demo.fr";
+export const DEMO_TRAINER_CODE = "SAMSA-DEMO"; // code formateur du mode démonstration
 
 function load() {
   try { const raw = localStorage.getItem(KEY); if (raw) return JSON.parse(raw); } catch {}
@@ -23,7 +24,7 @@ function seed(defaultActivities) {
   const sid = uid();
   const brands = [["Radio France", 1], ["France Télévisions", 2], ["Libération", 3]].map(([name, sort]) => ({ id: uid(), name, logo: null, logo_light: null, sort }));
   const db = {
-    brands, settings: { org_name: "Samsa", org_logo: null, org_logo_light: null }, support: { [sid]: "https://exemple.fr/support-formation.pdf" }, codes: [],
+    brands, settings: { org_name: "Samsa", org_logo: null, org_logo_light: null, trainer_code: DEMO_TRAINER_CODE }, support: { [sid]: "https://exemple.fr/support-formation.pdf" }, codes: [],
     profiles: [], sessions: [{
       ...SESSION_DEFAULTS, id: sid, title: "Prendre en main les IA génératives", formation: "Prendre en main les IA génératives",
       client: "", brand_id: brands[2].id, date: new Date(Date.now() + 86400000 * 10).toISOString().slice(0, 10), format: "1",
@@ -109,6 +110,9 @@ export function createDemoApi({ defaultActivities }) {
       return true;
     },
 
+    async trainerCodeConfigured() { return !!(db.settings.trainer_code ?? DEMO_TRAINER_CODE); },
+    async checkTrainerCode(code) { await new Promise((r) => setTimeout(r, 300)); return String(code).trim() === (db.settings.trainer_code ?? DEMO_TRAINER_CODE); },
+    async setTrainerCode(code) { needTrainer(); if (String(code).trim().length < 6) throw new Error("Le code doit compter au moins 6 caractères."); db.settings.trainer_code = String(code).trim(); commit(); return true; },
     async listBrands() { return [...db.brands].sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name)); },
     async saveBrand(b) {
       needTrainer();

@@ -30,7 +30,7 @@ npm run dev        # http://localhost:5173
 
 Sans fichier `.env`, l'application tourne entièrement dans le navigateur (localStorage).
 
-- Côté formateur : ouvrez `#/formateur`, puis cliquez sur « Entrer comme formateur ».
+- Côté formateur : ouvrez `#/formateur`, saisissez le code `SAMSA-DEMO`, puis cliquez sur « Entrer comme formateur ».
 - Côté stagiaire : dans un autre onglet, ouvrez `#/join/DEMO42`. Le code d'accès s'affiche à l'écran au lieu d'être envoyé.
 - L'écran projeté s'ouvre depuis le back-office (Jour J → « Ouvrir l'écran projeté »).
 
@@ -40,11 +40,13 @@ Supabase fournit l'authentification, la base Postgres, le temps réel et les fon
 
 1. **Créer le projet** sur supabase.com, région UE.
 2. **Créer le schéma** : SQL Editor → coller et exécuter `supabase/migrations/20261121000000_init.sql`. Vous pouvez aussi utiliser `supabase db push` avec la CLI.
-3. **Déclarer les formateur·ices** (SQL Editor) :
+3. **Déclarer les formateur·ices et le code d'accès formateur** (SQL Editor) :
    ```sql
    insert into trainer_emails values ('gerald@journalism.design');
    -- si le compte existe déjà :
    update profiles set role = 'trainer' where email = 'gerald@journalism.design';
+   -- code demandé avant la page de connexion formateur (modifiable ensuite dans Réglages généraux)
+   select public.set_trainer_code('un-code-secret');
    ```
 4. **Authentification** (Authentication → Providers) :
    - *Email* : activé. Les liens magiques passent par le SMTP de Supabase, limité à quelques e-mails par heure. Pour une vraie session, branchez votre propre SMTP (Authentication → SMTP Settings), par exemple Brevo ou le SMTP de votre hébergeur.
@@ -56,7 +58,7 @@ Supabase fournit l'authentification, la base Postgres, le temps réel et les fon
    supabase functions deploy access --no-verify-jwt
    supabase secrets set BREVO_API_KEY=xkeysib-... MAIL_FROM=formation@journalism.design MAIL_FROM_NAME="Formation IA générative" CODE_PEPPER=$(openssl rand -hex 32)
    ```
-   Exécutez aussi `supabase/migrations/20261122000000_v3_acces_pilotage.sql` puis `20261122010000_logos_clair_sombre.sql` `20261122020000_emargement_libelle.sql` , `20261122030000_presentations.sql` , `20261122040000_emargement_second.sql` et `20261122050000_evaluation.sql`. Activez pg_cron (Database → Extensions) pour la purge horaire des codes expirés. Sans pg_cron, les codes expirés sont refusés et purgés à chaque demande.
+   Exécutez aussi `supabase/migrations/20261122000000_v3_acces_pilotage.sql` puis `20261122010000_logos_clair_sombre.sql` `20261122020000_emargement_libelle.sql` , `20261122030000_presentations.sql` , `20261122040000_emargement_second.sql` , `20261122050000_evaluation.sql` et `20261122060000_code_formateur.sql`. Activez pg_cron (Database → Extensions) pour la purge horaire des codes expirés. Sans pg_cron, les codes expirés sont refusés et purgés à chaque demande.
 7. **Logos** : dans Back-office → Réglages généraux, déposez une fois pour toutes les logos de Radio France, France Télévisions, Libération et de votre organisme, chacun en version sombre (fonds clairs) et en version claire (fonds marine). Utilisez les fichiers officiels fournis par les clients.
 8. **Assistant IA** (pistes, analyse du cadrage, assistant d'apprentissage) :
    ```bash

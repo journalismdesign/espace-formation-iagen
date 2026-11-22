@@ -19,7 +19,7 @@ grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid(), auth.jwt() to anon, authenticated;
 alter default privileges in schema public grant all on tables to anon, authenticated; -- comme Supabase
 `);
-for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql"]) {
+for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql"]) {
   try { await db.exec(readFileSync(new URL("../supabase/migrations/" + f, import.meta.url), "utf8")); }
   catch (e) { console.error("Migration", f, ":", e.message, e.where || ""); process.exit(1); }
 }
@@ -33,7 +33,7 @@ const roles = await db.query(`select email, role, full_name from profiles order 
 ok(roles.rows.find(r => r.email === "formateur@exemple.fr").role === "trainer", "profil formateur créé par le déclencheur");
 ok(roles.rows.find(r => r.email === "bob@exemple.fr").full_name === "Bob", "nom repris de Google");
 
-const as = async (uid, email) => db.exec(`reset role; set test.uid='${uid}'; set test.email='${email}'; set role authenticated;`);
+const as = async (uid, email) => db.exec(`reset role; set test.uid='${uid}'; set test.email='${email}'; set request.jwt.claims='{"role":"authenticated"}'; set role authenticated;`);
 
 // Formateur : crée une session, invite Alice
 await as(T, "formateur@exemple.fr");
@@ -105,6 +105,17 @@ await db.exec(`update sessions set status = 'closed' where id = '${sid}'`);
 await db.exec(`reset role;`);
 ok((await db.query(`select count(*)::int n from access_codes where session_id='${sid}'`)).rows[0].n === 0, "codes détruits à la clôture");
 ok((await db.query(`select count(*)::int n from public.session_public('${code}')`)).rows[0].n === 0, "session close invisible publiquement");
+
+// Code formateur
+await db.exec(`reset role; set test.uid=''; set request.jwt.claims='';`);
+await db.query(`select public.set_trainer_code('Samsa-2026!')`); // SQL Editor
+await db.exec(`set request.jwt.claims='{"role":"anon"}'; set role anon;`);
+ok((await db.query(`select public.check_trainer_code('Samsa-2026!') ok`)).rows[0].ok === true, "code formateur accepté");
+ok((await db.query(`select public.check_trainer_code('mauvais') ok`)).rows[0].ok === false, "mauvais code refusé");
+await fails(`select * from private_settings`, "empreinte du code illisible");
+await fails(`select public.set_trainer_code('pirate123')`, "un visiteur ne change pas le code");
+await as(B, "bob@exemple.fr");
+await fails(`select public.set_trainer_code('pirate123')`, "un stagiaire ne change pas le code");
 
 // Anonyme : rien
 await db.exec(`reset role; set test.uid=''; set role anon;`);

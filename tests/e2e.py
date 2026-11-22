@@ -25,7 +25,9 @@ async def main():
         ctx = await b.new_context(viewport={"width": 1366, "height": 860}, locale="fr-FR")
         tr = await ctx.new_page(); watch(tr, "formateur")
         await tr.goto(URL); await tr.wait_for_selector("#sForm")   # entrée stagiaire par défaut
-        await tr.goto(URL + "#/formateur"); await tr.wait_for_selector("#gBtn")
+        await tr.goto(URL + "#/formateur"); await tr.wait_for_selector("#gF")      # code d'accès formateur
+        await tr.fill("#gC", "mauvais"); await tr.click("#gF button"); await tr.wait_for_selector("#gMsg:has-text('incorrect')")
+        await tr.fill("#gC", "SAMSA-DEMO"); await tr.click("#gF button"); await tr.wait_for_selector("#gBtn")
         await shot(tr, "01-connexion")
         await tr.click("#asTrainer"); await tr.wait_for_selector("text=Démarrer une session")
         await shot(tr, "02-sessions")

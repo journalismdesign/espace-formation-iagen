@@ -34,6 +34,11 @@ export function createSupabaseApi(url, anonKey) {
       return true;
     },
 
+    /* ---------- Code d'accès formateur ---------- */
+    async trainerCodeConfigured() { return ok(await sb.rpc("trainer_code_configured")); },
+    async checkTrainerCode(code) { return ok(await sb.rpc("check_trainer_code", { p_code: code })); },
+    async setTrainerCode(code) { ok(await sb.rpc("set_trainer_code", { p_code: code })); return true; },
+
     /* ---------- Identité visuelle et réglages ---------- */
     async listBrands() { return ok(await sb.from("brands").select("*").order("sort").order("name")); },
     async saveBrand(b) {
