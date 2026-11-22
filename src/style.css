@@ -662,3 +662,13 @@ input[type=url],input[type=email],input[type=date],input[type=time],input[type=n
 .slide-page.title .samsa.slidebig{margin:50px auto 22px}
 @media (max-height:700px){.slide-page.title .for-client{margin-bottom:32px}.slide-page.title .samsa.slidebig{margin:30px auto 14px}}
 .em2box{margin-top:12px;padding:10px 12px;background:var(--light);border-radius:8px}
+/* Évaluation de fin de stage */
+.ds-eval{display:grid;grid-template-columns:1.15fr 1fr;align-items:center;padding:0 6cqw 0 8.5cqw;gap:4cqw}
+.ds-title.ds-black{color:#000;font-size:3.1cqw;line-height:1.08}
+.ds-eval-qr{display:flex;flex-direction:column;align-items:center;gap:3cqw}
+.ds-eval-qr .ds-qrbox img{width:21cqw;height:21cqw}
+.ds-eval-url{font-size:2.1cqw;color:#1155CC;text-decoration:underline;word-break:break-all;text-align:center}
+.eval-block{display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:space-between}
+.eval-txt{flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.eval-txt p{margin:0}
+.eval-block.dark .em-h,.eval-block.dark p{color:#fff}

@@ -3,7 +3,7 @@
    compte (sessionStorage) : ouvrez un onglet formateur et un onglet
    stagiaire pour tester le direct. Aucune donnée ne quitte la machine. */
 
-const KEY = "iagen-demo-db-v7";
+const KEY = "iagen-demo-db-v8";
 const USER_KEY = "iagen-demo-user";
 const bc = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("iagen-demo") : null;
 const uid = () => crypto.randomUUID();
@@ -16,7 +16,8 @@ function load() {
   return null;
 }
 export const SESSION_DEFAULTS = { date2: null, start_time: "09:30", end_time: "17:30", brand_id: null, client_logo: null, client_logo_light: null,
-  slides_url: "https://docs.google.com/presentation/d/1G-exjcmMujp3XtEAOMCyzR9Plk3OzgS1qnVdTI0rJkg/edit", emargement_url: "", emargement_qr: null, emargement_label: null, support_unlocked: false, decks: [], emargement2_enabled: true, emargement2_text: null };
+  slides_url: "https://docs.google.com/presentation/d/1G-exjcmMujp3XtEAOMCyzR9Plk3OzgS1qnVdTI0rJkg/edit", emargement_url: "", emargement_qr: null, emargement_label: null, support_unlocked: false, decks: [], emargement2_enabled: true, emargement2_text: null,
+  evaluation_url: null, evaluation_qr: null, evaluation_title: null, evaluation_text: null };
 
 function seed(defaultActivities) {
   const sid = uid();
@@ -180,7 +181,9 @@ export function createDemoApi({ defaultActivities }) {
       needTrainer();
       const s = db.sessions.find((x) => x.id === id);
       const n = await api.createSession({ title: s.title + " (copie)", formation: s.formation, client: s.client, format: s.format, activities: s.activities,
-        brand_id: s.brand_id, client_logo: s.client_logo, client_logo_light: s.client_logo_light, slides_url: s.slides_url, start_time: s.start_time, end_time: s.end_time, emargement_url: s.emargement_url, emargement_qr: s.emargement_qr });
+        brand_id: s.brand_id, client_logo: s.client_logo, client_logo_light: s.client_logo_light, slides_url: s.slides_url, start_time: s.start_time, end_time: s.end_time, emargement_url: s.emargement_url, emargement_qr: s.emargement_qr,
+        emargement_label: s.emargement_label, emargement2_enabled: s.emargement2_enabled, emargement2_text: s.emargement2_text, decks: s.decks,
+        evaluation_url: s.evaluation_url, evaluation_qr: s.evaluation_qr, evaluation_title: s.evaluation_title, evaluation_text: s.evaluation_text });
       if (db.support[id]) db.support[n.id] = db.support[id];
       db.resources.filter((r) => r.session_id === id).forEach((r) => db.resources.push({ ...r, id: uid(), session_id: n.id }));
       db.secrets.filter((r) => r.session_id === id).forEach((r) => db.secrets.push({ ...r, id: uid(), session_id: n.id, value: "" }));

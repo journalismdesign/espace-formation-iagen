@@ -10,7 +10,7 @@ import { joinUrl, joinUrlLabel, qr, showQr, parseEmails } from "./admin.js";
 import { STATUS } from "./home.js";
 import { logoPair } from "./settings.js";
 import { STEPS, SENSIB } from "./cadrageModel.js";
-import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml, EM2_DEFAULT } from "../lib/brand.js";
+import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml, EM2_DEFAULT, evaluationQr, EVAL_TITLE, EVAL_TEXT } from "../lib/brand.js";
 import { modulesFor, typeLabel } from "../lib/content.js";
 import { parsePages, slideEmbedUrl, deckId, deckKind } from "../deck.js";
 
@@ -40,6 +40,7 @@ export async function loadScreenData(api, session) {
     branding: await resolveBranding(api, session),
     emQr: view === "emargement" ? await emargementQr(session, 700) : null,
     support: view === "support" ? await api.supportStatus(session.id).catch(() => null) : null,
+    evalQr: view === "evaluation" ? await evaluationQr(session, 700) : null,
     rows, participants: roster.length,
     projects: projects.filter((p) => p.status === "validated").map((p) => ({ titre: p.data?.retenu?.titre || "Sans titre", description: p.data?.retenu?.description, auteur: byUser[p.user_id] ? firstName(byUser[p.user_id]) : "" })),
   };
@@ -83,6 +84,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
   async function phaseReglages() {
     const [brands, sup] = await Promise.all([api.listBrands(), api.supportStatus(sid).catch(() => ({}))]);
     let decks = [...(session.decks || [])];
+    let evQr = session.evaluation_qr || null;
     let clientLogo = session.client_logo || null, clientLogoLight = session.client_logo_light || null, emQr = session.emargement_qr || null;
     box.innerHTML = `
     <form id="regF" class="grid adm2">
@@ -130,6 +132,14 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
           <p class="small muted" id="supInfo"></p>
           <label class="f inline"><input type="checkbox" id="gSuF"${session.support_unlocked ? " checked" : ""}> Débloquer dès maintenant</label>
         </div>
+        <div class="card" style="margin-top:14px"><h3>Évaluation de fin de stage</h3>
+          <label class="f" for="gEvU">Lien du formulaire</label><input type="url" id="gEvU" placeholder="https://bit.ly/…" value="${esc(session.evaluation_url || "")}">
+          <label class="f">ou image du QR code fourni</label><input type="file" id="gEvQ" accept="image/*">
+          <div id="evPrev" style="margin-top:8px"></div>
+          <label class="f" for="gEvT">Titre</label><input type="text" id="gEvT" maxlength="160" placeholder="${esc(EVAL_TITLE)}" value="${esc(session.evaluation_title || "")}">
+          <label class="f" for="gEvX">Texte</label><textarea id="gEvX" maxlength="500" placeholder="${esc(EVAL_TEXT)}">${esc(session.evaluation_text || "")}</textarea>
+          <p class="small muted">${T("Projetée depuis le pilotage (bouton « Évaluation » et créneau en fin de déroulé). Les stagiaires la retrouvent aussi au-dessus du téléchargement du support.")}</p>
+        </div>
         <div class="card" style="margin-top:14px"><h3>Slides projetées</h3>
           <label class="f" for="gSl">Présentation Google Slides</label><input type="url" id="gSl" placeholder="https://docs.google.com/presentation/d/…" value="${esc(session.slides_url || "")}">
           <p class="small muted">${T("Appelées pendant les séquences « Comprendre » depuis l'onglet Jour J. L'écran projeté doit être ouvert dans un navigateur connecté à un compte Google qui a accès à la présentation : inutile de la rendre publique.")}</p>
@@ -154,6 +164,13 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     };
     const syncE2 = () => ($("#e2fields", box).style.display = $("#gE2", box).checked ? "" : "none");
     $("#gE2", box).onchange = syncE2; syncE2();
+    const drawEv = async () => {
+      const q = await evaluationQr({ evaluation_qr: evQr, evaluation_url: $("#gEvU", box).value.trim() }, 600);
+      $("#evPrev", box).innerHTML = q ? `<img src="${q}" alt="QR de l'évaluation" class="thumb lg"><div class="chips" style="margin-top:6px"><a class="btn sm ghost" href="${q}" download="evaluation-${esc(session.code)}.png">Télécharger le QR (PNG)</a>${evQr ? `<button type="button" class="linkbtn small" id="evDel">Retirer l'image</button>` : ""}</div>` : "";
+      $("#evDel", box)?.addEventListener("click", () => { evQr = null; drawEv(); });
+    };
+    $("#gEvU", box).oninput = debounce(drawEv, 400); drawEv();
+    $("#gEvQ", box).onchange = async (e) => { const f = e.target.files[0]; if (f) { evQr = await guard(() => fileToDataUrl(f, 800)) || evQr; drawEv(); } };
     const fmt = () => box.querySelector('input[name="fmt"]:checked').value;
     const syncD2 = () => ($("#d2wrap", box).style.visibility = fmt() === "2" ? "visible" : "hidden");
     box.querySelectorAll('input[name="fmt"]').forEach((r) => (r.onchange = syncD2)); syncD2();
@@ -192,8 +209,11 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         emargement_url: $("#gEm", box).value.trim() || null, emargement_qr: emQr, emargement_label: $("#gEl", box).value.trim() || null,
         emargement2_enabled: $("#gE2", box).checked, emargement2_text: $("#gEt", box).value.trim() || null,
         slides_url: $("#gSl", box).value.trim() || null, support_unlocked: $("#gSuF", box).checked, decks,
+        evaluation_url: $("#gEvU", box).value.trim() || null, evaluation_qr: evQr,
+        evaluation_title: $("#gEvT", box).value.trim() || null, evaluation_text: $("#gEvX", box).value.trim() || null,
       };
       if (patch.slides_url && !deckId(patch.slides_url)) return toast("Lien Google Slides non reconnu.", "ko");
+      if (patch.evaluation_url && !/^https?:\/\//i.test(patch.evaluation_url)) return toast("Le lien de l'évaluation doit commencer par https://", "ko");
       const fmtChanged = format !== session.format;
       if (fmtChanged) patch.activities = defaultActivities(format);
       const saved = await guard(() => api.updateSession(sid, patch));
@@ -277,7 +297,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <h3>Pilotage</h3>
             <p class="small muted" id="hint" style="margin-top:0"></p>
             <div id="emRemind"></div>
-            <div class="kicker-d" style="margin:10px 0 6px">Ouverture · discussion libre</div>
+            <div class="kicker-d" style="margin:10px 0 6px">Écrans de la session · ouverture et clôture</div>
             <div class="acts" id="opening"></div>
             <div class="kicker-d" style="margin:16px 0 6px">Déroulé · ce que voient les stagiaires et l'écran</div>
             <div id="modules"></div>
@@ -328,7 +348,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const act = currentAct(session), live = session.live || {};
       $("#hint", box).textContent = session.status === "live" ? "La salle est ouverte. Chaque clic change l'écran projeté et ce que voient les stagiaires dans leur espace." : "La salle est fermée : le premier clic l'ouvrira.";
       const V = session.status === "live" ? live.view : null;
-      $("#opening", box).innerHTML = [["title", "Slide de titre", "Titre, logos, dates, QR"], ["emargement", "Émargement", session.emargement_url || session.emargement_qr ? "QR de l'organisme" : "À configurer"], ["support", "Support", "Annonce du téléchargement"], ["", "Écran d'attente", "Rien de projeté"]]
+      $("#opening", box).innerHTML = [["title", "Slide de titre", "Titre, logos, dates, QR"], ["emargement", "Émargement", session.emargement_url || session.emargement_qr ? "QR de l'organisme" : "À configurer"], ["support", "Support", "Annonce du téléchargement"], ["evaluation", "Évaluation", session.evaluation_url || session.evaluation_qr ? "QR et lien du formulaire" : "À configurer"], ["", "Écran d'attente", "Rien de projeté"]]
         .map(([v, l, sub]) => `<button class="act${(V || "") === v && !act ? " on" : ""}" data-view="${v}"><span>${v ? "▣" : "□"}</span>${l}<small>${T(sub)}</small></button>`).join("");
       $$("[data-view]", box).forEach((b) => (b.onclick = () => (b.dataset.view ? show(b.dataset.view) : setLive({ ...keep(), view: null }))));
       // Émargements : arrivée du matin (début de journée) et reprise de l'après-midi (fin du déjeuner)
@@ -340,10 +360,12 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         const am = String(session.start_time || dm[0]?.t[0] || "09:30").slice(0, 5);
         const pm = lunch ? lunch.t[1] : "13:30";
         const date = d === 2 ? session.date2 : session.date;
-        return [{ key: `j${d}-matin`, day: d, t: am, label: "Émargement du matin", date }, { key: `j${d}-aprem`, day: d, t: pm, label: "Émargement de l'après-midi", date }];
+        const out = [{ key: `j${d}-matin`, day: d, t: am, label: "Émargement du matin", date }, { key: `j${d}-aprem`, day: d, t: pm, label: "Émargement de l'après-midi", date }];
+        if (d === days[days.length - 1]) { const last = dm.filter((m) => m.type !== "pause").pop(); if (last) out.push({ key: `j${d}-eval`, day: d, t: last.t[0], label: "Évaluation de fin de stage", date, kind: "evaluation" }); }
+        return out;
       });
       const emDone = live.emarg || {};
-      const showEm = (k) => show("emargement", { emKey: k, emarg: { ...emDone, [k]: new Date().toISOString() } });
+      const showEm = (k) => show(k.endsWith("-eval") ? "evaluation" : "emargement", { emKey: k, emarg: { ...emDone, [k]: new Date().toISOString() } });
       // Rappel : de 15 min avant à 30 min après l'heure prévue, le jour J
       const nowD = new Date(), today = nowD.toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
       const nowM = mins(nowD.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }));
@@ -356,7 +378,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const shown = mods.filter((m) => session.format !== "2" || (m.day || 1) === modDay);
       $("#modules", box).innerHTML = `${session.format === "2" ? `<div class="days" style="margin:0 0 8px">${[1, 2].map((d) => `<button type="button" data-mday="${d}" aria-pressed="${d === modDay}">Jour ${d}</button>`).join("")}</div>` : ""}
         <div class="modlist">${interleave(shown, slots.filter((x) => session.format !== "2" || x.day === modDay)).map((m) => {
-          if (m.slot) return `<div class="modrow em${emDone[m.key] ? " done" : ""}${V === "emargement" && live.emKey === m.key ? " on" : ""}"><button type="button" data-em="${m.key}"><span class="mono small">${hhmmT(m.t)}</span><span class="pill tf">Émargement</span><b>${T(m.label)}</b>${emDone[m.key] ? `<span class="small muted" style="margin-left:auto">✓ présenté à ${new Date(emDone[m.key]).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>` : ""}</button></div>`;
+          if (m.slot) return `<div class="modrow em${emDone[m.key] ? " done" : ""}${(V === "emargement" || V === "evaluation") && live.emKey === m.key ? " on" : ""}"><button type="button" data-em="${m.key}"><span class="mono small">${hhmmT(m.t)}</span><span class="pill tf">${m.kind === "evaluation" ? "Évaluation" : "Émargement"}</span><b>${T(m.label)}</b>${emDone[m.key] ? `<span class="small muted" style="margin-left:auto">✓ présenté à ${new Date(emDone[m.key]).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>` : ""}</button></div>`;
           const on = m.id === live.module, pages = parsePages(m.pages);
           return `<div class="modrow${on ? " on" : ""}"><button type="button" data-mod="${m.id}"><span class="mono small">${hhmmT(m.t[0])}</span><span class="pill ${m.type}">${T(typeLabel(m.type))}</span><b>${T(m.titre)}</b></button>
             ${on && pages.length && session.slides_url ? `<div class="slidebar"><button type="button" class="iconbtn" data-sl="prev" aria-label="Page précédente">←</button>${pages.map((p) => `<button type="button" class="chip${V === "slide" && live.slide === p ? " on" : ""}" data-page="${p}">${p}</button>`).join("")}<button type="button" class="iconbtn" data-sl="next" aria-label="Page suivante">→</button></div>` : ""}

@@ -8,7 +8,7 @@ import { currentAct, renderInput, renderResults, respKey } from "../lib/activiti
 import { renderCadrage } from "./cadrage.js";
 import { STATUS } from "./home.js";
 import { modulesFor } from "../lib/content.js";
-import { resolveBranding, logosHtml, datesFr, emargementQr, emargementLabels, emargementStepsHtml } from "../lib/brand.js";
+import { resolveBranding, logosHtml, datesFr, emargementQr, emargementLabels, emargementStepsHtml, evaluationQr, evaluationHtml } from "../lib/brand.js";
 import { supportBlock } from "./entry.js";
 
 const TABS = [
@@ -119,6 +119,7 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
           const EL = emargementLabels(session, br);
           h = `<h3>${EL.second && EL.client ? "Deux étapes pour émarger" : "Émargement"}</h3>${emargementStepsHtml(session, qr, emargementLabels(session, br))}`;
         } else if (L.view === "support") h = `<h3>Le support de la formation</h3>${supportBlock(await api.supportStatus(sid).catch(() => ({})))}`;
+        else if (L.view === "evaluation") h = `<h3>Évaluation de fin de stage</h3>${evaluationHtml(session, await evaluationQr(session)) || `<p class="muted">Le formateur vous indique comment évaluer la formation.</p>`}`;
         else if (L.view === "deck") { const d = (session.decks || []).find((x) => x.id === L.deck); h = `<h3>${T(d?.title || "Présentation")}</h3><p class="muted">Le formateur projette une présentation.</p>`; }
         else if (L.view === "slide") h = `<h3>${T(mod?.titre || "Présentation")}</h3><p class="muted">${T(`Le formateur présente la page ${L.slide} du support.`)}</p>`;
         else h = `<h3>${T(mod?.titre || "")}</h3>${mod?.obj ? `<ul class="small">${mod.obj.map((x) => `<li>${T(x)}</li>`).join("")}</ul>` : ""}`;
@@ -267,7 +268,8 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   async function tabSupport() {
     const draw = async () => {
       const st = await api.supportStatus(sid).catch(() => ({ configured: false }));
-      body.innerHTML = `<div class="pagehead"><div><div class="kicker-d">${T(session.title)}</div><h1>Support de formation</h1></div></div><div class="card" style="max-width:720px">${supportBlock(st)}</div>`;
+      const ev = st.unlocked ? evaluationHtml(session, await evaluationQr(session)) : "";
+      body.innerHTML = `<div class="pagehead"><div><div class="kicker-d">${T(session.title)}</div><h1>Support de formation</h1></div></div>${ev ? `<div class="card" style="max-width:820px;margin-bottom:14px">${ev}</div>` : ""}<div class="card" style="max-width:720px">${supportBlock(st)}</div>`;
     };
     await draw();
     const t = setInterval(draw, 60000); // le déblocage se fait à l'heure dite

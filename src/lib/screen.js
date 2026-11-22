@@ -8,7 +8,7 @@
 import { T, esc } from "./dom.js";
 import { QUIZ } from "../data.js";
 import { currentAct, quizQ, countOf } from "./activities.js";
-import { datesFr, hhmm, samsaHtml, pickLogo, emargementLabels, MAIL_ICON } from "./brand.js";
+import { datesFr, hhmm, samsaHtml, pickLogo, emargementLabels, MAIL_ICON, evaluationInfo } from "./brand.js";
 import { modulesFor, typeLabel } from "./content.js";
 import { slideEmbedUrl, deckEmbedUrl } from "../deck.js";
 
@@ -55,7 +55,7 @@ const joinBox = (session, qrUrl) => (qrUrl ? `<div class="ds-join"><img src="${q
 
 // d = { session, rows, participants, qrUrl, projects, branding, emQr, support }
 export function screenHtml(d, compact = false) {
-  const { session, rows = [], participants = 0, qrUrl = "", projects = [], branding = null, emQr = null, support = null } = d;
+  const { session, rows = [], participants = 0, qrUrl = "", projects = [], branding = null, emQr = null, support = null, evalQr = null } = d;
   const cls = compact ? "compact" : "";
   const live = session.live || {};
   const isLive = session.status === "live";
@@ -105,6 +105,16 @@ export function screenHtml(d, compact = false) {
           ${emQr ? `<div class="ds-qrbox"><img src="${emQr}" alt="QR code d'émargement"></div>` : `<div class="ds-wait">QR code à configurer (onglet Réglages).</div>`}</div>
         ${L.second && L.client ? `<div class="ds-em-col"><div class="ds-em-h">Pour ${T(L.client)}</div><div class="ds-em-t">${T(L.text)}</div><div class="ds-mail">${MAIL_ICON}</div></div>` : ""}
       </div>`, right, cls);
+  }
+
+  // Évaluation de fin de stage (modèle de la page « Avant de télécharger la présentation »)
+  if (view === "evaluation") {
+    const e = evaluationInfo(session);
+    return `<div class="deck-slide light ${cls}"><div class="ds-body ds-eval">
+        <div class="ds-eval-txt"><div class="ds-title ds-black">${T(e.title)}</div><div class="ds-em-t">${T(e.text)}</div></div>
+        <div class="ds-eval-qr">${evalQr ? `<div class="ds-qrbox"><img src="${evalQr}" alt="QR code de l'évaluation"></div>` : `<div class="ds-wait">QR code à configurer (onglet Réglages).</div>`}
+          ${e.url ? `<div class="ds-eval-url">${esc(e.url)}</div>` : ""}</div>
+      </div>${foot(session, right)}</div>`;
   }
 
   if (view === "support") {
