@@ -19,7 +19,7 @@ grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid(), auth.jwt() to anon, authenticated;
 -- Pas de droits par défaut : comme les projets Supabase récents, les migrations doivent tout accorder elles-mêmes
 `);
-for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql", "20261122080000_premiere_connexion.sql", "20261122090000_droits_explicites.sql"]) {
+for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql", "20261122080000_premiere_connexion.sql", "20261122090000_droits_explicites.sql", "20261122100000_conducteur_habillages.sql"]) {
   try { await db.exec(readFileSync(new URL("../supabase/migrations/" + f, import.meta.url), "utf8")); }
   catch (e) { console.error("Migration", f, ":", e.message, e.where || ""); process.exit(1); }
 }
@@ -142,6 +142,25 @@ await as(B, "bob@exemple.fr");
 ok((await db.query(`select public.claim_trainer() ok`)).rows[0].ok === false, "un stagiaire ne se promeut pas");
 ok((await db.query(`select email from profiles`)).rows.length === 1, "sans droits par défaut : un·e stagiaire lit son profil et lui seul");
 await fails(`select * from trainer_emails`, "liste des formateurs illisible");
+
+// Habillages et conducteur
+await as(T, "formateur@exemple.fr");
+const sk = (await db.query(`insert into skins (name, accent) values ('INA', '#e4002b') returning id`)).rows[0].id;
+await fails(`insert into skins (name, accent) values ('Mauvais', 'rouge')`, "couleur d'accent invalide refusée");
+await db.exec(`update sessions set skin_id = '${sk}', programme = '{"modules":[{"id":"x","t":["09:00","10:00"],"type":"pratique","titre":"Atelier","day":1}],"nDays":1}'::jsonb, status = 'live' where code = '${code}'`);
+await db.exec(`reset role; set test.uid=''; set request.jwt.claims='{"role":"anon"}'; set role anon;`);
+const pubSk = (await db.query(`select skin_name, skin_accent from public.session_public('${code}')`)).rows[0];
+ok(pubSk?.skin_name === "INA" && pubSk.skin_accent === "#e4002b", "habillage transmis à l'entrée stagiaire sans connexion");
+await fails(`select * from skins`, "habillages illisibles sans connexion");
+await as(B, "bob@exemple.fr");
+ok((await db.query(`select name from skins`)).rows.length === 1, "un·e stagiaire lit les habillages (pour l'affichage)");
+await fails(`insert into skins (name) values ('Pirate')`, "un·e stagiaire ne crée pas d'habillage");
+await as(T, "formateur@exemple.fr");
+const dupId = (await db.query(`select public.duplicate_session((select id from sessions where code = '${code}')) id`)).rows[0].id;
+const dupS = (await db.query(`select skin_id, programme->'modules'->0->>'titre' t from sessions where id = '${dupId}'`)).rows[0];
+ok(dupS.skin_id === sk && dupS.t === "Atelier", "duplication : habillage et conducteur repris");
+await db.exec(`delete from skins where id = '${sk}'`);
+ok((await db.query(`select skin_id from sessions where code = '${code}'`)).rows[0].skin_id === null, "habillage supprimé : la session revient au défaut");
 
 // Anonyme : rien
 await db.exec(`reset role; set test.uid=''; set role anon;`);

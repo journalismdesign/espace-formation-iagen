@@ -55,7 +55,7 @@ Supabase fournit l'authentification, la base Postgres, le temps réel et les fon
    supabase functions deploy access --no-verify-jwt
    supabase secrets set BREVO_API_KEY=xkeysib-... MAIL_FROM=formation@journalism.design MAIL_FROM_NAME="Formation IA générative" CODE_PEPPER=$(openssl rand -hex 32)
    ```
-   Exécutez aussi `supabase/migrations/20261122000000_v3_acces_pilotage.sql` puis `20261122010000_logos_clair_sombre.sql` `20261122020000_emargement_libelle.sql` , `20261122030000_presentations.sql` , `20261122040000_emargement_second.sql` , `20261122050000_evaluation.sql` , `20261122060000_code_formateur.sql`, `20261122070000_formateurs.sql`, `20261122080000_premiere_connexion.sql` et `20261122090000_droits_explicites.sql`. Activez pg_cron (Database → Extensions) pour la purge horaire des codes expirés. Sans pg_cron, les codes expirés sont refusés et purgés à chaque demande.
+   Exécutez aussi `supabase/migrations/20261122000000_v3_acces_pilotage.sql` puis `20261122010000_logos_clair_sombre.sql` `20261122020000_emargement_libelle.sql` , `20261122030000_presentations.sql` , `20261122040000_emargement_second.sql` , `20261122050000_evaluation.sql` , `20261122060000_code_formateur.sql`, `20261122070000_formateurs.sql`, `20261122080000_premiere_connexion.sql`, `20261122090000_droits_explicites.sql` et `20261122100000_conducteur_habillages.sql`. Activez pg_cron (Database → Extensions) pour la purge horaire des codes expirés. Sans pg_cron, les codes expirés sont refusés et purgés à chaque demande.
 7. **Logos** : dans Back-office → Réglages généraux, déposez une fois pour toutes les logos de Radio France, France Télévisions, Libération et de votre organisme, chacun en version sombre (fonds clairs) et en version claire (fonds marine). Utilisez les fichiers officiels fournis par les clients.
 8. **Assistant IA** (pistes, analyse du cadrage, assistant d'apprentissage) :
    ```bash
@@ -105,3 +105,9 @@ src/views/                  login, home (mon espace), profile, session (espace s
 supabase/                   migration SQL · fonction Edge « assistant »
 legacy/                     version claude.ai d'origine (un seul fichier HTML)
 ```
+
+
+## Conducteur et habillages
+
+- **Conducteur** : dans une session, Réglages → Conducteur → « Importer un conducteur (.md) ». Un aperçu liste les séquences, les erreurs et les remarques avant d'appliquer. Le format est décrit dans `docs/conducteurs/FORMAT.md` ; `conducteur-1-jour.md` et `conducteur-2-jours.md` reprennent les déroulés actuels, `conducteur-test-atelier.md` sert à vérifier un import. « Télécharger le conducteur actuel » exporte le déroulé en cours pour le modifier.
+- **Habillages** : Réglages généraux → Habillages. Un habillage par centre de formation (INA, Journalism.design, ESJ, CFJ…) : couleur d'accent, couleur sombre facultative, logo clair et sombre, mention du pied des écrans. Il se choisit dans les réglages de chaque session ; celui marqué « par défaut » s'applique aux autres. Sans habillage, la palette Samsa d'origine reste en place.

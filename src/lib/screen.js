@@ -11,13 +11,14 @@ import { currentAct, quizQ, countOf } from "./activities.js";
 import { datesFr, hhmm, samsaHtml, pickLogo, emargementLabels, MAIL_ICON, evaluationInfo } from "./brand.js";
 import { modulesFor, typeLabel } from "./content.js";
 import { slideEmbedUrl, deckEmbedUrl } from "../deck.js";
+import { skinFooter } from "./skin.js";
 
 const LETTERS = "ABCDEFGHIJKL";
 const year = (s) => (s.date ? s.date.slice(0, 4) : String(new Date().getFullYear()));
 
 // Pied de slide commun
 function foot(session, right) {
-  return `<div class="ds-foot">${samsaHtml(true, "foot")}<b>JOURNALISME &amp; IA · ${year(session)}</b><span class="ds-foot-r">${right}</span></div>`;
+  return `<div class="ds-foot">${samsaHtml(true, "foot")}<b>${esc(skinFooter().toUpperCase())} · ${year(session)}</b><span class="ds-foot-r">${right}</span></div>`;
 }
 // Slide sombre (titre, séparateur de partie)
 const dark = (session, inner, right, cls = "") => `<div class="deck-slide dark ${cls}"><div class="ds-body">${inner}</div>${foot(session, right)}</div>`;
@@ -79,7 +80,7 @@ export function screenHtml(d, compact = false) {
   const isLive = session.status === "live";
   const act = isLive ? currentAct(session) : null;
   const view = isLive ? live.view : null;
-  const mod = live.module ? modulesFor(session.format).find((m) => m.id === live.module) : null;
+  const mod = live.module ? modulesFor(session).find((m) => m.id === live.module) : null;
   const right = `Code ${esc(session.code)} · ${participants} participant${participants > 1 ? "s" : ""}`;
 
   // Slide de titre (et activité « Accueil ») : reprend la page 1 du support

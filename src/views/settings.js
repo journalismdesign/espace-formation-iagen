@@ -4,6 +4,15 @@
    - version claire (logo_light) pour les fonds marine. */
 import { $, $$, T, esc, guard } from "../lib/dom.js";
 import { fileToDataUrl, samsaHtml } from "../lib/brand.js";
+import { applySkin, invalidateSkins, isHex, mix } from "../lib/skin.js";
+
+const SUGGESTED = ["INA", "Journalism.design", "ESJ Lille", "CFJ", "Samsa"];
+// Aperçu miniature d'un habillage : bandeau, bouton, pastille
+const skinPreview = (k) => {
+  const a = isHex(k.accent) ? k.accent : "#124F90", d = isHex(k.dark) ? k.dark : "#1F2328";
+  const logo = k.logo_light ? `<img src="${esc(k.logo_light)}" alt="">` : k.logo ? `<img src="${esc(k.logo)}" alt="" style="filter:brightness(0) invert(1)">` : `<b>${esc(k.name || "")}</b>`;
+  return `<div class="skin-prev" style="--a:${a};--d:${d};--t:${mix(a, 0.88)}"><div class="sp-bar">${logo}<span>${esc((k.footer || "Journalisme & IA").toUpperCase())}</span></div><div class="sp-body"><span class="sp-btn">Bouton</span><span class="sp-pill">Pratique</span><span class="sp-tint">Séquence en cours</span></div></div>`;
+};
 
 // Deux emplacements côte à côte, chacun prévisualisé sur son fond
 export function logoPair(id, dark, light, fallback = "") {
@@ -16,14 +25,41 @@ export function logoPair(id, dark, light, fallback = "") {
 }
 
 export async function viewSettings(root, _p, { api, go }) {
-  const [brands, settings] = await Promise.all([api.listBrands(), api.getSettings()]);
+  const [brands, settings, skins] = await Promise.all([api.listBrands(), api.getSettings(), api.listSkins().catch(() => [])]);
+  const def = settings.default_skin || "";
   root.innerHTML = `
     <p><a href="#/admin">← Sessions</a></p>
     <div class="pagehead"><div><div class="kicker-d">Back-office</div><h1>Réglages généraux</h1><p class="muted">${T("Chaque logo existe en deux versions : la version sombre s'affiche sur les fonds clairs (espace stagiaire, bandeau de l'écran), la version claire sur les fonds marine (slides de titre, entrée des stagiaires). PNG à fond transparent ou SVG, 300 Ko au plus. Si une seule version est déposée, elle sert partout.")}</p></div></div>
-    <div class="card"><h3>Organisme de formation</h3>
+    <div class="card" id="skinsCard"><h3>Habillages · centres de formation</h3>
+      <p class="small muted" style="margin-top:0">${T("L'habillage donne à l'espace stagiaire, aux slides d'entrée et à l'écran projeté les couleurs du centre pour lequel vous intervenez : une couleur d'accent et un logo sur une base neutre. Il se choisit pour chaque session (Réglages de la session) ; celui marqué « par défaut » s'applique aux sessions qui n'en ont pas.")}</p>
+      <label class="skin-row samsa-row"><input type="radio" name="defskin" value=""${!def ? " checked" : ""}><div><b>Samsa · palette d'origine</b><div class="small muted">Marine et bleu du support, logo Samsa.</div></div><span class="small muted skin-def">${!def ? "Par défaut" : "Définir par défaut"}</span></label>
+      ${skins.map((k) => `<div class="skin-row" data-skin="${k.id}">
+        <div class="skin-head"><label class="radio"><input type="radio" name="defskin" value="${k.id}"${def === k.id ? " checked" : ""}> <span class="small">${def === k.id ? "Par défaut" : "Définir par défaut"}</span></label>
+          <button type="button" class="iconbtn danger" data-skdel="${k.id}" aria-label="Supprimer ${esc(k.name)}">✕</button></div>
+        <div class="grid g2">
+          <div>
+            <label class="f">Nom</label><input type="text" data-f="name" maxlength="60" value="${esc(k.name)}">
+            <div class="grid g2">
+              <div><label class="f">Couleur d'accent</label><div class="color-in"><input type="color" data-f="accent" value="${isHex(k.accent) ? k.accent : "#124F90"}"><input type="text" data-hex="accent" maxlength="7" value="${esc(k.accent || "#124F90")}" class="mono"></div></div>
+              <div><label class="f">Couleur sombre <span class="muted">(facultatif)</span></label><div class="color-in"><input type="color" data-f="dark" value="${isHex(k.dark) ? k.dark : "#1F2328"}"><input type="text" data-hex="dark" maxlength="7" value="${esc(k.dark || "")}" placeholder="#1F2328 (anthracite)" class="mono"></div></div>
+            </div>
+            <label class="f">Mention du pied des écrans</label><input type="text" data-f="footer" maxlength="40" value="${esc(k.footer || "")}" placeholder="Journalisme & IA">
+            <div style="display:flex;gap:8px;margin-top:10px;align-items:center"><button type="button" class="btn sm" data-sksave="${k.id}">Enregistrer</button><button type="button" class="btn sm ghost" data-sktry="${k.id}">Essayer sur cette page</button></div>
+          </div>
+          <div><label class="f">Aperçu</label><div data-prev>${skinPreview(k)}</div></div>
+        </div>
+        ${logoPair(`skin:${k.id}`, k.logo, k.logo_light)}
+      </div>`).join("")}
+      <form id="skF" style="margin-top:14px">
+        <div class="askrow" style="max-width:520px"><input type="text" id="skN" maxlength="60" placeholder="Nouvel habillage (nom du centre)" required><button class="btn sm" type="submit">Ajouter</button></div>
+        <div class="chips" style="margin-top:8px">${SUGGESTED.filter((n) => !skins.some((k) => k.name.toLowerCase() === n.toLowerCase())).map((n) => `<button type="button" class="chip" data-sugg="${esc(n)}">+ ${esc(n)}</button>`).join("")}</div>
+        <p class="small muted">${T("Les couleurs et logos officiels de chaque centre sont à reprendre de leur charte : rien n'est préréglé.")}</p>
+      </form>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Organisme de formation</h3>
       <div class="grid g2" style="align-items:end">
         <div><label class="f" for="oN">Nom</label><input type="text" id="oN" maxlength="80" value="${esc(settings.org_name || "")}"><button class="btn sm" id="oSave" style="margin-top:10px">Enregistrer le nom</button>
-          <p class="small muted">${T("Sans logo déposé, le logo Samsa intégré est utilisé (il reste toujours dans le bandeau bleu).")}</p></div>
+          <p class="small muted">${T("Logo des blocs « organisme » (slides de titre, émargement). Sans logo déposé, celui de l'habillage, ou à défaut Samsa, est utilisé. Le bandeau affiche toujours le logo de l'habillage.")}</p></div>
         ${logoPair("org", settings.org_logo, settings.org_logo_light, samsaHtml(false))}
       </div>
     </div>
@@ -38,6 +74,7 @@ export async function viewSettings(root, _p, { api, go }) {
   const reload = () => go(location.hash);
   $("#tcF", root).onsubmit = async (e) => { e.preventDefault(); if (await guard(() => api.setTrainerCode($("#tcN", root).value), "Code formateur changé.") !== undefined) $("#tcN", root).value = ""; };
   const save = async (id, kind, url) => {
+    if (id.startsWith("skin:")) { const k = skins.find((x) => x.id === id.slice(5)); invalidateSkins(); return guard(() => api.saveSkin({ ...k, [kind === "dark" ? "logo" : "logo_light"]: url })); }
     if (id === "org") return guard(() => api.saveSetting(kind === "dark" ? "org_logo" : "org_logo_light", url));
     const b = brands.find((x) => x.id === id);
     return guard(() => api.saveBrand({ ...b, [kind === "dark" ? "logo" : "logo_light"]: url }));
@@ -51,4 +88,37 @@ export async function viewSettings(root, _p, { api, go }) {
   $("#oSave", root).onclick = () => guard(() => api.saveSetting("org_name", $("#oN", root).value.trim()), "Enregistré.");
   $$("[data-del]", root).forEach((btn) => (btn.onclick = async () => { if (confirm("Supprimer cette entreprise ? Les sessions qui l'utilisent n'auront plus de logo.")) { await guard(() => api.deleteBrand(btn.dataset.del)); reload(); } }));
   $("#bF", root).onsubmit = async (e) => { e.preventDefault(); await guard(() => api.saveBrand({ name: $("#bN", root).value.trim() })); reload(); };
+
+  /* Habillages */
+  const rowVals = (row) => {
+    const k = { ...skins.find((x) => x.id === row.dataset.skin) };
+    $$("[data-f]", row).forEach((el) => { if (el.type !== "color") k[el.dataset.f] = el.value.trim(); });
+    const hx = (f) => $(`[data-hex="${f}"]`, row).value.trim();
+    k.accent = isHex(hx("accent")) ? hx("accent").toLowerCase() : k.accent;
+    k.dark = isHex(hx("dark")) ? hx("dark").toLowerCase() : null;
+    return k;
+  };
+  $$(".skin-row[data-skin]", root).forEach((row) => {
+    const refresh = () => ($("[data-prev]", row).innerHTML = skinPreview(rowVals(row)));
+    $$("input[type=color]", row).forEach((c) => (c.oninput = () => { $(`[data-hex="${c.dataset.f}"]`, row).value = c.value; refresh(); }));
+    $$("[data-hex]", row).forEach((t) => (t.oninput = () => { if (isHex(t.value.trim())) $(`input[type=color][data-f="${t.dataset.hex}"]`, row).value = t.value.trim(); refresh(); }));
+    $$("[data-f]", row).forEach((el) => el.type !== "color" && el.addEventListener("input", refresh));
+  });
+  $$("[data-sksave]", root).forEach((b) => (b.onclick = async () => {
+    const k = rowVals(b.closest(".skin-row"));
+    if (!k.name) return;
+    invalidateSkins();
+    if (await guard(() => api.saveSkin(k), "Habillage enregistré.")) reload();
+  }));
+  $$("[data-sktry]", root).forEach((b) => (b.onclick = () => { applySkin(rowVals(b.closest(".skin-row"))); }));
+  $$("[data-skdel]", root).forEach((b) => (b.onclick = async () => {
+    if (!confirm("Supprimer cet habillage ? Les sessions qui l'utilisent reprendront l'habillage par défaut.")) return;
+    invalidateSkins();
+    if (def === b.dataset.skdel) await guard(() => api.saveSetting("default_skin", null));
+    await guard(() => api.deleteSkin(b.dataset.skdel)); reload();
+  }));
+  $$('input[name="defskin"]', root).forEach((r) => (r.onchange = async () => { invalidateSkins(); await guard(() => api.saveSetting("default_skin", r.value || null), "Habillage par défaut enregistré."); reload(); }));
+  const addSkin = async (name) => { invalidateSkins(); if (await guard(() => api.saveSkin({ name, accent: "#124F90" }), "Habillage ajouté : choisissez sa couleur et déposez son logo.")) reload(); };
+  $("#skF", root).onsubmit = (e) => { e.preventDefault(); const n = $("#skN", root).value.trim(); if (n) addSkin(n); };
+  $$("[data-sugg]", root).forEach((b) => (b.onclick = () => addSkin(b.dataset.sugg)));
 }

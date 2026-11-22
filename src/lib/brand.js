@@ -1,15 +1,27 @@
 /* Identité visuelle d'une session (logo client, organisme de formation),
    dates affichées, import d'images en data URL. */
 import QRCode from "qrcode";
+import { currentSkin, skinDark } from "./skin.js";
 import { T, esc, dateFr } from "./dom.js";
 import samsaLogo from "../assets/samsa-logo.png";
 
 // Logo Samsa (organisme de formation), blanc : tel quel sur fond bleu,
 // teinté en marine par masque CSS sur fond clair
 export const SAMSA_LOGO = samsaLogo;
-export const samsaHtml = (onDark = true, cls = "") => onDark
-  ? `<img class="samsa ${cls}" src="${samsaLogo}" alt="Samsa">`
-  : `<span class="samsa-mask ${cls}" role="img" aria-label="Samsa" style="--samsa:url('${samsaLogo}')"></span>`;
+// Logo de l'organisme dans le bandeau : celui de l'habillage en cours s'il en a un, sinon Samsa.
+// Sur fond sombre : version claire, ou version sombre passée en blanc. Sur fond clair : l'inverse.
+export const samsaHtml = (onDark = true, cls = "") => {
+  const sk = currentSkin();
+  if (sk && (sk.logo || sk.logo_light)) {
+    const alt = esc(sk.name || "Organisme");
+    if (onDark) return sk.logo_light ? `<img class="samsa skin-logo ${cls}" src="${esc(sk.logo_light)}" alt="${alt}">` : `<img class="samsa skin-logo to-light ${cls}" src="${esc(sk.logo)}" alt="${alt}">`;
+    return sk.logo ? `<img class="samsa skin-logo ${cls}" src="${esc(sk.logo)}" alt="${alt}">` : `<img class="samsa skin-logo to-dark ${cls}" src="${esc(sk.logo_light)}" alt="${alt}">`;
+  }
+  if (sk) return `<span class="skin-name ${onDark ? "on-dark" : ""} ${cls}">${esc(sk.name || "")}</span>`;
+  return onDark
+    ? `<img class="samsa ${cls}" src="${samsaLogo}" alt="Samsa">`
+    : `<span class="samsa-mask ${cls}" role="img" aria-label="Samsa" style="--samsa:url('${samsaLogo}')"></span>`;
+};
 
 // Logos et noms à partir d'une session complète (connecté) ou publique
 export async function resolveBranding(api, session) {
@@ -57,7 +69,7 @@ export const hhmm = (t) => String(t || "").slice(0, 5).replace(/^0/, "").replace
 // QR code d'émargement : image fournie, sinon généré depuis le lien
 export async function emargementQr(session, size = 520) {
   if (session.emargement_qr) return session.emargement_qr;
-  if (session.emargement_url) return QRCode.toDataURL(session.emargement_url, { width: size, margin: 1, color: { dark: "#0A2D4E", light: "#ffffff" } });
+  if (session.emargement_url) return QRCode.toDataURL(session.emargement_url, { width: size, margin: 1, color: { dark: skinDark(), light: "#ffffff" } });
   return null;
 }
 

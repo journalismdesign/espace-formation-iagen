@@ -6,6 +6,7 @@
    → tableau de bord de la session. */
 import { $, T, esc, guard, toast } from "../lib/dom.js";
 import { resolveBranding, logosHtml, datesFr, hhmm, emargementQr, samsaHtml, emargementLabels, emargementStepsHtml } from "../lib/brand.js";
+import { skinFooter } from "../lib/skin.js";
 
 export async function viewEntry(root, [code], ctx) {
   const { api, go } = ctx;
@@ -112,7 +113,7 @@ export async function viewEntry(root, [code], ctx) {
 }
 
 // Chaque slide porte le bandeau bleu avec le logo Samsa
-const slide = (inner, kind = "") => `<div class="slide-page ${kind}"><div class="slide-inner">${inner}</div><div class="slide-bar">${samsaHtml(true, "head")}<b>JOURNALISME &amp; IA · ${new Date().getFullYear()}</b></div></div>`;
+const slide = (inner, kind = "") => `<div class="slide-page ${kind}"><div class="slide-inner">${inner}</div><div class="slide-bar">${samsaHtml(true, "head")}<b>${esc(skinFooter().toUpperCase())} · ${new Date().getFullYear()}</b></div></div>`;
 
 // Bloc support, partagé avec la page « Support » du tableau de bord
 export function supportBlock(st, onDark = false) {

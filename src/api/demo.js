@@ -77,7 +77,8 @@ export function createDemoApi({ defaultActivities }) {
     return { id: x.id, title: x.title, formation: x.formation, client: x.client || b?.name || "", date: x.date, date2: x.format === "2" ? x.date2 : null,
       start_time: x.start_time, end_time: x.end_time, format: x.format, status: x.status, client_logo: x.client_logo || b?.logo || null,
       client_logo_light: x.client_logo_light || b?.logo_light || null,
-      org_name: db.settings.org_name, org_logo: db.settings.org_logo, org_logo_light: db.settings.org_logo_light };
+      org_name: db.settings.org_name, org_logo: db.settings.org_logo, org_logo_light: db.settings.org_logo_light,
+      ...(() => { const k = (db.skins || []).find((y) => y.id === (x.skin_id || db.settings.default_skin)); return k ? { skin_id: k.id, skin_name: k.name, skin_accent: k.accent, skin_dark: k.dark, skin_logo: k.logo, skin_logo_light: k.logo_light, skin_footer: k.footer } : {}; })() };
   };
 
   const api = {
@@ -148,6 +149,20 @@ export function createDemoApi({ defaultActivities }) {
       const x = { id: uid(), name: b.name, logo: b.logo ?? null, logo_light: b.logo_light ?? null, sort: 100 }; db.brands.push(x); commit(); return x;
     },
     async deleteBrand(id) { needTrainer(); db.brands = db.brands.filter((y) => y.id !== id); commit(); },
+    async listSkins() { need(); return [...(db.skins || [])].sort((a, b) => a.name.localeCompare(b.name)); },
+    async saveSkin(k) {
+      needTrainer(); db.skins = db.skins || [];
+      if (!k.name?.trim()) throw new Error("Indiquez un nom.");
+      const row = { name: k.name.trim(), accent: k.accent || "#124F90", dark: k.dark || null, logo: k.logo ?? null, logo_light: k.logo_light ?? null, footer: k.footer || null };
+      if (k.id) { const x = db.skins.find((y) => y.id === k.id); Object.assign(x, row); commit(); return x; }
+      const x = { id: uid(), ...row }; db.skins.push(x); commit(); return x;
+    },
+    async deleteSkin(id) {
+      needTrainer(); db.skins = (db.skins || []).filter((y) => y.id !== id);
+      db.sessions.forEach((x) => { if (x.skin_id === id) x.skin_id = null; });
+      if (db.settings.default_skin === id) db.settings.default_skin = null;
+      commit();
+    },
     async getSettings() { return { ...db.settings }; },
     async saveSetting(k, v) { needTrainer(); db.settings[k] = v; commit(); },
 

@@ -21,6 +21,7 @@ import { viewAdminSession } from "./views/adminSession.js";
 import { viewScreen } from "./views/screen.js";
 import { viewSettings } from "./views/settings.js";
 import { viewTrainers } from "./views/trainers.js";
+import { skinFooter, skinForRoute, applySkin } from "./lib/skin.js";
 
 const app = $("#app");
 let cleanup = null, me = null, booted = false, renderTok = 0, currentRoute = null;
@@ -48,7 +49,7 @@ function header(route) {
   const h = location.hash;
   const link = (href, label, on) => `<a href="${href}"${on ? ' aria-current="page"' : ""}>${label}</a>`;
   return `<header class="top"><div class="hwrap">
-    <a class="brand-wrap" href="#/">${samsaHtml(true, "head")}<span class="brand"><span class="kicker">Espace formation · Journalisme &amp; IA</span><b>Prendre en main les IA génératives</b></span></a>
+    <a class="brand-wrap" href="#/">${samsaHtml(true, "head")}<span class="brand"><span class="kicker">Espace formation · ${esc(skinFooter())}</span><b>Prendre en main les IA génératives</b></span></a>
     <nav class="topnav">
       ${trainer ? link("#/admin", "Back-office", h.startsWith("#/admin")) : link("#/", "Mon espace", h === "#/" || h === "" || h.startsWith("#/s/"))}
       ${link("#/profil", esc(me.full_name || me.email.split("@")[0]), h === "#/profil")}
@@ -80,6 +81,10 @@ async function render() {
   if (route.trainer && me?.role !== "trainer") { go("#/"); return; }
   if (tok !== renderTok) return;
 
+  // Habillage du centre de formation (session ouverte, sinon habillage par défaut)
+  const skin = await skinForRoute(api, h, user).catch(() => null);
+  if (tok !== renderTok) return;
+  applySkin(skin);
   document.body.classList.toggle("bare", !!route.bare);
   app.innerHTML = header(route) + `<main id="view"></main>`;
   $("#logout")?.addEventListener("click", async () => { await api.signOut(); me = null; booted = false; go("#/login"); });

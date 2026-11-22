@@ -3,13 +3,14 @@ import QRCode from "qrcode";
 import { $, $$, T, esc, guard, dateFr } from "../lib/dom.js";
 import { defaultActivities } from "../lib/activities.js";
 import { STATUS } from "./home.js";
+import { skinDark } from "../lib/skin.js";
 
 // Lien court de la session : <site>/CODE (redirigé vers #/join/CODE par 404.html ou au démarrage).
 // VITE_SHORT_BASE permet un domaine plus court (ex. https://formation.samsa.fr/).
 const SHORT_BASE = import.meta.env.VITE_SHORT_BASE;
 export const joinUrl = (code) => (SHORT_BASE ? SHORT_BASE.replace(/\/?$/, "/") : location.origin + location.pathname.replace(/[^/]*$/, "")) + code;
 export const joinUrlLabel = (code) => joinUrl(code).replace(/^https?:\/\//, "");
-export const qr = (text, size = 320) => QRCode.toDataURL(text, { width: size, margin: 1, color: { dark: "#0A2D4E", light: "#ffffff" } });
+export const qr = (text, size = 320) => QRCode.toDataURL(text, { width: size, margin: 1, color: { dark: skinDark(), light: "#ffffff" } });
 
 export async function viewAdmin(root, _p, { api, go }) {
   const [sessions, counts, brands] = await Promise.all([api.listSessions(), api.memberCounts(), api.listBrands().catch(() => [])]);

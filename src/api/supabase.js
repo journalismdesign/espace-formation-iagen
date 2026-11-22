@@ -66,6 +66,14 @@ export function createSupabaseApi(url, anonKey) {
       return ok(await sb.from("brands").insert(row).select().single());
     },
     async deleteBrand(id) { ok(await sb.from("brands").delete().eq("id", id)); },
+    /* ---------- Habillages (centres de formation) ---------- */
+    async listSkins() { return ok(await sb.from("skins").select("*").order("name")); },
+    async saveSkin(k) {
+      const row = { name: k.name, accent: k.accent || "#124F90", dark: k.dark || null, logo: k.logo ?? null, logo_light: k.logo_light ?? null, footer: k.footer || null };
+      if (k.id) return ok(await sb.from("skins").update(row).eq("id", k.id).select().single());
+      return ok(await sb.from("skins").insert(row).select().single());
+    },
+    async deleteSkin(id) { ok(await sb.from("skins").delete().eq("id", id)); },
     async getSettings() { return Object.fromEntries(ok(await sb.from("app_settings").select("*")).map((r) => [r.key, r.value])); },
     async saveSetting(key, value) { ok(await sb.from("app_settings").upsert({ key, value })); },
 

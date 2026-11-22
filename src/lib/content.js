@@ -5,7 +5,15 @@ import { FICHES, GLOSS, PROMPTS, CASES, QUIZ, D1, D2, PRESETS, CC, CCL } from ".
 import { T, esc, fr, $, $$, NB, norm, mins, hfr, fmtMin, bindCopy } from "./dom.js";
 
 export const ficheById = (id) => FICHES.find((f) => f.id === id);
-export const modulesFor = (format) => (format === "2" ? D2 : D1);
+// Déroulé d'une session : conducteur importé (sessions.programme) s'il existe, sinon déroulé par défaut du format.
+// Accepte la session entière ou, pour les anciens appels, le seul format ("1" ou "2").
+export const modulesFor = (x) => (x && typeof x === "object" ? (x.programme?.modules?.length ? x.programme.modules : x.format === "2" ? D2 : D1) : x === "2" ? D2 : D1);
+// Nombre de journées et titres des journées
+export const daysOf = (x) => {
+  const mods = modulesFor(x), n = Math.max(1, ...mods.map((m) => m.day || 1));
+  const titles = x && typeof x === "object" && x.programme?.modules?.length ? x.programme.days || {} : n > 1 ? { 1: "Comprendre et Gemini Notebook", 2: "Les assistants et les méthodes" } : {};
+  return { n, titles };
+};
 export const typeLabel = (t) => ({ comprendre: "Comprendre", pratique: "Pratique", discussion: "Discussion libre", pause: "Pause" }[t]);
 
 export function totals(list) {
@@ -70,13 +78,13 @@ export function renderQuiz(box, id, onScore) {
 /* ---------- Parcours de la journée ---------- */
 // progress = { done:{id:true}, quiz:{id:score} } ; onChange(progress) sauvegarde
 export function renderParcours(root, format, progress, onChange, opts = {}) {
-  const list0 = modulesFor(format);
+  const list0 = modulesFor(format), D = daysOf(format);
   const curMod = opts.currentId ? list0.find((m) => m.id === opts.currentId) : null;
   let curDay = curMod?.day || 1;
   const list = list0, t = totals(list), tot = t.comprendre + t.pratique + t.discussion;
   const pct = (k) => Math.round((t[k] / tot) * 100);
   const draw = () => {
-    const mods = list.filter((m) => format !== "2" || m.day === curDay);
+    const mods = list.filter((m) => D.n < 2 || (m.day || 1) === curDay);
     const nm = new Date().getHours() * 60 + new Date().getMinutes();
     const curIdx = curMod ? list.indexOf(curMod) : -1; // position pilotée par le formateur
     root.innerHTML = `
@@ -85,7 +93,7 @@ export function renderParcours(root, format, progress, onChange, opts = {}) {
         <div class="split"><span style="width:${pct("comprendre")}%;background:var(--comp)"></span><span style="width:${pct("pratique")}%;background:var(--prat)"></span><span style="width:${pct("discussion")}%;background:var(--disc)"></span></div>
         <div class="legend">${[["comprendre", "Comprendre", "var(--comp)"], ["pratique", "Pratique", "var(--prat)"], ["discussion", "Discussion libre", "var(--disc)"]].map(([k, l, c]) => `<span><b style="background:${c}"></b>${l} · ${fmtMin(t[k])}</span>`).join("")}</div>
       </div>
-      ${format === "2" ? `<div class="days">${[1, 2].map((d) => `<button data-day="${d}" aria-pressed="${d === curDay}">Jour ${d} · ${d === 1 ? "Comprendre et Gemini Notebook" : "Les assistants et les méthodes"}</button>`).join("")}</div>` : ""}
+      ${D.n > 1 ? `<div class="days">${Array.from({ length: D.n }, (_, k) => k + 1).map((d) => `<button data-day="${d}" aria-pressed="${d === curDay}">Jour ${d}${D.titles[d] ? ` · ${T(D.titles[d])}` : ""}</button>`).join("")}</div>` : ""}
       <div class="tl">${mods.map((m) => modHtml(m, progress, nm, curIdx < 0 ? null : list.indexOf(m) - curIdx)).join("")}</div>`;
     $$("[data-day]", root).forEach((b) => (b.onclick = () => { curDay = +b.dataset.day; draw(); }));
     $$(".mod[data-id]", root).forEach((el) => {

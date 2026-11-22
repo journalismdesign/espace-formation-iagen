@@ -86,15 +86,15 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
       <div class="pagehead"><div><div class="kicker-d">Le jour J · ${T(dateFr(session.date))}</div><h1>La formation en direct</h1></div></div>
       <div class="card live" id="liveCard"></div>
       <h2 style="margin:22px 0 8px">Le déroulé</h2>
-      <p class="muted small" style="margin-top:0">${T(`Cochez les séquences au fil de la journée. Progression : `)}<b id="pp">${parcoursPct(session.format, progress, session.live?.module)}${NB}%</b></p>
+      <p class="muted small" style="margin-top:0">${T(`Cochez les séquences au fil de la journée. Progression : `)}<b id="pp">${parcoursPct(session, progress, session.live?.module)}${NB}%</b></p>
       <div id="parcours"></div>`;
     const save = debounce((p) => membership && api.saveProgress(sid, p).catch(() => {}), 600);
     let lastMod;
     const drawParcours = () => {
       if (lastMod === (session.live?.module || null)) return; // ne redessine que si la séquence change
       lastMod = session.live?.module || null;
-      renderParcours($("#parcours", body), session.format, progress, (p) => { $("#pp", body).textContent = parcoursPct(session.format, p, lastMod) + NB + "%"; save(p); }, { currentId: lastMod });
-      $("#pp", body).textContent = parcoursPct(session.format, progress, lastMod) + NB + "%";
+      renderParcours($("#parcours", body), session, progress, (p) => { $("#pp", body).textContent = parcoursPct(session, p, lastMod) + NB + "%"; save(p); }, { currentId: lastMod });
+      $("#pp", body).textContent = parcoursPct(session, progress, lastMod) + NB + "%";
     };
     drawParcours();
     onSession.add(drawParcours);
@@ -105,7 +105,7 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
       const act = currentAct(session);
       clearInterval(poll);
       const L = session.live || {};
-      const mod = L.module ? modulesFor(session.format).find((m) => m.id === L.module) : null;
+      const mod = L.module ? modulesFor(session).find((m) => m.id === L.module) : null;
       const modLine = mod ? `<div class="small muted" style="margin-top:4px">En ce moment : <b>${T(mod.titre)}</b></div>` : "";
       if (session.status !== "live" || (!act && !L.view)) {
         card.innerHTML = `<div class="kicker-d">En direct</div>${modLine}<p class="empty" style="margin:8px 0 0">${session.status === "closed" ? "La session est close. Le déroulé et les ressources restent consultables." : "Les sondages, quiz et consignes s'afficheront ici quand le formateur les lancera. Gardez cette page ouverte."}</p>`;

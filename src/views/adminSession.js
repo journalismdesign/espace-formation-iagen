@@ -12,7 +12,10 @@ import { STATUS } from "./home.js";
 import { logoPair } from "./settings.js";
 import { STEPS, SENSIB } from "./cadrageModel.js";
 import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml, EM2_DEFAULT, evaluationQr, EVAL_TITLE, EVAL_TEXT } from "../lib/brand.js";
-import { modulesFor, typeLabel } from "../lib/content.js";
+import { modulesFor, daysOf, typeLabel } from "../lib/content.js";
+import { parseConducteur, conducteurMarkdown } from "../lib/conducteur.js";
+import { loadSkins, skinFor, applySkin } from "../lib/skin.js";
+import { samsaHtml } from "../lib/brand.js";
 import { parsePages, slideEmbedUrl, deckId, deckKind } from "../deck.js";
 
 const PHASES = [["reglages", "Réglages"], ["avant", "Avant — inscription et cadrage"], ["jour", "Jour J — pilotage"], ["apres", "Après — suivi"]];
@@ -84,6 +87,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
      RÉGLAGES : format, dates, horaires, logo, support, émargement, slides
      ================================================================= */
   async function phaseReglages() {
+    const skinData = await loadSkins(api);
     const [brands, sup, trainers] = await Promise.all([api.listBrands(), api.supportStatus(sid).catch(() => ({})), api.listTrainers().catch(() => [])]);
     let decks = [...(session.decks || [])];
     let evQr = session.evaluation_qr || null;
@@ -94,8 +98,11 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         <div class="card"><h3>La formation</h3>
           <label class="f" for="gT">Titre affiché aux stagiaires</label><input type="text" id="gT" required maxlength="140" value="${esc(session.title)}">
           <label class="f" for="gF">Intitulé de la formation</label><input type="text" id="gF" maxlength="140" value="${esc(session.formation)}">
+          <label class="f" for="gSk">Habillage (centre de formation)</label>
+          <select id="gSk"><option value="">Par défaut · ${esc(skinData.skins.find((k) => k.id === skinData.def)?.name || "Samsa")}</option>${skinData.skins.map((k) => `<option value="${k.id}"${session.skin_id === k.id ? " selected" : ""}>${esc(k.name)}</option>`).join("")}</select>
+          <p class="small muted" style="margin-top:4px">${T("Couleur d'accent et logo du centre, appliqués à l'espace stagiaire, aux slides d'entrée et à l'écran. ")}<a href="#/admin/reglages">Gérer les habillages</a></p>
           <label class="f">Format</label>
-          <div class="chips" id="gFmt">${[["1", "Une journée"], ["2", "Deux journées"]].map(([v, l]) => `<label class="radio"><input type="radio" name="fmt" value="${v}"${session.format === v ? " checked" : ""}> ${l}</label>`).join("")}</div>
+          <div class="chips" id="gFmt">${[["1", "Une journée"], ["2", "Deux journées"]].map(([v, l]) => `<label class="radio"><input type="radio" name="fmt" value="${v}"${session.format === v ? " checked" : ""}${session.programme?.modules?.length ? " disabled" : ""}> ${l}</label>`).join("")}</div>
           <p class="small muted">${T("Le format détermine le déroulé visible côté stagiaire : en une journée, seul le programme d'une journée est accessible.")}</p>
           <div class="grid g2">
             <div><label class="f" for="gD1">Date (jour 1)</label><input type="date" id="gD1" value="${esc(session.date || "")}"></div>
@@ -103,6 +110,15 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <div><label class="f" for="gS">Début</label><input type="time" id="gS" value="${esc(String(session.start_time || "09:30").slice(0, 5))}"></div>
             <div><label class="f" for="gE">Fin</label><input type="time" id="gE" value="${esc(String(session.end_time || "17:30").slice(0, 5))}"></div>
           </div>
+        </div>
+        <div class="card" style="margin-top:14px" id="condCard"><h3>Conducteur</h3>
+          <p class="small" id="condSrc"></p>
+          <div class="cond-actions">
+            <label class="btn sm">Importer un conducteur (.md)<input type="file" id="condFile" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden></label>
+            <button type="button" class="btn sm ghost" id="condExport">Télécharger le conducteur actuel (.md)</button>
+            <button type="button" class="linkbtn" id="condReset"${session.programme?.modules?.length ? "" : " hidden"}>Revenir au déroulé par défaut</button>
+          </div>
+          <div id="condPrev"></div>
         </div>
         <div class="card" style="margin-top:14px"><h3>Intervenant·e</h3>
           <select id="gTr"><option value="">— Choisir une fiche —</option>${trainers.map((t) => `<option value="${t.id}"${session.trainer_id === t.id ? " selected" : ""}>${T(t.name)}</option>`).join("")}</select>
@@ -214,6 +230,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     if (sup.url) $("#gSu", box).value = sup.url;
     const supInfo = (st) => (st.unlock_at ? T(`Téléchargeable par les stagiaires à partir du ${new Date(st.unlock_at).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "full", timeStyle: "short" })} (une heure avant la fin). La page Support reste visible dans leur menu.`) : T("Renseignez la date et l'heure de fin pour programmer le déblocage."));
     $("#supInfo", box).innerHTML = supInfo(sup);
+    bindConducteur();
     keepDraft($("#regF", box), `reglages:${sid}`, { saveLabel: "Enregistrer les réglages" }); // brouillon automatique + « Tout réinitialiser »
     $("#regF", box).onsubmit = async (e) => {
       e.preventDefault();
@@ -223,7 +240,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         title: $("#gT", box).value.trim(), formation: $("#gF", box).value.trim() || "Prendre en main les IA génératives",
         format, date: $("#gD1", box).value || null, date2: format === "2" ? $("#gD2", box).value || null : null,
         start_time: $("#gS", box).value || "09:30", end_time: $("#gE", box).value || "17:30",
-        brand_id: box.querySelector('input[name="brand"]:checked')?.value || null, trainer_id: $("#gTr", box).value || null,
+        brand_id: box.querySelector('input[name="brand"]:checked')?.value || null, trainer_id: $("#gTr", box).value || null, skin_id: $("#gSk", box).value || null,
         emargement_url: $("#gEm", box).value.trim() || null, emargement_qr: emQr, emargement_label: $("#gEl", box).value.trim() || null,
         emargement2_enabled: $("#gE2", box).checked, emargement2_text: $("#gEt", box).value.trim() || null,
         slides_url: $("#gSl", box).value.trim() || null, support_unlocked: $("#gSuF", box).checked, decks,
@@ -239,10 +256,52 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const saved = await guard(() => api.updateSession(sid, patch));
       if (!saved) return;
       session = saved;
+      applySkin(skinFor(session, skinData.skins, skinData.def)); // l'habillage choisi s'applique aussitôt
+      document.querySelector(".brand-wrap > :first-child")?.replaceWith(Object.assign(document.createElement("span"), { innerHTML: samsaHtml(true, "head") }).firstElementChild);
       await guard(() => api.setSupport(sid, $("#gSu", box).value.trim() || null));
       const st = await api.supportStatus(sid).catch(() => ({}));
       $("#supInfo", box).innerHTML = supInfo(st);
       toast(fmtChanged ? "Réglages enregistrés : déroulé et activités adaptés au nouveau format." : "Réglages enregistrés.", "ok");
+    };
+  }
+
+  /* Conducteur : import d'un fichier Markdown, aperçu, application, export, retour au déroulé par défaut */
+  function bindConducteur() {
+    const imported = session.programme?.modules?.length;
+    const mods = modulesFor(session), D = daysOf(session);
+    $("#condSrc", box).innerHTML = T(imported
+      ? `Conducteur importé${session.programme.name ? ` (${session.programme.name})` : ""} : ${mods.filter((m) => m.type !== "pause").length} séquences sur ${D.n} journée${D.n > 1 ? "s" : ""}. Le format suit le conducteur.`
+      : `Déroulé par défaut de la formation en ${session.format === "2" ? "deux journées" : "une journée"}. Importez un fichier .md pour le remplacer.`);
+    $("#condExport", box).onclick = () => download(`conducteur-${(session.code || "session").toLowerCase()}.md`,
+      conducteurMarkdown(mods, { formation: session.programme?.formation || session.formation, days: D.titles }), "text/markdown;charset=utf-8");
+    $("#condReset", box).onclick = async () => {
+      if (!confirm("Revenir au déroulé par défaut ? Le conducteur importé sera retiré de cette session.")) return;
+      if (await guard(() => api.updateSession(sid, { programme: null }), "Déroulé par défaut rétabli.")) go(location.hash);
+    };
+    $("#condFile", box).onchange = async (e) => {
+      const f = e.target.files[0]; e.target.value = "";
+      if (!f) return;
+      if (f.size > 300000) return toast("Fichier trop lourd pour un conducteur (300 Ko au plus).", "ko");
+      const { programme, warnings, errors } = parseConducteur(await f.text());
+      programme.name = f.name;
+      const rows = programme.modules.map((m) => `<tr><td class="mono small">${programme.nDays > 1 ? `J${m.day} · ` : ""}${m.t[0]}–${m.t[1]}</td><td><span class="pill ${m.type}">${typeLabel(m.type)}</span></td><td>${T(m.titre)}${m.cas ? `<div class="small muted">${T(m.cas)}</div>` : ""}</td><td class="small muted">${[m.obj && "objectifs", m.pts && "points clés", m.disc && "discussion", m.exo && `exercice ${m.exo.duree} min`, m.quiz && "quiz", m.live && "activité"].filter(Boolean).join(" · ")}</td></tr>`).join("");
+      $("#condPrev", box).innerHTML = `<div class="cond-prev">
+        <h4>Aperçu de « ${esc(f.name)} »</h4>
+        ${errors.length ? `<div class="warn small"><b>${errors.length} erreur${errors.length > 1 ? "s" : ""} à corriger avant d'appliquer :</b><ul>${errors.map((x) => `<li>${T(x)}</li>`).join("")}</ul></div>` : ""}
+        ${warnings.length ? `<details class="small cond-warn"><summary>${warnings.length} remarque${warnings.length > 1 ? "s" : ""} (sans blocage)</summary><ul>${warnings.map((x) => `<li>${T(x)}</li>`).join("")}</ul></details>` : ""}
+        ${programme.modules.length ? `<div class="cond-table"><table class="tbl small"><thead><tr><th>Horaires</th><th>Type</th><th>Séquence</th><th>Contenu</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button type="button" class="btn sm" id="condApply"${errors.length ? " disabled" : ""}>Appliquer ce conducteur (${programme.nDays} journée${programme.nDays > 1 ? "s" : ""})</button>
+          <button type="button" class="btn sm ghost" id="condCancel">Annuler</button>
+        </div></div>`;
+      $("#condCancel", box).onclick = () => ($("#condPrev", box).innerHTML = "");
+      $("#condApply", box).onclick = async () => {
+        const format = programme.nDays > 1 ? "2" : "1";
+        if (format === "2" && !session.date2) toast("Pensez à indiquer la date du jour 2.", "info");
+        const patch = { programme, format };
+        if (session.live?.module && !programme.modules.some((m) => m.id === session.live.module)) patch.live = { ...session.live, module: null };
+        if (await guard(() => api.updateSession(sid, patch), "Conducteur appliqué : déroulé, parcours stagiaire et pilotage sont à jour.")) go(location.hash);
+      };
     };
   }
 
@@ -372,7 +431,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         .map(([v, l, sub]) => `<button class="act${(V || "") === v && !act ? " on" : ""}" data-view="${v}"><span>${v ? "▣" : "□"}</span>${l}<small>${T(sub)}</small></button>`).join("");
       $$("[data-view]", box).forEach((b) => (b.onclick = () => (b.dataset.view ? show(b.dataset.view) : setLive({ ...keep(), view: null }))));
       // Émargements : arrivée du matin (début de journée) et reprise de l'après-midi (fin du déjeuner)
-      const all = modulesFor(session.format);
+      const all = modulesFor(session);
       const days = session.format === "2" ? [1, 2] : [1];
       const slots = days.flatMap((d) => {
         const dm = all.filter((m) => (m.day || 1) === d);
@@ -392,7 +451,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const due = slots.find((x) => !emDone[x.key] && x.date === today && nowM >= mins(x.t) - 15 && nowM <= mins(x.t) + 30);
       $("#emRemind", box).innerHTML = due ? `<div class="remind"><b>${T(`${due.label} · ${hhmmT(due.t)}`)}</b><span>${T("C'est le moment de projeter le QR code d'émargement.")}</span><button class="btn sm" data-em="${due.key}">Projeter l'émargement</button></div>` : "";
       // Déroulé : séquence courante + slides Drive des séquences qui en ont
-      const mods = modulesFor(session.format).filter((m) => m.type !== "pause");
+      const mods = modulesFor(session).filter((m) => m.type !== "pause");
       const cur = mods.find((m) => m.id === live.module);
       if (cur?.day) modDay = cur.day;
       const shown = mods.filter((m) => session.format !== "2" || (m.day || 1) === modDay);

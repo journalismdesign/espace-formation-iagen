@@ -199,6 +199,32 @@ async def main():
         await tr.click("#tF .draft-save"); await tr.wait_for_url("**/formateurs/*-*")
         await tr.goto(URL + "#/admin/formateurs"); assert await tr.locator(".trainer-card").count() == 2
 
+        # Habillages : ajout d'un centre, couleur d'accent, application à la session
+        await tr.goto(URL + "#/admin/reglages"); await tr.wait_for_selector("#skinsCard")
+        await tr.click("[data-sugg='INA']"); await tr.wait_for_selector(".skin-row[data-skin]")
+        row = tr.locator(".skin-row[data-skin]").first
+        await row.locator("[data-hex='accent']").fill("#c2185b"); await row.locator("[data-f='footer']").fill("Formation continue")
+        await row.locator("[data-sksave]").click(); await tr.wait_for_timeout(400)
+        await shot(tr, "23-habillages")
+        await tr.goto(URL + f"#/admin/s/{sid}/reglages"); await tr.wait_for_selector("#gSk")
+        await tr.select_option("#gSk", label="INA"); await tr.click("#regF .draft-save"); await tr.wait_for_timeout(500)
+        acc = await tr.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--blue').trim()")
+        assert acc == "#c2185b", f"accent appliqué attendu, obtenu {acc}"
+        # Conducteur : import d'un .md, aperçu, application
+        await tr.set_input_files("#condFile", str(pathlib.Path(__file__).parent.parent / "docs/conducteurs/conducteur-test-atelier.md"))
+        await tr.wait_for_selector("#condApply"); await shot(tr, "24-conducteur-apercu")
+        assert await tr.locator(".cond-table tbody tr").count() == 5
+        await tr.click("#condApply"); await tr.wait_for_selector("#condReset:not([hidden])")
+        assert "Conducteur importé" in await tr.inner_text("#condSrc")
+        await st.goto(URL + f"#/s/{sid}/jour"); await st.wait_for_selector("#parcours")
+        ptxt2 = await st.inner_text("#parcours")
+        assert "Comprendre la machine" in ptxt2 and "interroger ses propres sources" in ptxt2 and "argent, énergie" not in ptxt2, "parcours stagiaire = conducteur importé"
+        acc2 = await st.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--blue').trim()")
+        assert acc2 == "#c2185b", "habillage côté stagiaire"
+        await shot(st, "25-stagiaire-habille")
+        # Retour au déroulé par défaut
+        await tr.click("#condReset"); await tr.wait_for_selector("#condReset[hidden]", state="attached")
+
         # Nouvelle session + duplication
         await tr.goto(URL + "#/admin"); await tr.click("#newBtn"); await tr.fill("#nTitle", "Test · deux jours"); await tr.select_option("#nFmt", "2"); await tr.click("#newForm button[type=submit]")
         await tr.wait_for_selector(".phases"); await tr.goto(URL + "#/admin"); await tr.wait_for_selector("table")
