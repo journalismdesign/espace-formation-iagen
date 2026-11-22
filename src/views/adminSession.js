@@ -16,6 +16,7 @@ import { modulesFor, daysOf, typeLabel } from "../lib/content.js";
 import { parseConducteur, conducteurMarkdown } from "../lib/conducteur.js";
 import { loadSkins, skinFor, applySkin, currentSkin } from "../lib/skin.js";
 import { samsaHtml } from "../lib/brand.js";
+import { morph } from "../lib/morph.js";
 import { parsePages, slideEmbedUrl, deckId, deckKind } from "../deck.js";
 
 const PHASES = [["reglages", "Réglages"], ["avant", "Avant — inscription et cadrage"], ["jour", "Jour J — pilotage"], ["apres", "Après — suivi"]];
@@ -511,7 +512,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       $("[data-next]", box)?.addEventListener("click", () => launch(session.activities[session.activities.findIndex((a) => a.id === act.id) + 1]));
       $("[data-stop]", box)?.addEventListener("click", () => setLive({ ...keep(), view: live.module ? "module" : null }));
       const sd = await loadScreenData(api, session);
-      $("#preview", box).innerHTML = screenHtml({ ...sd, session, qrUrl }, true);
+      morph($("#preview", box), screenHtml({ ...sd, session, qrUrl }, true)); // sans clignotement
       const roster = await api.roster(sid);
       $("#pTitle", box).textContent = `Participant·es (${roster.length})`;
       $("#plist", box).innerHTML = roster.map((r) => `<div class="prow"><span>${T(r.full_name || r.email)}</span>${r.project_status === "validated" ? `<span class="tag ok">✓ Cadrage</span>` : r.project_id ? `<span class="tag">${r.project_steps}/${STEPS.length}</span>` : `<span class="tag muted">—</span>`}</div>`).join("") || `<p class="small muted">Personne pour l'instant. Projetez le QR code.</p>`;
