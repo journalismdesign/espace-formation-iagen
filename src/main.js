@@ -11,7 +11,7 @@ import { api } from "./api/index.js";
 import { $, esc, toast } from "./lib/dom.js";
 import { samsaHtml } from "./lib/brand.js";
 import { closeSheet } from "./lib/content.js";
-import { viewLogin, viewTrainerLogin } from "./views/login.js";
+import { viewLogin, viewTrainerLogin, viewSetTrainerCode, RESET } from "./views/login.js";
 import { viewEntry } from "./views/entry.js";
 import { viewHome } from "./views/home.js";
 import { viewProfile } from "./views/profile.js";
@@ -30,6 +30,7 @@ export const go = (h) => { if (location.hash === h) render(); else location.hash
 const ROUTES = [
   [/^#\/login$/, viewLogin, { public: true }],
   [/^#\/formateur$/, viewTrainerLogin, { public: true }],
+  [/^#\/formateur\/code$/, viewSetTrainerCode, {}],
   [/^#\/join\/([A-Za-z0-9]+)$/, viewEntry, { any: true, bare: true }],
   [/^#\/profil$/, viewProfile],
   [/^#\/s\/([\w-]+)(?:\/([\w-]+))?(?:\/([\w-]+))?$/, viewSession],
@@ -69,6 +70,9 @@ async function render() {
 
   const user = await api.currentUser();
   if (!user && !route.public && !route.any) { go("#/login"); return; }
+  // Connexion par code temporaire (première connexion ou code oublié) : choix du code d'accès
+  let resetPending = false; try { resetPending = localStorage.getItem(RESET) === "1"; } catch {}
+  if (user && resetPending && h !== "#/formateur/code") { go("#/formateur/code"); return; }
   if (user && route.public) { go("#/"); return; }
   me = user ? await api.me() : null;
   if (tok !== renderTok) return;

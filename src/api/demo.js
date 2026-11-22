@@ -125,6 +125,21 @@ export function createDemoApi({ defaultActivities }) {
     async deleteTrainer(id) { needTrainer(); db.trainers = db.trainers.filter((x) => x.id !== id); db.sessions.forEach((x) => x.trainer_id === id && (x.trainer_id = null)); commit(); },
     async trainerCodeConfigured() { return !!(db.settings.trainer_code ?? DEMO_TRAINER_CODE); },
     async checkTrainerCode(code) { await new Promise((r) => setTimeout(r, 300)); return String(code).trim() === (db.settings.trainer_code ?? DEMO_TRAINER_CODE); },
+    async sendTrainerOtp(email) {
+      email = email.trim().toLowerCase();
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      db.otp = { email, code, exp: Date.now() + 3600000 }; commit();
+      return { sent: true, demoCode: code };
+    },
+    async verifyEmailOtp(email, token) {
+      email = email.trim().toLowerCase();
+      const o = db.otp;
+      if (!o || o.email !== email || o.exp < Date.now() || o.code !== String(token).replace(/\s/g, "")) throw new Error("Code invalide ou expiré.");
+      delete db.otp; commit();
+      await api.signInEmail(email);
+      return true;
+    },
+    async claimTrainer() { const u = user(); return !!u && prof(u.id)?.role === "trainer"; },
     async setTrainerCode(code) { needTrainer(); if (String(code).trim().length < 6) throw new Error("Le code doit compter au moins 6 caractères."); db.settings.trainer_code = String(code).trim(); commit(); return true; },
     async listBrands() { return [...db.brands].sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name)); },
     async saveBrand(b) {

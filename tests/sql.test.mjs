@@ -19,7 +19,7 @@ grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid(), auth.jwt() to anon, authenticated;
 alter default privileges in schema public grant all on tables to anon, authenticated; -- comme Supabase
 `);
-for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql"]) {
+for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql", "20261122080000_premiere_connexion.sql"]) {
   try { await db.exec(readFileSync(new URL("../supabase/migrations/" + f, import.meta.url), "utf8")); }
   catch (e) { console.error("Migration", f, ":", e.message, e.where || ""); process.exit(1); }
 }
@@ -124,6 +124,22 @@ await fails(`select * from private_settings`, "empreinte du code illisible");
 await fails(`select public.set_trainer_code('pirate123')`, "un visiteur ne change pas le code");
 await as(B, "bob@exemple.fr");
 await fails(`select public.set_trainer_code('pirate123')`, "un stagiaire ne change pas le code");
+
+// Première connexion : adresse déclarée après la création du compte
+await db.exec(`reset role; set test.uid=''; set request.jwt.claims='';`);
+const C = "00000000-0000-0000-0000-00000000000d";
+await db.exec(`insert into auth.users (id,email) values ('${C}','claire@exemple.fr');`);
+await as(C, "claire@exemple.fr");
+ok((await db.query(`select public.claim_trainer() ok`)).rows[0].ok === false, "adresse non déclarée : pas formateur");
+await db.exec(`reset role; set test.uid=''; set request.jwt.claims=''; insert into trainer_emails values ('claire@exemple.fr');`);
+ok((await db.query(`select role from profiles where id='${C}'`)).rows[0].role === "trainer", "ajout à trainer_emails : compte promu");
+await as(C, "claire@exemple.fr");
+ok((await db.query(`select public.claim_trainer() ok`)).rows[0].ok === true, "claim_trainer reconnaît le formateur");
+await db.query(`select public.set_trainer_code('Nouveau-2026')`);
+await db.exec(`reset role; set role anon;`);
+ok((await db.query(`select public.check_trainer_code('Nouveau-2026') ok`)).rows[0].ok === true, "code choisi après première connexion");
+await as(B, "bob@exemple.fr");
+ok((await db.query(`select public.claim_trainer() ok`)).rows[0].ok === false, "un stagiaire ne se promeut pas");
 
 // Anonyme : rien
 await db.exec(`reset role; set test.uid=''; set role anon;`);

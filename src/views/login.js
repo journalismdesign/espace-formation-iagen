@@ -46,33 +46,133 @@ export async function viewTrainerLogin(root, p, ctx) {
   }
 }
 
-/* Code d'accès formateur, vérifié côté serveur avant d'afficher la connexion */
-async function trainerGate(root, { api, go }, onOk) {
+/* Code d'accès formateur, vérifié côté serveur avant d'afficher la connexion.
+   Pas encore de code, ou code oublié : code temporaire par e-mail, puis choix du code. */
+export const RESET = "iagen-code-reset";
+async function trainerGate(root, ctx, onOk) {
+  const { api } = ctx;
   const configured = await api.trainerCodeConfigured().catch(() => false);
+  if (!configured) return otpFlow(root, ctx, true);
   root.innerHTML = `
   <div class="login">
     <div class="login-card card">
       <div class="kicker" style="color:var(--muted)">Espace formateur</div>
       <h1 style="color:var(--navy);margin:4px 0 6px">Code d'accès</h1>
-      ${configured ? `<p class="muted">${T("Saisissez le code d'accès de l'équipe pédagogique.")}</p>
+      <p class="muted">${T("Saisissez le code d'accès de l'équipe pédagogique.")}</p>
       <form id="gF"><input type="password" id="gC" required autocomplete="current-password" class="mono" placeholder="Code formateur" aria-label="Code formateur">
         <button class="btn" type="submit" style="margin-top:10px;width:100%">Continuer</button></form>
-      <div id="gMsg" class="small" style="margin-top:8px;color:var(--ko)"></div>`
-      : `<div class="warn small">${T("Aucun code formateur n'est défini. Dans Supabase → SQL Editor, exécutez : select public.set_trainer_code('votre-code');")}</div>`}
-      <p class="small" style="margin-top:18px"><a href="#/login">← Espace stagiaire</a></p>
+      <div id="gMsg" class="small" style="margin-top:8px;color:var(--ko)"></div>
+      <p class="small" style="margin-top:14px"><button class="linkbtn" id="gForgot" type="button">Code oublié ? Recevoir un code temporaire par e-mail</button></p>
+      <p class="small" style="margin-top:6px"><a href="#/login">← Espace stagiaire</a></p>
     </div>
   </div>`;
-  $("#gF")?.addEventListener("submit", async (e) => {
+  $("#gF").addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = $("#gF button"); btn.disabled = true; btn.textContent = "Vérification…";
     const ok = await api.checkTrainerCode($("#gC").value).catch(() => false);
     if (ok) { try { sessionStorage.setItem(GATE, "1"); } catch {} onOk(); }
     else { $("#gMsg").textContent = "Code incorrect."; btn.disabled = false; btn.textContent = "Continuer"; $("#gC").select(); }
   });
-  $("#gC")?.focus();
+  $("#gForgot").onclick = () => otpFlow(root, ctx, false);
+  $("#gC").focus();
 }
 
-/* Entrée stagiaire sans lien : saisie du code de session */
+/* Étape 1 : adresse e-mail · étape 2 : code reçu. La connexion déclenche ensuite le choix du code. */
+function otpFlow(root, { api, go }, first) {
+  root.innerHTML = `
+  <div class="login">
+    <div class="login-card card">
+      <div class="kicker" style="color:var(--muted)">Espace formateur</div>
+      <h1 style="color:var(--navy);margin:4px 0 6px">${first ? "Première connexion" : "Code oublié"}</h1>
+      <p class="muted">${T(first
+        ? "Aucun code d'accès n'est encore défini. Recevez un code temporaire sur votre adresse de formateur·ice, puis choisissez le code d'accès de l'équipe."
+        : "Recevez un code temporaire sur votre adresse de formateur·ice, puis choisissez un nouveau code d'accès.")}</p>
+      <form id="oF">
+        <label class="f" for="oM">Votre adresse e-mail</label>
+        <input type="email" id="oM" required autocomplete="email" placeholder="prenom.nom@exemple.fr">
+        <button class="btn" type="submit" style="margin-top:10px;width:100%">Recevoir le code</button>
+      </form>
+      <form id="vF" hidden>
+        <label class="f" for="vC">Code reçu par e-mail</label>
+        <input id="vC" required inputmode="numeric" autocomplete="one-time-code" class="mono" placeholder="123456" maxlength="12">
+        <button class="btn" type="submit" style="margin-top:10px;width:100%">Valider</button>
+        <p class="small muted" style="margin-top:8px">${T("Valable une heure. Vous pouvez aussi cliquer sur le lien du message, depuis cet appareil.")} <button class="linkbtn" id="vBack" type="button">Changer d'adresse</button></p>
+      </form>
+      <div id="oMsg" class="small" style="margin-top:10px"></div>
+      <p class="small" style="margin-top:14px">${first ? `<a href="#/login">← Espace stagiaire</a>` : `<button class="linkbtn" id="oCancel" type="button">← Saisir le code d'accès</button>`}</p>
+    </div>
+  </div>`;
+  let email = "";
+  const msg = (h) => ($("#oMsg").innerHTML = h);
+  $("#oF").onsubmit = async (e) => {
+    e.preventDefault();
+    email = $("#oM").value.trim().toLowerCase();
+    const btn = $("#oF button"); btn.disabled = true; btn.textContent = "Envoi…";
+    const r = await guard(() => api.sendTrainerOtp(email));
+    btn.disabled = false; btn.textContent = "Recevoir le code";
+    if (!r?.sent) return;
+    try { localStorage.setItem(RESET, "1"); } catch {}
+    $("#oF").hidden = true; $("#vF").hidden = false; $("#vC").focus();
+    msg(`<div class="okbox">${T(`Code envoyé à ${esc(email)}. Pensez à vérifier les indésirables.`)}</div>`
+      + (r.demoCode ? `<div class="demo-box small" style="margin-top:8px"><b>Mode démonstration.</b> Code : <b class="mono" id="demoOtp">${r.demoCode}</b></div>` : ""));
+  };
+  $("#vBack").onclick = () => { $("#vF").hidden = true; $("#oF").hidden = false; msg(""); };
+  $("#vF").onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = $("#vF button"); btn.disabled = true; btn.textContent = "Vérification…";
+    try {
+      await api.verifyEmailOtp(email, $("#vC").value);
+      go("#/formateur/code"); // la connexion relance aussi le rendu : main.js redirige vers le choix du code
+    } catch {
+      btn.disabled = false; btn.textContent = "Valider";
+      msg(`<div class="warn">Code invalide ou expiré.</div>`); $("#vC").select();
+    }
+  };
+  $("#oCancel")?.addEventListener("click", () => trainerGate(root, { api, go }, () => go("#/formateur")));
+  $("#oM").focus();
+}
+
+/* Choix du code d'accès, après connexion par code temporaire */
+export async function viewSetTrainerCode(root, _p, { api, go, refreshMe }) {
+  const isTrainer = await api.claimTrainer().catch(() => false);
+  if (!isTrainer) {
+    try { localStorage.removeItem(RESET); } catch {}
+    const me = await api.currentUser();
+    root.innerHTML = `<div class="login"><div class="login-card card">
+      <div class="kicker" style="color:var(--muted)">Espace formateur</div>
+      <h1 style="color:var(--navy);margin:4px 0 6px">Adresse non déclarée</h1>
+      <p class="muted">${T(`${esc(me?.email || "Cette adresse")} n'est pas déclarée comme formateur·ice. Dans Supabase → SQL Editor : insert into trainer_emails values ('${esc(me?.email || "votre@adresse.fr")}'); puis recommencez.`)}</p>
+      <button class="btn" id="sOut" style="width:100%">Se déconnecter</button>
+    </div></div>`;
+    $("#sOut").onclick = async () => { await api.signOut(); go("#/formateur"); };
+    return;
+  }
+  root.innerHTML = `<div class="login"><div class="login-card card">
+    <div class="kicker" style="color:var(--muted)">Espace formateur</div>
+    <h1 style="color:var(--navy);margin:4px 0 6px">Choisissez le code d'accès</h1>
+    <p class="muted">${T("Ce code protège l'entrée de l'espace formateur pour toute l'équipe. Au moins 6 caractères.")}</p>
+    <form id="cF">
+      <label class="f" for="c1">Nouveau code</label>
+      <input type="password" id="c1" required minlength="6" autocomplete="new-password" class="mono">
+      <label class="f" for="c2" style="margin-top:8px">Confirmation</label>
+      <input type="password" id="c2" required minlength="6" autocomplete="new-password" class="mono">
+      <button class="btn" type="submit" style="margin-top:12px;width:100%">Enregistrer et entrer</button>
+    </form>
+    <div id="cMsg" class="small" style="margin-top:8px;color:var(--ko)"></div>
+  </div></div>`;
+  $("#cF").onsubmit = async (e) => {
+    e.preventDefault();
+    const a = $("#c1").value.trim(), b = $("#c2").value.trim();
+    if (a.length < 6) return ($("#cMsg").textContent = "Au moins 6 caractères.");
+    if (a !== b) return ($("#cMsg").textContent = "Les deux saisies diffèrent.");
+    if (await guard(() => api.setTrainerCode(a), "Code d'accès enregistré.") === undefined) return;
+    try { localStorage.removeItem(RESET); sessionStorage.setItem(GATE, "1"); } catch {}
+    await refreshMe?.();
+    go("#/admin");
+  };
+  $("#c1").focus();
+}
+
 export async function viewLogin(root, _p, { go }) {
   root.innerHTML = `
   <div class="login">

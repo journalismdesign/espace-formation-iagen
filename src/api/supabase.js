@@ -47,6 +47,16 @@ export function createSupabaseApi(url, anonKey) {
     async trainerCodeConfigured() { return ok(await sb.rpc("trainer_code_configured")); },
     async checkTrainerCode(code) { return ok(await sb.rpc("check_trainer_code", { p_code: code })); },
     async setTrainerCode(code) { ok(await sb.rpc("set_trainer_code", { p_code: code })); return true; },
+    /* Première connexion / code oublié : code à usage unique envoyé par Supabase Auth */
+    async sendTrainerOtp(email) {
+      ok(await sb.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { emailRedirectTo: redirect() + "#/formateur", shouldCreateUser: true } }));
+      return { sent: true };
+    },
+    async verifyEmailOtp(email, token) {
+      ok(await sb.auth.verifyOtp({ email: email.trim().toLowerCase(), token: String(token).replace(/\s/g, ""), type: "email" }));
+      profileCache = null; return true;
+    },
+    async claimTrainer() { profileCache = null; return !!ok(await sb.rpc("claim_trainer")); },
 
     /* ---------- Identité visuelle et réglages ---------- */
     async listBrands() { return ok(await sb.from("brands").select("*").order("sort").order("name")); },

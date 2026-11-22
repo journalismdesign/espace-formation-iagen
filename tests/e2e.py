@@ -193,6 +193,23 @@ async def main():
         await tr.wait_for_selector(".phases"); await tr.goto(URL + "#/admin"); await tr.wait_for_selector("table")
         rows = await tr.locator("tbody tr").count()
         assert rows == 2, f"2 sessions attendues, {rows} trouvées"
+
+        # Code oublié : code temporaire par e-mail, puis nouveau code d'accès
+        c2 = await b.new_context(viewport={"width": 1280, "height": 860}); fx = await c2.new_page(); watch(fx, "oubli")
+        await fx.goto(URL + "#/formateur"); await fx.wait_for_selector("#gForgot"); await fx.click("#gForgot")
+        await fx.fill("#oM", "inconnu@exemple.fr"); await fx.click("#oF button"); await fx.wait_for_selector("#demoOtp"); otp = await fx.inner_text("#demoOtp")
+        await fx.fill("#vC", "000000"); await fx.click("#vF button"); await fx.wait_for_selector("#oMsg .warn")
+        await fx.fill("#vC", otp); await fx.click("#vF button")
+        await fx.wait_for_selector("#sOut"); await shot(fx, "20-adresse-non-declaree"); await fx.click("#sOut")
+        await fx.wait_for_selector("#gForgot"); await fx.click("#gForgot")
+        await fx.fill("#oM", "formateur@demo.fr"); await fx.click("#oF button"); await fx.wait_for_selector("#demoOtp")
+        await shot(fx, "21-code-temporaire")
+        await fx.fill("#vC", await fx.inner_text("#demoOtp")); await fx.click("#vF button"); await fx.wait_for_selector("#cF")
+        await fx.fill("#c1", "Nouveau-1"); await fx.fill("#c2", "Autre-22"); await fx.click("#cF button"); await fx.wait_for_selector("#cMsg:has-text('diffèrent')")
+        await fx.fill("#c2", "Nouveau-1"); await shot(fx, "22-choix-code"); await fx.click("#cF button"); await fx.wait_for_url("**/#/admin")
+        await fx.click("#logout"); await fx.evaluate("sessionStorage.clear()"); await fx.goto(URL + "#/formateur"); await fx.wait_for_selector("#gF")
+        await fx.fill("#gC", "Nouveau-1"); await fx.click("#gF button"); await fx.wait_for_selector("#gBtn")
+        await c2.close()
         await b.close()
     bad = [e for e in errors if "favicon" not in e]
     print("ERREURS :", bad if bad else "aucune")
