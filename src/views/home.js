@@ -3,6 +3,7 @@
 import { $, $$, T, esc, dateFr, guard, NB } from "../lib/dom.js";
 import { preparation } from "./cadrageModel.js";
 import { datesFr } from "../lib/brand.js";
+import { hasCadrage } from "../lib/content.js";
 
 export const STATUS = { draft: "À venir", live: "En direct", closed: "Terminée" };
 
@@ -11,8 +12,9 @@ export async function viewHome(root, _p, { api, me, go }) {
   const sessions = await api.listSessions();
   const open = sessions.filter((s) => s.status !== "closed");
   const next = open.find((s) => s.status === "live") || open[0] || null;
-  const project = next ? await api.myProject(next.id).catch(() => null) : null;
-  const prep = preparation(me, project);
+  const cad = next ? hasCadrage(next) : false; // pas de cadrage pour une formation d'une journée
+  const project = next && cad ? await api.myProject(next.id).catch(() => null) : null;
+  const prep = preparation(me, project, cad);
   const threads = next ? (await api.listThreads(next.id)).slice(0, 3) : [];
 
   const todo = next ? `
@@ -25,7 +27,7 @@ export async function viewHome(root, _p, { api, me, go }) {
         ${i.done ? `<span class="small"><b>Terminé</b></span>` : `<a class="small" href="${i.k === "profil" ? "#/profil" : `#/s/${next.id}/cadrage`}">${i.started ? "Continuer" : "Commencer"}</a>`}</div>`).join("")}
       <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
         ${next.status === "live" ? `<a class="btn" href="#/s/${next.id}/direct">Rejoindre le direct →</a>` : ""}
-        <a class="btn${next.status === "live" ? " ghost" : ""}" href="${!prep.items[0].done ? "#/profil" : `#/s/${next.id}/cadrage`}">${prep.pct === 100 ? "Revoir ma préparation" : "Continuer ma préparation"} →</a>
+        <a class="btn${next.status === "live" ? " ghost" : ""}" href="${!prep.items[0].done || !cad ? "#/profil" : `#/s/${next.id}/cadrage`}">${prep.pct === 100 ? "Revoir ma préparation" : "Continuer ma préparation"} →</a>
       </div>
     </div>
     <div class="card prep">
@@ -47,10 +49,10 @@ export async function viewHome(root, _p, { api, me, go }) {
     ${next ? `
     <div class="card" style="margin-top:14px">
       <div class="kicker-d">Mon parcours de formation</div>
-      <p class="small muted" style="margin:4px 0 12px">Deux moments : le cadrage avant, la formation le jour J. Vous pouvez y revenir à tout instant.</p>
+      <p class="small muted" style="margin:4px 0 12px">${cad ? "Deux moments : le cadrage avant, la formation le jour J. Vous pouvez y revenir à tout instant." : "Tout se passe le jour J : sondages, quiz, exercices et déroulé s'affichent au bon moment."}</p>
       <div class="grid g2">
-        <a class="step-card" href="#/s/${next.id}/cadrage"><span class="ring${project?.status === "validated" ? " on" : ""}">${project?.status === "validated" ? "✓" : "1"}</span><div><div class="kicker-d">Avant la formation</div><b>Je cadre mon cas d'usage</b><div class="small muted">Préparé pas à pas, avec le retour du formateur.</div><span class="small">${project ? "Revoir" : "Commencer"} →</span></div></a>
-        <a class="step-card" href="#/s/${next.id}/direct"><span class="ring">2</span><div><div class="kicker-d">Le jour J</div><b>Je suis la formation en direct</b><div class="small muted">Sondages, quiz et déroulé s'affichent au bon moment.</div><span class="small">Ouvrir →</span></div></a>
+        ${cad ? `<a class="step-card" href="#/s/${next.id}/cadrage"><span class="ring${project?.status === "validated" ? " on" : ""}">${project?.status === "validated" ? "✓" : "1"}</span><div><div class="kicker-d">Avant la formation</div><b>Je cadre mon cas d'usage</b><div class="small muted">Préparé pas à pas, avec le retour du formateur.</div><span class="small">${project ? "Revoir" : "Commencer"} →</span></div></a>` : ""}
+        <a class="step-card" href="#/s/${next.id}/direct"><span class="ring">${cad ? "2" : "✓"}</span><div><div class="kicker-d">Le jour J</div><b>Je suis la formation en direct</b><div class="small muted">Sondages, quiz et déroulé s'affichent au bon moment.</div><span class="small">Ouvrir →</span></div></a>
       </div>
     </div>
     <div class="grid home-mid" style="margin-top:14px">

@@ -12,7 +12,7 @@ import { STATUS } from "./home.js";
 import { logoPair } from "./settings.js";
 import { STEPS, SENSIB, VERIF } from "./cadrageModel.js";
 import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml, EM2_DEFAULT, evaluationQr, EVAL_TITLE, EVAL_TEXT } from "../lib/brand.js";
-import { modulesFor, daysOf, typeLabel } from "../lib/content.js";
+import { modulesFor, daysOf, typeLabel, hasCadrage } from "../lib/content.js";
 import { parseConducteur, conducteurMarkdown } from "../lib/conducteur.js";
 import { loadSkins, skinFor, applySkin, currentSkin } from "../lib/skin.js";
 import { samsaHtml } from "../lib/brand.js";
@@ -20,6 +20,7 @@ import { morph } from "../lib/morph.js";
 import { parsePages, slideEmbedUrl, deckId, deckKind } from "../deck.js";
 
 const PHASES = [["reglages", "Réglages"], ["avant", "Avant — inscription et cadrage"], ["jour", "Jour J — pilotage"], ["apres", "Après — suivi"]];
+const phaseLabel = (k, l, session) => (k === "avant" && !hasCadrage(session) ? "Avant — inscription" : l);
 const hhmmT = (t) => t.replace(/^0/, "").replace(":", " h ");
 const mins = (t) => { const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
 // Insère les créneaux d'émargement dans le déroulé, à leur heure
@@ -71,7 +72,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     </div>
     <div class="head-actions"><a class="btn ghost sm" href="#/s/${sid}" title="Voir l'espace tel que le voient les stagiaires">Voir côté stagiaire</a>
       ${session.status === "draft" ? `<button class="btn sm" data-status="live">Ouvrir la salle</button>` : session.status === "live" ? `<button class="btn sm ghost" data-status="draft">Fermer la salle</button>` : `<button class="btn sm ghost" data-status="live">Rouvrir</button>`}</div></div>
-    <div class="phases">${PHASES.map(([k, l]) => `<a href="#/admin/s/${sid}/${k}"${k === phase ? ' aria-current="page"' : ""}>${l}</a>`).join("")}</div>
+    <div class="phases">${PHASES.map(([k, l]) => `<a href="#/admin/s/${sid}/${k}"${k === phase ? ' aria-current="page"' : ""}>${phaseLabel(k, l, session)}</a>`).join("")}</div>
     <div id="phase"></div>`;
   $$("[data-status]", root).forEach((b) => (b.onclick = async () => {
     const st = b.dataset.status;
@@ -208,7 +209,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     };
     $("#gEvU", box).oninput = debounce(drawEv, 400); drawEv();
     $("#gEvQ", box).onchange = async (e) => { const f = e.target.files[0]; if (f) { evQr = await guard(() => fileToDataUrl(f, 800)) || evQr; drawEv(); } };
-    const fmt = () => box.querySelector('input[name="fmt"]:checked').value;
+    const fmt = () => box.querySelector('input[name="fmt"]:checked')?.value || session.format || "1";
     const syncD2 = () => ($("#d2wrap", box).style.visibility = fmt() === "2" ? "visible" : "hidden");
     box.querySelectorAll('input[name="fmt"]').forEach((r) => (r.onchange = syncD2)); syncD2();
     const drawEm = async () => {
@@ -322,12 +323,12 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         <div>
           <div class="card">
             <h3>Participant·es (${roster.length})</h3>
-            <p class="small muted" style="margin-top:0">${roster.filter((r) => r.project_status === "validated").length} cadrage(s) validé(s) · ${roster.filter((r) => r.project_id && r.project_status !== "validated").length} en cours</p>
-            ${roster.length ? `<table class="tbl"><thead><tr><th>Nom</th><th>Profil</th><th>Cadrage</th><th></th></tr></thead><tbody>${roster.map((r) => `<tr>
+            ${hasCadrage(session) ? `<p class="small muted" style="margin-top:0">${roster.filter((r) => r.project_status === "validated").length} cadrage(s) validé(s) · ${roster.filter((r) => r.project_id && r.project_status !== "validated").length} en cours</p>` : `<p class="small muted" style="margin-top:0">${T("Formation d'une journée : pas de cadrage de cas d'usage en amont.")}</p>`}
+            ${roster.length ? `<table class="tbl"><thead><tr><th>Nom</th><th>Profil</th>${hasCadrage(session) ? "<th>Cadrage</th>" : ""}<th></th></tr></thead><tbody>${roster.map((r) => `<tr>
               <td><b>${T(r.full_name || "—")}</b><div class="small muted">${esc(r.email)}</div></td>
               <td class="small">${T(r.metier || "—")}<div class="muted">${T(r.niveau || "")}</div></td>
-              <td>${r.project_status === "validated" ? `<span class="tag ok">✓ Validé</span>` : r.project_id ? `<span class="tag">${r.project_steps}/${STEPS.length} · commencé</span>` : `<span class="small muted">Pas commencé</span>`}${r.project_title ? `<div class="small">${T(r.project_title)}</div>` : ""}</td>
-              <td class="actions">${r.project_id ? `<button class="btn sm ghost" data-proj="${r.project_id}">Voir et commenter</button>` : ""}<button class="iconbtn danger" data-rm="${r.user_id}" title="Retirer de la session" aria-label="Retirer">✕</button></td></tr>`).join("")}</tbody></table>` : `<p class="empty">Personne n'a encore rejoint la session.</p>`}
+              ${hasCadrage(session) ? `<td>${r.project_status === "validated" ? `<span class="tag ok">✓ Validé</span>` : r.project_id ? `<span class="tag">${r.project_steps}/${STEPS.length} · commencé</span>` : `<span class="small muted">Pas commencé</span>`}${r.project_title ? `<div class="small">${T(r.project_title)}</div>` : ""}</td>` : ""}
+              <td class="actions">${r.project_id && hasCadrage(session) ? `<button class="btn sm ghost" data-proj="${r.project_id}">Voir et commenter</button>` : ""}<button class="iconbtn danger" data-rm="${r.user_id}" title="Retirer de la session" aria-label="Retirer">✕</button></td></tr>`).join("")}</tbody></table>` : `<p class="empty">Personne n'a encore rejoint la session.</p>`}
           </div>
           <div class="card" style="margin-top:14px">
             <h3>Invitations par e-mail</h3>
@@ -577,11 +578,11 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     const by = Object.fromEntries(roster.map((r) => [r.user_id, r]));
     const validated = projects.filter((p) => p.status === "validated");
     box.innerHTML = `
-      <div class="card"><p style="margin:0 0 10px">${roster.length} participant·es · ${validated.length} cadrage(s) validé(s) · ${roster.filter((r) => r.attended).length} présent·es émargé·es. ${T("Les projets, retours et résultats restent consultables après la session.")}</p>
-        <div class="chips"><a class="btn sm" href="#projets">Voir les projets</a><a class="btn sm ghost" href="#emarg">Émargement, bilan et duplication</a><a class="btn sm ghost" href="#resultats">Résultats à l'écran</a></div></div>
+      <div class="card"><p style="margin:0 0 10px">${roster.length} participant·es · ${hasCadrage(session) ? `${validated.length} cadrage(s) validé(s) · ` : ""}${roster.filter((r) => r.attended).length} présent·es émargé·es. ${T("Les projets, retours et résultats restent consultables après la session.")}</p>
+        <div class="chips">${hasCadrage(session) ? `<a class="btn sm" href="#projets">Voir les projets</a>` : ""}<a class="btn sm ghost" href="#emarg">Émargement, bilan et duplication</a><a class="btn sm ghost" href="#resultats">Résultats à l'écran</a></div></div>
 
-      <div class="card" id="projets" style="margin-top:14px"><h3>Projets (${projects.length})</h3>
-        ${projects.length ? `<div class="grid g2">${projects.map((p) => `<div class="proj-card"><span class="tag${p.status === "validated" ? " ok" : ""}">${p.status === "validated" ? "✓ Validé" : "En cours"}</span><b>${T(p.data?.retenu?.titre || "Sans titre")}</b><div class="small muted">${T(by[p.user_id]?.full_name || by[p.user_id]?.email || "")}</div><p class="small">${T((p.data?.retenu?.description || "").slice(0, 260))}</p>${p.trainer_comment ? `<p class="small"><b>Votre retour :</b> ${T(p.trainer_comment)}</p>` : ""}</div>`).join("")}</div>` : `<p class="empty">Aucun cadrage.</p>`}</div>
+${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:14px"><h3>Projets (${projects.length})</h3>
+        ${projects.length ? `<div class="grid g2">${projects.map((p) => `<div class="proj-card"><span class="tag${p.status === "validated" ? " ok" : ""}">${p.status === "validated" ? "✓ Validé" : "En cours"}</span><b>${T(p.data?.retenu?.titre || "Sans titre")}</b><div class="small muted">${T(by[p.user_id]?.full_name || by[p.user_id]?.email || "")}</div><p class="small">${T((p.data?.retenu?.description || "").slice(0, 260))}</p>${p.trainer_comment ? `<p class="small"><b>Votre retour :</b> ${T(p.trainer_comment)}</p>` : ""}</div>`).join("")}</div>` : `<p class="empty">Aucun cadrage.</p>`}</div>` : ""}
 
       <div class="card" id="emarg" style="margin-top:14px"><h3>Émargement</h3>
         ${roster.length ? `<table class="tbl"><thead><tr><th>Présent·e</th><th>Nom</th><th>E-mail</th><th>Cadrage</th></tr></thead><tbody>${roster.map((r) => `<tr><td><input type="checkbox" data-att="${r.user_id}"${r.attended ? " checked" : ""} aria-label="Présence de ${esc(r.full_name || r.email)}"></td><td>${T(r.full_name || "—")}</td><td class="small">${esc(r.email)}</td><td class="small">${r.project_status === "validated" ? "Validé" : r.project_id ? `${r.project_steps}/${STEPS.length}` : "—"}</td></tr>`).join("")}</tbody></table>` : `<p class="empty">Aucun participant.</p>`}

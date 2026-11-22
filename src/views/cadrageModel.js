@@ -35,10 +35,10 @@ export function stepsDone(me, data = {}) {
 export const canValidate = (done) => ["profil", "besoin", "retenu"].every((k) => done.includes(k));
 
 // Préparation affichée sur « Mon espace » : profil + cadrage validé
-export function preparation(me, project) {
+export function preparation(me, project, withCadrage = true) {
   const items = [
     { k: "profil", label: "Compléter mon profil", sub: "Pour personnaliser votre espace", done: profileDone(me) },
-    { k: "cadrage", label: "Cadrer mon cas d'usage", sub: "Pour arriver avec un objectif concret", done: project?.status === "validated", started: !!project },
+    ...(withCadrage ? [{ k: "cadrage", label: "Cadrer mon cas d'usage", sub: "Pour arriver avec un objectif concret", done: project?.status === "validated", started: !!project }] : []),
   ];
   return { items, pct: Math.round((items.filter((i) => i.done).length / items.length) * 100) };
 }

@@ -11,7 +11,7 @@ OUT = pathlib.Path(__file__).parent
 errors = []
 
 def watch(page, who):
-    page.on("pageerror", lambda e: errors.append(f"{who} pageerror: {e}"))
+    page.on("pageerror", lambda e: errors.append(f"{who} pageerror: {e} | {(e.stack or '')[:300]}"))
     page.on("console", lambda m: errors.append(f"{who} console: {m.text}") if m.type == "error" else None)
     page.on("dialog", lambda d: asyncio.ensure_future(d.accept()))
 
@@ -165,6 +165,20 @@ async def main():
         await tr.click("[data-a='attente']"); await scr.wait_for_timeout(1200); await shot(scr, "08-ecran-nuage")
         await scr.close()
 
+        # Formation d'une journée : pas de cadrage
+        await st.goto(URL + f"#/s/{sid}/direct"); await st.wait_for_selector(".side-path")
+        assert await st.locator(".side-path a[href$='/cadrage']").count() == 0, "pas de cadrage en une journée"
+        await st.goto(URL + f"#/s/{sid}/cadrage"); await st.wait_for_selector("#liveCard")
+        assert "/direct" in st.url, "le cadrage renvoie au jour J"
+        assert await tr.locator(".phases a:has-text('Avant — inscription')").count() == 1
+        assert await tr.locator("[data-a='vote']").count() == 0, "pas de vote sur les projets en une journée"
+        # Passage en deux journées (cadrage, vote et projets réapparaissent)
+        await tr.evaluate("""() => { const k = 'iagen-demo-db-v9', db = JSON.parse(localStorage.getItem(k)); const x = db.sessions[0];
+          x.format = '2'; const d = new Date(x.date + 'T12:00:00'); d.setDate(d.getDate() + 1); x.date2 = d.toISOString().slice(0, 10);
+          x.activities.push({ id: 'vote', type: 'vote', titre: 'Vote', q: "Quel cas d'usage voulez-vous voir testé devant le groupe ?" }, { id: 'projets', type: 'projects', titre: 'Projets' });
+          localStorage.setItem(k, JSON.stringify(db)); }""")
+        await tr.goto(URL + f"#/admin/s/{sid}/jour"); await tr.reload(); await tr.wait_for_selector("[data-a='vote']")
+        await st.reload()
         # Stagiaire : cadrage complet
         await st.goto(URL + f"#/s/{sid}/cadrage"); await st.wait_for_selector("section.cad")
         await st.fill("#pName", "Bob Martin")

@@ -153,6 +153,9 @@ function detail(m, progress) {
   return h;
 }
 // Séquences déjà passées dans le déroulé piloté par le formateur
+// Le cadrage (mode projet) n'existe que pour les formations de deux journées : en une journée, pas le temps
+export const hasCadrage = (session) => daysOf(session).n > 1;
+
 /* Outils d'exercice : ils apparaissent côté stagiaire quand le formateur lance (ou dépasse) la séquence
    qui les propose, puis restent disponibles. Après la session (close), tous restent accessibles. */
 export const TOOL_IDS = ["toolRmctf", "toolSve"];

@@ -3,7 +3,7 @@
    discussion. */
 import { $, $$, T, esc, fr, NB, matches, dateFr, guard, toast, bindCopy, copyText, download, debounce } from "../lib/dom.js";
 import { FICHES, GLOSS, PROMPTS, CASES } from "../data.js";
-import { renderParcours, parcoursPct, ficheById, ficheHtml, bindRefs, openPrompt, toolsHtml, bindTools, corpusMarkdown, unlockedTools, TOOL_IDS } from "../lib/content.js";
+import { renderParcours, parcoursPct, ficheById, ficheHtml, bindRefs, openPrompt, toolsHtml, bindTools, corpusMarkdown, unlockedTools, TOOL_IDS, hasCadrage } from "../lib/content.js";
 import { currentAct, renderInput, renderResults, respKey } from "../lib/activities.js";
 import { renderCadrage } from "./cadrage.js";
 import { STATUS } from "./home.js";
@@ -47,7 +47,7 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
       <div class="side-live${live() ? " on" : ""}" id="sideLive"><span class="dot${live() ? " on" : ""}"></span>${live() ? "En direct" : STATUS[session.status]}</div>
       <div class="side-label">Le parcours</div>
       <div class="side-path">
-        <a href="#/s/${sid}/cadrage" class="${tab === "cadrage" ? "cur" : ""}"><span class="ring${project?.status === "validated" ? " on" : ""}">${project?.status === "validated" ? "✓" : ""}</span><div><b>Mon cadrage</b><div class="small muted">${project?.status === "validated" ? "Cas validé" : "Avant la formation"}</div></div></a>
+${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "cadrage" ? "cur" : ""}"><span class="ring${project?.status === "validated" ? " on" : ""}">${project?.status === "validated" ? "✓" : ""}</span><div><b>Mon cadrage</b><div class="small muted">${project?.status === "validated" ? "Cas validé" : "Avant la formation"}</div></div></a>` : ""}
         <a href="#/s/${sid}/direct" class="${tab === "direct" ? "cur" : ""}"><span class="ring"></span><div><b>Le jour J</b><div class="small muted">La formation en direct</div></div></a>
       </div>
       <div id="sideExtra"></div>
@@ -71,6 +71,7 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   cleanups.push(api.watch(sid, (e) => { if (e.table === "sessions" || e.table === "*") refreshSession(); }));
 
   if (tab === "direct") await tabDirect();
+  else if (tab === "cadrage" && !hasCadrage(session)) ctx.go(`#/s/${sid}/direct`); // pas de cadrage en une journée
   else if (tab === "cadrage") await renderCadrage(body, $("#sideExtra", root), ctx, session, trainerPreview);
   else if (tab === "ressources") await tabRessources();
   else if (tab === "fiches") tabFiches();

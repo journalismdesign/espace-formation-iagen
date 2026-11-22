@@ -44,6 +44,7 @@ export function keepDraft(form, key, { saveLabel } = {}) {
     for (const el of fields(form)) {
       const k = keyOf(form, el);
       if (!(k in saved.values) || read(el) === saved.values[k]) continue;
+      if (el.type === "radio" && !saved.values[k]) continue; // cocher le bon bouton décoche les autres : ne jamais en décocher un seul
       if (el.type === "checkbox" || el.type === "radio") el.checked = !!saved.values[k]; else el.value = saved.values[k];
       el.dispatchEvent(new Event("input", { bubbles: true }));
       el.dispatchEvent(new Event("change", { bubbles: true }));

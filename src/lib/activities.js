@@ -26,7 +26,9 @@ export function defaultActivities(format = "1") {
     { id: "quiz-sve", type: "quiz", titre: "Quiz · S·V·E", quiz: "sve" },
     P("lundi", "Lundi matin"),
   ];
-  if (format === "2") base.splice(9, 0, { id: "quiz-jargon", type: "quiz", titre: "Quiz · le jargon", quiz: "jargon" }, { id: "quiz-donnees", type: "quiz", titre: "Quiz · vos données", quiz: "donnees" });
+  // vote et présentation des projets reposent sur le cadrage, réservé aux formations de deux journées
+  if (format !== "2") return base.filter((a) => !["vote", "projects"].includes(a.type));
+  base.splice(9, 0, { id: "quiz-jargon", type: "quiz", titre: "Quiz · le jargon", quiz: "jargon" }, { id: "quiz-donnees", type: "quiz", titre: "Quiz · vos données", quiz: "donnees" });
   return base;
 }
 
