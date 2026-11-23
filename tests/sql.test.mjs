@@ -19,7 +19,7 @@ grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid(), auth.jwt() to anon, authenticated;
 -- Pas de droits par défaut : comme les projets Supabase récents, les migrations doivent tout accorder elles-mêmes
 `);
-for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql", "20261122080000_premiere_connexion.sql", "20261122090000_droits_explicites.sql", "20261122100000_conducteur_habillages.sql", "20261123000000_roles_admin.sql", "20261123010000_reponses.sql"]) {
+for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql", "20261122080000_premiere_connexion.sql", "20261122090000_droits_explicites.sql", "20261122100000_conducteur_habillages.sql", "20261123000000_roles_admin.sql", "20261123010000_reponses.sql", "20261124000000_discussion.sql"]) {
   try { await db.exec(readFileSync(new URL("../supabase/migrations/" + f, import.meta.url), "utf8")); }
   catch (e) { console.error("Migration", f, ":", e.message, e.where || ""); process.exit(1); }
 }
@@ -101,8 +101,22 @@ ok(st.unlocked === true && st.url.includes("support.pdf"), "support débloqué u
 await db.exec(`reset role; set test.uid=''; set role anon;`);
 const pub = await db.query(`select * from public.session_public('${code}')`);
 ok(pub.rows.length === 1 && pub.rows[0].org_name === "Samsa", "slide d'ouverture lisible sans connexion");
+// Messagerie : le badge « équipe » est posé par le serveur, jamais par le client
+await as(B, "bob@exemple.fr");
+const tid = (await db.query(`select id from threads limit 1`)).rows[0].id;
+await fails(`insert into posts (thread_id, session_id, body, staff) values ('${tid}', '${sid}', 'Je me fais passer pour l''équipe', true)`, "un stagiaire ne peut pas fournir lui-même le badge équipe");
+await db.exec(`insert into posts (thread_id, session_id, body) values ('${tid}', '${sid}', 'Question de Bob')`);
+ok((await db.query(`select staff from posts where author='${B}'`)).rows[0].staff === false, "message de stagiaire non marqué équipe");
 await as(T, "formateur@exemple.fr");
+await db.exec(`insert into posts (thread_id, session_id, body) values ('${tid}', '${sid}', 'Réponse du formateur')`);
+ok((await db.query(`select staff from posts where author='${T}'`)).rows[0].staff === true, "message du formateur marqué équipe");
 await db.exec(`update sessions set status = 'closed' where id = '${sid}'`);
+await as(B, "bob@exemple.fr");
+ok((await db.query(`select count(*)::int n from threads`)).rows[0].n === 0, "session close : le stagiaire ne lit plus la discussion");
+ok((await db.query(`select count(*)::int n from resources`)).rows[0].n === 1, "session close : le stagiaire garde les ressources");
+await fails(`insert into posts (thread_id, session_id, body) values ('${tid}', '${sid}', 'encore là')`, "session close : le stagiaire n'écrit plus");
+await as(T, "formateur@exemple.fr");
+ok((await db.query(`select count(*)::int n from posts where session_id='${sid}'`)).rows[0].n === 2, "session close : l'équipe relit la discussion");
 await db.exec(`reset role;`);
 ok((await db.query(`select count(*)::int n from access_codes where session_id='${sid}'`)).rows[0].n === 0, "codes détruits à la clôture");
 ok((await db.query(`select count(*)::int n from public.session_public('${code}')`)).rows[0].n === 0, "session close invisible publiquement");

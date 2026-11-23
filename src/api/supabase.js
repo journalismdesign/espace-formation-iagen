@@ -190,7 +190,11 @@ export function createSupabaseApi(url, anonKey) {
     async removeSecret(id) { ok(await sb.from("session_secrets").delete().eq("id", id)); },
 
     /* ---------- Discussion ---------- */
-    async listThreads(sid) { return ok(await sb.from("threads").select("*, posts(count)").eq("session_id", sid).order("created_at", { ascending: false })).map((t) => ({ ...t, count: t.posts?.[0]?.count ?? 0 })); },
+    async listThreads(sid) {
+      const rows = ok(await sb.from("threads").select("*, posts(count), recent:posts(created_at)").eq("session_id", sid)
+        .order("created_at", { ascending: false }).order("created_at", { referencedTable: "recent", ascending: false }).limit(1, { referencedTable: "recent" }));
+      return rows.map(({ posts, recent, ...t }) => ({ ...t, count: posts?.[0]?.count ?? 0, last: recent?.[0]?.created_at || t.created_at }));
+    },
     async createThread(sid, title, body) { return ok(await sb.from("threads").insert({ session_id: sid, title, body }).select().single()); },
     async getThread(id) { return ok(await sb.from("threads").select("*").eq("id", id).maybeSingle()); },
     async listPosts(tid) { return ok(await sb.from("posts").select("*").eq("thread_id", tid).order("created_at")); },

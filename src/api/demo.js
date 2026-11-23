@@ -82,6 +82,8 @@ export function createDemoApi({ defaultActivities }) {
     return !!(t?.login_email && t.login_email === myProf()?.email);
   };
   const canSee = (sid) => manages(sid) || isMember(sid);
+  // Discussion : l'équipe garde la main, les stagiaires jusqu'à la clôture
+  const chatOpen = (sid) => manages(sid) || (isMember(sid) && db.sessions.find((s) => s.id === sid)?.status !== "closed");
   const nameOf = (id) => { const p = prof(id); return p ? (p.full_name || p.email.split("@")[0]) : "?"; };
 
   const lastDay = (x) => (x.format === "2" && x.date2) || x.date;
@@ -337,17 +339,24 @@ export function createDemoApi({ defaultActivities }) {
     async removeSecret(id) { needTrainer(); db.secrets = db.secrets.filter((r) => r.id !== id); commit(); },
 
     async listThreads(sid) {
-      if (!canSee(sid)) return [];
-      return db.threads.filter((t) => t.session_id === sid).map((t) => ({ ...t, count: db.posts.filter((p) => p.thread_id === t.id).length })).sort((a, b) => b.created_at.localeCompare(a.created_at));
+      if (!chatOpen(sid)) return [];
+      return db.threads.filter((t) => t.session_id === sid).map((t) => {
+        const ps = db.posts.filter((p) => p.thread_id === t.id);
+        return { ...t, count: ps.length, last: ps.reduce((m, p) => (p.created_at > m ? p.created_at : m), t.created_at) };
+      }).sort((a, b) => b.created_at.localeCompare(a.created_at));
     },
     async createThread(sid, title, body) {
-      const u = need(); if (!canSee(sid)) throw new Error("Accès refusé.");
-      const t = { id: uid(), session_id: sid, author: u.id, author_name: nameOf(u.id), title, body, created_at: now() };
+      const u = need(); if (!chatOpen(sid)) throw new Error("La discussion est fermée.");
+      const t = { id: uid(), session_id: sid, author: u.id, author_name: nameOf(u.id), title, body, staff: manages(sid), created_at: now() };
       db.threads.push(t); commit(); return t;
     },
-    async getThread(id) { const t = db.threads.find((x) => x.id === id); return t && canSee(t.session_id) ? t : null; },
-    async listPosts(tid) { return db.posts.filter((p) => p.thread_id === tid).sort((a, b) => a.created_at.localeCompare(b.created_at)); },
-    async addPost(tid, sid, body) { const u = need(); const p = { id: uid(), thread_id: tid, session_id: sid, author: u.id, author_name: nameOf(u.id), body, created_at: now() }; db.posts.push(p); commit(); return p; },
+    async getThread(id) { const t = db.threads.find((x) => x.id === id); return t && chatOpen(t.session_id) ? t : null; },
+    async listPosts(tid) { return db.posts.filter((p) => p.thread_id === tid && chatOpen(p.session_id)).sort((a, b) => a.created_at.localeCompare(b.created_at)); },
+    async addPost(tid, sid, body) {
+      const u = need(); if (!chatOpen(sid)) throw new Error("La discussion est fermée.");
+      const p = { id: uid(), thread_id: tid, session_id: sid, author: u.id, author_name: nameOf(u.id), body, staff: manages(sid), created_at: now() };
+      db.posts.push(p); commit(); return p;
+    },
     async deleteThread(id) { db.threads = db.threads.filter((t) => t.id !== id); db.posts = db.posts.filter((p) => p.thread_id !== id); commit(); },
     async deletePost(id) { db.posts = db.posts.filter((p) => p.id !== id); commit(); },
 

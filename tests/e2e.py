@@ -201,8 +201,21 @@ async def main():
         assert "100" in await st.inner_text(".prep-square")
         await st.goto(URL + f"#/s/{sid}/fiches"); await st.wait_for_selector(".fcard"); await shot(st, "12-fiches")
         await st.click(".fcard >> nth=0"); await st.wait_for_selector("article");
-        await st.goto(URL + f"#/s/{sid}/discussion/new"); await st.fill("#tTitle", "Gemini garde-t-il mes documents ?"); await st.click("#newT button")
-        await st.wait_for_selector("#reply"); await st.fill("#rBody", "Question pour la pause."); await st.click("#reply button"); await st.wait_for_selector(".post")
+        # Messagerie : premier message → conversation « Général » créée, bulle à droite
+        await st.goto(URL + f"#/s/{sid}/discussion"); await st.wait_for_selector(".chat .chat-compose textarea")
+        await st.fill(".chat-compose textarea", "Gemini garde-t-il mes documents ?"); await st.press(".chat-compose textarea", "Enter")
+        await st.wait_for_selector(".chat-row.mine .chat-bubble", timeout=5000)
+        assert "Général" in await st.inner_text(".chat-title")
+        await st.fill(".chat-compose textarea", "Question pour la pause, avec un lien https://exemple.fr"); await st.press(".chat-compose textarea", "Enter")
+        await st.wait_for_selector(".chat-row.mine.grouped .chat-body a", timeout=5000)
+        await shot(st, "13-discussion")
+        # Back-office : le widget affiche le fil ; la réponse du formateur porte le badge Équipe côté stagiaire
+        await tr.goto(URL + f"#/admin/s/{sid}/jour")
+        await tr.wait_for_selector("#chatAdm .chat-bubble", timeout=6000)
+        assert "Gemini" in await tr.inner_text("#chatAdm")
+        await tr.fill("#chatAdm textarea", "Oui, selon vos réglages : on en parle à la pause."); await tr.press("#chatAdm textarea", "Enter")
+        await st.wait_for_selector(".chat-bubble.staff .chat-badge", timeout=6000)
+        await shot(tr, "05e-widget-discussion")
         assert await st.locator("a[href$='/assistant']").count() == 0, "onglet Assistant retiré"
         await st.goto(URL + f"#/s/{sid}/ressources"); await st.wait_for_selector("details.acc"); await shot(st, "14-ressources")
         await st.goto(URL + f"#/s/{sid}/direct"); await st.wait_for_selector(".mod[data-id]")
@@ -222,6 +235,15 @@ async def main():
         txt = open(csv, encoding="utf-8-sig").read()
         assert "Bob Martin" in txt and "validé" in txt, "bilan CSV incomplet"
         await st.goto(URL + f"#/s/{sid}/cadrage"); await st.wait_for_selector(".card.fb"); await shot(st, "17-retour-formateur")
+        # Clôture : le stagiaire garde ressources, fiches, exercices, support ; perd discussion, émargement, déroulé
+        await tr.goto(URL + f"#/admin/s/{sid}/jour"); await tr.wait_for_selector("#closeDay"); await tr.check("#closeDay"); await tr.wait_for_timeout(600)
+        await st.goto(URL + f"#/s/{sid}/discussion"); await st.wait_for_url(f"**/#/s/{sid}/ressources", timeout=5000)
+        nav = await st.inner_text(".side-nav")
+        assert "Discussion" not in nav and "Émargement" not in nav and "Fiches pratiques" in nav and "Support" in nav, "accès réduit après clôture : " + nav
+        assert await st.locator("#parcours").count() == 0, "déroulé masqué après clôture"
+        await shot(st, "18-stagiaire-apres-cloture")
+        await tr.goto(URL + f"#/admin/s/{sid}/apres"); await tr.wait_for_selector("#chatAdm .chat-bubble", timeout=6000)
+        await tr.goto(URL + f"#/admin/s/{sid}/jour"); await tr.wait_for_selector("#closeDay"); await tr.uncheck("#closeDay"); await tr.wait_for_timeout(600)
 
         # Fiches formateurs : création avec aperçu
         await tr.goto(URL + "#/admin/formateurs"); await tr.wait_for_selector(".trainer-card")

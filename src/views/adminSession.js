@@ -1,6 +1,7 @@
 /* Back-office d'une session, en trois temps :
    Avant (accès, invitations, cadrages), Jour J (animation en direct),
    Après (projets, émargement, bilan, duplication, résultats, ressources). */
+import { mountChat } from "../lib/chat.js";
 import { keepDraft } from "../lib/draft.js";
 import { $, $$, T, esc, NB, guard, toast, debounce, dateFr, download, copyText } from "../lib/dom.js";
 import { QUIZ } from "../data.js";
@@ -394,7 +395,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <div class="acts" id="acts"></div>
             <div id="ctrl" style="margin:12px 0"></div>
             <details style="margin-top:14px"><summary class="small" style="cursor:pointer">Ajouter ou retirer des activités</summary><div id="actEdit"></div></details>
-            <hr><label class="f inline"><input type="checkbox" id="closeDay"${session.status === "closed" ? " checked" : ""}> Clore la journée (les stagiaires gardent l'accès aux ressources)</label>
+            <hr><label class="f inline"><input type="checkbox" id="closeDay"${session.status === "closed" ? " checked" : ""}> Clore la journée (les stagiaires gardent ressources, fiches, exercices et support ; discussion, émargement et déroulé se ferment)</label>
           </div>
           <div class="card" style="margin-top:14px"><h3 id="pTitle">Participant·es</h3><div id="plist"></div></div>
         </div>
@@ -402,8 +403,10 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="kicker-d live-tag"><span class="dot on"></span>Écran projeté · en direct</div><button class="btn sm" id="openScr">Ouvrir l'écran projeté</button></div>
           <div id="preview" class="preview"></div>
           <div class="card qrcard row" style="margin-top:14px"><img src="${qrUrl}" alt="QR code"><div><div class="small">Rejoindre la session</div><b class="mono">${esc(session.code)}</b><br><button class="btn sm ghost" id="pjQ" style="margin-top:8px">Projeter le QR code</button></div></div>
+          <div class="card chat-card" style="margin-top:14px"><h3>Discussion des stagiaires</h3><div id="chatAdm"></div></div>
         </aside>
       </div>`;
+    cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: true, compact: true }));
     $("#openScr", box).onclick = () => window.open(`#/ecran/${sid}`, "ecran-" + sid, "popup=yes,width=1280,height=760");
     $("#pjQ", box).onclick = async () => showQr(session, await qr(joinUrl(session.code), 900));
     $("#closeDay", box).onchange = async (e) => { session = await guard(() => api.updateSession(sid, e.target.checked ? { status: "closed", live: {} } : { status: "live" }), e.target.checked ? "Journée close." : "Session rouverte.") || session; draw(); };
@@ -591,6 +594,8 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
         <div class="chips" style="margin-top:12px"><button class="btn sm" id="csv">Exporter le bilan (CSV)</button>${admin ? `<button class="btn sm ghost" id="dup">Dupliquer la session</button>` : ""}</div>
         <p class="small muted">${T("Le bilan reprend présence, profil, état du cadrage, progression dans le déroulé et scores aux quiz. La duplication reprend la séquence, les ressources et les intitulés des accès (sans les valeurs), sans participant·es.")}</p></div>
 
+      <div class="card chat-card" id="discussion" style="margin-top:14px"><h3>Discussion des stagiaires</h3><p class="small muted" style="margin-top:0">${T("Après la clôture, les stagiaires n'y ont plus accès ; vous gardez l'historique.")}</p><div id="chatAdm"></div></div>
+
       <div class="card" id="resultats" style="margin-top:14px"><h3>Résultats des activités</h3><div id="resBox" class="grid g2"><p class="small muted">Chargement…</p></div></div>
 
       <div class="grid g2" style="margin-top:14px">
@@ -604,6 +609,7 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
     const reload = () => go(location.hash);
     $$("[data-att]", box).forEach((c) => (c.onchange = () => guard(() => api.setAttended(sid, c.dataset.att, c.checked))));
     if ($("#dup", box)) $("#dup", box).onclick = async () => { const id = await guard(() => api.duplicateSession(sid), "Session dupliquée."); if (id) go(`#/admin/s/${id}`); };
+    cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: true, compact: true }));
     $("#csv", box).onclick = () => {
       const quizzes = Object.keys(QUIZ);
       const head = ["Nom", "E-mail", "Présent", "Métier", "Niveau IA", "Cadrage", "Cas d'usage", "Retour formateur", "Déroulé (séquences cochées)", ...quizzes.map((q) => "Quiz " + QUIZ[q].titre)];

@@ -11,12 +11,16 @@ import { STATUS } from "./home.js";
 import { modulesFor } from "../lib/content.js";
 import { resolveBranding, logosHtml, datesFr, emargementQr, emargementLabels, emargementStepsHtml, evaluationQr, evaluationHtml } from "../lib/brand.js";
 import { supportBlock } from "./entry.js";
+import { mountChat } from "../lib/chat.js";
 
 const TABS = [
   ["direct", "Le jour J"], ["cadrage", "Mon cadrage"], ["ressources", "Ressources du jour"], ["fiches", "Fiches pratiques"],
   ["outils", "Outils d'exercice"], ["discussion", "Discussion"],
   ["support", "Support de formation"], ["emargement", "Émargement"],
 ];
+// Après la clôture, les stagiaires gardent leurs ressources, les fiches, les exercices et le support
+// (ni déroulé, ni discussion, ni émargement ; la discussion est aussi fermée côté base)
+const CLOSED_TABS = ["ressources", "fiches", "outils", "support"];
 export const FICHE_CATS = [
   ["comprendre", "Comprendre", ["interface", "configuration"]],
   ["outils", "Les briques des assistants", ["projet", "plugin", "connecteur", "competence", "mcp", "instructions", "notebook"]],
@@ -34,11 +38,15 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   if (!TABS.some(([k]) => k === tab)) tab = "direct";
   const membership = await api.myMembership(sid).catch(() => null);
   const trainerPreview = isStaff(me) && !membership;
+  const closedView = session.status === "closed" && !trainerPreview;
+  if (closedView && !CLOSED_TABS.includes(tab)) { ctx.go(`#/s/${sid}/ressources`); return; }
+  const shownTabs = TABS.filter(([k]) => !closedView || CLOSED_TABS.includes(k));
   const project = await api.myProject(sid).catch(() => null);
   const live = () => session.status === "live" && !!(session.live?.act || session.live?.view || session.live?.module);
   const br = await resolveBranding(api, session);
   // Outils d'exercice : visibles dès que le formateur a lancé l'exercice qui les utilise (toujours visibles en aperçu formateur)
-  const toolsVisible = () => trainerPreview || unlockedTools(session).size > 0;
+  const toolsVisible = () => trainerPreview || session.status === "closed" || unlockedTools(session).size > 0;
+  const openTools = () => (session.status === "closed" ? new Set(TOOL_IDS) : unlockedTools(session)); // après clôture : tous les exercices
 
   root.classList.add("withside");
   root.innerHTML = `
@@ -46,14 +54,14 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
       ${logosHtml(br, "sm")}
       <div class="side-head"><div><b>${T(session.title)}</b><div class="small muted">${T(datesFr(session))}</div></div></div>
       <div class="side-live${live() ? " on" : ""}" id="sideLive"><span class="dot${live() ? " on" : ""}"></span>${live() ? "En direct" : STATUS[session.status]}</div>
-      <div class="side-label">Le parcours</div>
+${closedView ? `      <p class="small muted" style="margin:0 0 12px">${T("La formation est terminée. Vous gardez l'accès aux ressources, aux fiches pratiques, aux exercices et au support.")}</p>` : `      <div class="side-label">Le parcours</div>
       <div class="side-path">
 ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "cadrage" ? "cur" : ""}"><span class="ring${project?.status === "validated" ? " on" : ""}">${project?.status === "validated" ? "✓" : ""}</span><div><b>Mon cadrage</b><div class="small muted">${project?.status === "validated" ? "Cas validé" : "Avant la formation"}</div></div></a>` : ""}
         <a href="#/s/${sid}/direct" class="${tab === "direct" ? "cur" : ""}"><span class="ring"></span><div><b>Le jour J</b><div class="small muted">La formation en direct</div></div></a>
-      </div>
+      </div>`}
       <div id="sideExtra"></div>
       <div class="side-label">Ressources</div>
-      <nav class="side-nav">${TABS.filter(([k]) => !["direct", "cadrage"].includes(k)).map(([k, l]) => `<a href="#/s/${sid}/${k}"${k === tab ? ' aria-current="page"' : ""}${k === "outils" ? ` id="navOutils"${toolsVisible() ? "" : " hidden"}` : ""}>${l}<span>›</span></a>`).join("")}</nav>
+      <nav class="side-nav">${shownTabs.filter(([k]) => !["direct", "cadrage"].includes(k)).map(([k, l]) => `<a href="#/s/${sid}/${k}"${k === tab ? ' aria-current="page"' : ""}${k === "outils" ? ` id="navOutils"${toolsVisible() ? "" : " hidden"}` : ""}>${l}<span>›</span></a>`).join("")}</nav>
       ${trainerPreview ? `<p class="small muted" style="margin-top:14px">Aperçu formateur : vos clics ne sont pas enregistrés. <a href="#/admin/s/${sid}">Retour au back-office</a></p>` : ""}
     </aside>
     <section class="sidemain" id="tabBody"></section>`;
@@ -69,6 +77,9 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   }, 150);
   const onSession = new Set();
   onSession.add(() => { const n = $("#navOutils", root); if (n) n.hidden = !toolsVisible(); });
+  // Clôture ou réouverture pendant la consultation : on redessine avec les bons onglets
+  const status0 = session.status;
+  onSession.add(() => { if (!trainerPreview && (session.status === "closed") !== (status0 === "closed")) ctx.go(location.hash); });
   cleanups.push(api.watch(sid, (e) => { if (e.table === "sessions" || e.table === "*") refreshSession(); }));
 
   if (tab === "direct") await tabDirect();
@@ -78,11 +89,11 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   else if (tab === "fiches") tabFiches();
   else if (tab === "outils") {
     const drawTools = () => {
-      const open = unlockedTools(session);
+      const open = openTools();
       if (!trainerPreview && !open.size) { body.innerHTML = `<div class="pagehead"><div><h1>Outils d'exercice</h1></div></div><p class="empty">${T("Les outils apparaîtront ici quand le formateur lancera l'exercice qui s'en sert. Ils resteront ensuite disponibles.")}</p>`; return; }
       if (body.dataset.tools === [...open].sort().join() && $("#toolRmctf", body)) return; // déjà affichés : on ne perd pas la saisie
       body.dataset.tools = [...open].sort().join();
-      body.innerHTML = `<div class="pagehead"><div><h1>Outils d'exercice</h1><p class="muted">${T("De quoi s'entraîner pendant les temps de pratique, et après. Rien de ce que vous tapez ici ne quitte votre navigateur.")}</p>${trainerPreview ? `<p class="small muted">${T(`Aperçu formateur : tous les outils sont affichés. Les stagiaires ne voient que ceux des exercices déjà lancés (${open.size ? [...open].map((t) => (t === "toolRmctf" ? "R·M·C·T·F" : "S·V·E")).join(", ") : "aucun pour l'instant"}).`)}</p>` : ""}</div></div>${toolsHtml()}`;
+      body.innerHTML = `<div class="pagehead"><div><h1>Outils d'exercice</h1><p class="muted">${T("De quoi s'entraîner pendant les temps de pratique, et après. Rien de ce que vous tapez ici ne quitte votre navigateur.")}</p>${trainerPreview && session.status !== "closed" ? `<p class="small muted">${T(`Aperçu formateur : tous les outils sont affichés. Les stagiaires ne voient que ceux des exercices déjà lancés (${open.size ? [...open].map((t) => (t === "toolRmctf" ? "R·M·C·T·F" : "S·V·E")).join(", ") : "aucun pour l'instant"}).`)}</p>` : ""}</div></div>${toolsHtml()}`;
       bindTools(body);
       // les outils pas encore proposés restent masqués (ils sont dans la page pour que les liaisons fonctionnent)
       if (!trainerPreview) TOOL_IDS.forEach((id) => { const c = $(`#${id}`, body); if (c && !open.has(id)) c.hidden = true; });
@@ -248,44 +259,10 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
     draw();
   }
 
-  /* ---------------- Discussion ---------------- */
+  /* ---------------- Discussion (messagerie) ---------------- */
   async function tabDiscussion() {
-    if (sub && sub !== "new") return threadView(sub);
-    const threads = await api.listThreads(sid);
-    body.innerHTML = `
-      <div class="pagehead"><div><div class="kicker-d">Discussion · ${T(session.title)}</div><h1>Discussion</h1><p class="muted">${T("Questions, retours d'expérience, liens utiles. Visible par les participant·es de la session et l'équipe pédagogique.")}</p></div></div>
-      <form class="card" id="newT" style="margin-bottom:14px">
-        <label class="f" for="tTitle">Nouveau sujet</label><input type="text" id="tTitle" maxlength="160" required placeholder="Ex. Comment désactiver l'entraînement dans Gemini ?">
-        <label class="f" for="tBody">Message (facultatif)</label><textarea id="tBody" maxlength="4000"></textarea>
-        <button class="btn" type="submit" style="margin-top:10px">Publier</button>
-      </form>
-      <div class="card">${threads.length ? threads.map((t) => `<a class="res" style="display:block" href="#/s/${sid}/discussion/${t.id}"><b>${T(t.title)}</b><div class="small muted">${T(t.author_name)} · ${new Date(t.created_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })} · ${t.count} réponse${t.count > 1 ? "s" : ""}</div></a>`).join("") : `<p class="empty">Aucune discussion pour le moment.</p>`}</div>`;
-    if (sub === "new") $("#tTitle", body).focus();
-    $("#newT", body).onsubmit = async (e) => {
-      e.preventDefault();
-      const t = await guard(() => api.createThread(sid, $("#tTitle", body).value.trim(), $("#tBody", body).value.trim()));
-      if (t) ctx.go(`#/s/${sid}/discussion/${t.id}`);
-    };
-    cleanups.push(api.watch(sid, (e) => { if (e.table === "threads") ctx.go(location.hash); }));
-  }
-  async function threadView(tid) {
-    const t = await api.getThread(tid);
-    if (!t) { body.innerHTML = `<p class="empty">Discussion introuvable.</p>`; return; }
-    const draw = async () => {
-      const posts = await api.listPosts(tid);
-      const mineOr = (a) => a === me.id || isStaff(me);
-      body.innerHTML = `<p><a href="#/s/${sid}/discussion">← Toutes les discussions</a></p>
-        <div class="card"><h2 style="margin:0">${T(t.title)}</h2><div class="small muted">${T(t.author_name)} · ${new Date(t.created_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</div>
-          ${t.body ? `<p style="white-space:pre-wrap">${T(t.body)}</p>` : ""}
-          ${mineOr(t.author) ? `<button class="linkbtn small" id="delT">Supprimer le sujet</button>` : ""}</div>
-        <div class="posts">${posts.map((p) => `<div class="post"><div class="small"><b>${T(p.author_name)}</b> <span class="muted">${new Date(p.created_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</span>${mineOr(p.author) ? ` <button class="linkbtn small" data-del="${p.id}">Supprimer</button>` : ""}</div><div style="white-space:pre-wrap">${T(p.body)}</div></div>`).join("")}</div>
-        <form class="card" id="reply"><label class="f" for="rBody">Répondre</label><textarea id="rBody" maxlength="4000" required></textarea><button class="btn" type="submit" style="margin-top:8px">Envoyer</button></form>`;
-      $("#reply", body).onsubmit = async (e) => { e.preventDefault(); if (await guard(() => api.addPost(tid, sid, $("#rBody", body).value.trim()))) draw(); };
-      $("#delT", body)?.addEventListener("click", async () => { if (confirm("Supprimer ce sujet et ses réponses ?")) { await guard(() => api.deleteThread(tid)); ctx.go(`#/s/${sid}/discussion`); } });
-      $$("[data-del]", body).forEach((b) => (b.onclick = async () => { await guard(() => api.deletePost(b.dataset.del)); draw(); }));
-    };
-    await draw();
-    cleanups.push(api.watch(sid, debounce((e) => { if (e.table === "posts" || e.table === "*") { if (!$("#rBody", body)?.value) draw(); } }, 300)));
+    body.innerHTML = `<div class="pagehead"><div><div class="kicker-d">${T(session.title)}</div><h1>Discussion</h1></div></div><div id="chatBox"></div>`;
+    cleanups.push(mountChat($("#chatBox", body), { api, sid, me, staff: trainerPreview }));
   }
 
   /* ---------------- Support ---------------- */
