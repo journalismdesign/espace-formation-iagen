@@ -74,7 +74,7 @@ export function trainerSlideHtml(session, t, cls = "", right = "") {
 
 // d = { session, rows, participants, qrUrl, projects, branding, emQr, support, trainer }
 export function screenHtml(d, compact = false) {
-  const { session, rows = [], participants = 0, qrUrl = "", projects = [], branding = null, emQr = null, support = null, evalQr = null, trainer = null } = d;
+  const { session, rows = [], participants = 0, qrUrl = "", projects = [], branding = null, emQr = null, support = null, evalQr = null, trainer = null, forTrainee = false } = d;
   const cls = compact ? "compact" : "";
   const live = session.live || {};
   const isLive = session.status === "live";
@@ -82,7 +82,7 @@ export function screenHtml(d, compact = false) {
   // salle fermée : seuls les écrans d'ouverture et de clôture se projettent (les stagiaires, eux, ne les voient pas)
   const view = isLive || ["title", "trainer", "emargement", "support", "evaluation"].includes(live.view) ? live.view : null;
   const mod = live.module ? modulesFor(session).find((m) => m.id === live.module) : null;
-  const right = `Code ${esc(session.code)} · ${participants} participant${participants > 1 ? "s" : ""}`;
+  const right = forTrainee ? "" : `Code ${esc(session.code)} · ${participants} participant${participants > 1 ? "s" : ""}`;
 
   // Slide de titre (et activité « Accueil ») : reprend la page 1 du support
   if (view === "title" || act?.type === "welcome") {

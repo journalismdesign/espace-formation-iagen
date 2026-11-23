@@ -860,3 +860,16 @@ select:disabled{background-image:none;padding-right:12px !important}
   .chat.show-list .chat-pane{display:none}
 }
 @media (prefers-reduced-motion:reduce){.chat-msgs{scroll-behavior:auto}}
+
+/* ===== Formation en ligne ===== */
+.online-toggle{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin:0 0 12px;border:1px solid var(--line);border-radius:var(--r);cursor:pointer;background:var(--light)}
+.online-toggle input{margin-top:3px}
+.online-toggle>span{display:flex;flex-direction:column;gap:2px}
+.online-toggle .small{color:var(--muted)}
+.online-toggle.on{border-color:var(--blue);background:var(--tint)}
+.online-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
+.online-screen{position:relative;border-radius:8px;overflow:hidden;background:var(--navy)}
+/* le stagiaire suit la page choisie par le formateur : pas de navigation dans la présentation intégrée */
+.online-screen .deck-slide.frame::after{content:"";position:absolute;inset:0}
+.online-screen:fullscreen{display:grid;place-items:center;border-radius:0;background:#000}
+.online-screen:fullscreen>.deck-slide{width:min(100vw,177.78vh)}

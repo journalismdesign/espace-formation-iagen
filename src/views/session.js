@@ -12,6 +12,9 @@ import { modulesFor } from "../lib/content.js";
 import { resolveBranding, logosHtml, datesFr, emargementQr, emargementLabels, emargementStepsHtml, evaluationQr, evaluationHtml } from "../lib/brand.js";
 import { supportBlock } from "./entry.js";
 import { mountChat } from "../lib/chat.js";
+import { screenHtml } from "../lib/screen.js";
+import { morph } from "../lib/morph.js";
+import { loadScreenData } from "./adminSession.js";
 
 const TABS = [
   ["direct", "Le jour J"], ["cadrage", "Mon cadrage"], ["ressources", "Ressources du jour"], ["fiches", "Fiches pratiques"],
@@ -128,7 +131,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
     drawParcours();
     onSession.add(drawParcours);
 
-    let poll = null, lastKey = null;
+    let poll = null, lastKey = null, olSeq = 0;
     const drawLive = async () => {
       const card = $("#liveCard", body); if (!card) return;
       const act = currentAct(session);
@@ -136,6 +139,22 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
       const L = session.live || {};
       const mod = L.module ? modulesFor(session).find((m) => m.id === L.module) : null;
       const modLine = mod ? `<div class="small muted" style="margin-top:4px">En ce moment : <b>${T(mod.titre)}</b></div>` : "";
+      // Formation en ligne : l'écran projeté s'affiche ici (hors activités, qui gardent leur saisie)
+      if (session.online && session.status === "live" && (!act || act.type === "welcome")) {
+        if (!$("#olScr", card)) {
+          card.innerHTML = `<div class="online-head"><div class="kicker-d"><span class="dot on"></span> En direct · écran du formateur</div><button class="btn sm ghost" id="olFs" type="button">Plein écran</button></div>
+            <div class="online-screen" id="olScr"></div><div id="olNote"></div>`;
+          $("#olFs", card).onclick = () => { const el = $("#olScr", card); document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen?.(); };
+        }
+        const n = ++olSeq;
+        const data = await loadScreenData(api, session, { trainee: !trainerPreview }).catch(() => null);
+        if (n !== olSeq || !data || !$("#olScr", card)) return;
+        morph($("#olScr", card), screenHtml({ ...data, session, qrUrl: "", forTrainee: true }));
+        const note = L.view === "module" && mod?.obj ? `<ul class="small" style="margin:10px 0 0">${mod.obj.map((x) => `<li>${T(x)}</li>`).join("")}</ul>` : "";
+        if ($("#olNote", card).innerHTML !== note) $("#olNote", card).innerHTML = note;
+        return;
+      }
+      olSeq++;
       if (session.status !== "live" || (!act && !L.view)) {
         card.innerHTML = `<div class="kicker-d">En direct</div>${modLine}<p class="empty" style="margin:8px 0 0">${session.status === "closed" ? "La session est close. Le déroulé et les ressources restent consultables." : "Les sondages, quiz et consignes s'afficheront ici quand le formateur les lancera. Gardez cette page ouverte."}</p>`;
         return;

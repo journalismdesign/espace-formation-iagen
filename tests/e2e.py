@@ -110,6 +110,14 @@ async def main():
         assert "GERALD HOLUBOWICZ" in (await tr.inner_text("#preview")).upper()
         await st.wait_for_selector("#liveCard .tr-card", timeout=5000)
         await shot(tr, "05d-intervenant")
+        # Formation en ligne : le stagiaire voit l'écran du formateur dans son espace
+        await tr.check("#onlineMode"); await st.wait_for_selector("#olScr .deck-slide", timeout=6000)
+        assert "GERALD HOLUBOWICZ" in (await st.inner_text("#olScr")).upper(), "écran du formateur côté stagiaire"
+        assert "participant" not in (await st.inner_text("#olScr")).lower(), "pas de compteur côté stagiaire"
+        await tr.click("[data-view='title']"); await st.wait_for_selector("#olScr .ds-title.xl", timeout=6000)
+        await shot(st, "03d-stagiaire-en-ligne")
+        await tr.uncheck("#onlineMode"); await st.wait_for_selector("#liveCard h3", timeout=6000)
+        assert await st.locator("#olScr").count() == 0, "retour à la carte classique"
         await tr.click("[data-em='j1-matin']"); await tr.wait_for_selector("#preview .ds-qrbox img")
         assert "POUR FTV" in (await tr.inner_text("#preview")).upper()
         assert "lien reçu de la DRH" in await tr.inner_text("#preview"), "texte du second émargement modifiable"

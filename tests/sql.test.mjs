@@ -19,7 +19,7 @@ grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid(), auth.jwt() to anon, authenticated;
 -- Pas de droits par défaut : comme les projets Supabase récents, les migrations doivent tout accorder elles-mêmes
 `);
-for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql", "20261122080000_premiere_connexion.sql", "20261122090000_droits_explicites.sql", "20261122100000_conducteur_habillages.sql", "20261123000000_roles_admin.sql", "20261123010000_reponses.sql", "20261124000000_discussion.sql"]) {
+for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql", "20261122080000_premiere_connexion.sql", "20261122090000_droits_explicites.sql", "20261122100000_conducteur_habillages.sql", "20261123000000_roles_admin.sql", "20261123010000_reponses.sql", "20261124000000_discussion.sql", "20261124010000_en_ligne.sql"]) {
   try { await db.exec(readFileSync(new URL("../supabase/migrations/" + f, import.meta.url), "utf8")); }
   catch (e) { console.error("Migration", f, ":", e.message, e.where || ""); process.exit(1); }
 }
@@ -110,6 +110,12 @@ ok((await db.query(`select staff from posts where author='${B}'`)).rows[0].staff
 await as(T, "formateur@exemple.fr");
 await db.exec(`insert into posts (thread_id, session_id, body) values ('${tid}', '${sid}', 'Réponse du formateur')`);
 ok((await db.query(`select staff from posts where author='${T}'`)).rows[0].staff === true, "message du formateur marqué équipe");
+await db.exec(`update sessions set online = true where id = '${sid}'`);
+await as(B, "bob@exemple.fr");
+ok((await db.query(`select online from sessions`)).rows[0].online === true, "le stagiaire lit le mode en ligne");
+await db.exec(`update sessions set online = false`);
+await as(T, "formateur@exemple.fr");
+ok((await db.query(`select online from sessions where id='${sid}'`)).rows[0].online === true, "le stagiaire ne change pas le mode en ligne");
 await db.exec(`update sessions set status = 'closed' where id = '${sid}'`);
 await as(B, "bob@exemple.fr");
 ok((await db.query(`select count(*)::int n from threads`)).rows[0].n === 0, "session close : le stagiaire ne lit plus la discussion");

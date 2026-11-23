@@ -38,11 +38,11 @@ const firstName = (r) => (r.full_name || r.email.split("@")[0]).split(" ")[0];
 // Écrans d'ouverture et de clôture (projetables salle fermée)
 export const OPENING_VIEWS = new Set(["title", "trainer", "emargement", "support", "evaluation"]);
 
-export async function loadScreenData(api, session) {
+export async function loadScreenData(api, session, { trainee = false } = {}) {
   const act = currentAct(session);
   const [rows, roster, projects] = await Promise.all([
     act && session.status === "live" ? api.results(session.id, respKey(act, session.live)) : [],
-    api.roster(session.id).catch(() => []),
+    trainee ? [] : api.roster(session.id).catch(() => []), // le tableau des participants est réservé à l'équipe
     act?.type === "projects" ? api.listProjects(session.id) : [],
   ]);
   const byUser = Object.fromEntries(roster.map((r) => [r.user_id, r]));
@@ -384,6 +384,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         <div>
           <div class="card">
             <h3>Pilotage</h3>
+            <label class="online-toggle${session.online ? " on" : ""}" id="onlineLbl"><input type="checkbox" id="onlineMode"${session.online ? " checked" : ""}><span><b>Formation en ligne</b><span class="small">${T("Les stagiaires voient dans leur espace ce que montre l'écran projeté : pages du support, présentations, séquences, émargement.")}</span></span></label>
             <p class="small muted" id="hint" style="margin-top:0"></p>
             <div id="emRemind"></div>
             <div class="kicker-d" style="margin:10px 0 6px">Écrans de la session · ouverture et clôture</div>
@@ -409,6 +410,12 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: true, compact: true }));
     $("#openScr", box).onclick = () => window.open(`#/ecran/${sid}`, "ecran-" + sid, "popup=yes,width=1280,height=760");
     $("#pjQ", box).onclick = async () => showQr(session, await qr(joinUrl(session.code), 900));
+    $("#onlineMode", box).onchange = async (e) => {
+      const on = e.target.checked;
+      const s2 = await guard(() => api.updateSession(sid, { online: on }), on ? "Mode en ligne : les stagiaires voient l'écran dans leur espace." : "Mode en ligne désactivé.");
+      if (s2) session = s2; else e.target.checked = !on;
+      $("#onlineLbl", box).classList.toggle("on", !!session.online);
+    };
     $("#closeDay", box).onchange = async (e) => { session = await guard(() => api.updateSession(sid, e.target.checked ? { status: "closed", live: {} } : { status: "live" }), e.target.checked ? "Journée close." : "Session rouverte.") || session; draw(); };
 
     // Outils d'exercice débloqués : on ajoute celui de la séquence lancée, sans jamais en retirer
