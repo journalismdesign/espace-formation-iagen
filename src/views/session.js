@@ -71,6 +71,9 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
     <section class="sidemain" id="tabBody"></section>`;
   const body = $("#tabBody", root);
   const cleanups = [];
+  // Écouteurs et minuteries propres à l'onglet affiché : coupés à chaque changement d'onglet
+  let tabCleanups = [], fullRender = false;
+  const tabHandlers = new Set();
 
   // Mise à jour en direct de la session (activité lancée, statut)
   const refreshSession = debounce(async () => {
@@ -83,7 +86,8 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   onSession.add(() => { const n = $("#navOutils", root); if (n) n.hidden = !toolsVisible(); });
   // Clôture ou réouverture pendant la consultation : on redessine avec les bons onglets
   const status0 = session.status;
-  onSession.add(() => { if (!trainerPreview && (session.status === "closed") !== (status0 === "closed")) ctx.go(location.hash); });
+  onSession.add(() => { if (!trainerPreview && (session.status === "closed") !== (status0 === "closed")) { fullRender = true; ctx.go(location.hash); } });
+  onSession.add(() => tabHandlers.forEach((f) => f()));
   cleanups.push(api.watch(sid, (e) => { if (e.table === "sessions" || e.table === "*") refreshSession(); }, ["sessions"]));
   // Émargement : bouton vert sous « En direct », affiché pendant les créneaux (début de journée et reprise
   // de l'après-midi, 30 min chacun) ou quand le formateur projette l'émargement ; toujours en aperçu formateur
@@ -99,6 +103,37 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   drawEm(); onSession.add(drawEm);
   const emTimer = setInterval(drawEm, 30000); cleanups.push(() => clearInterval(emTimer));
 
+  await renderTab();
+
+  /* Changer d'onglet ne redessine que la colonne de droite (main.js appelle retab au lieu de tout reconstruire) :
+     la colonne de gauche reste en place, seule l'entrée active change ; l'ancien contenu reste affiché jusqu'à
+     ce que le nouveau soit prêt. Les changements d'onglet sont traités l'un après l'autre. */
+  let chain = Promise.resolve();
+  const done = () => { tabCleanups.forEach((f) => f && f()); cleanups.forEach((f) => f && f()); };
+  done.retab = async ([sid2, tab2 = "direct", sub2]) => {
+    if (fullRender || sid2 !== sid) return false; // autre session, ou clôture/réouverture : tout redessiner
+    await (chain = chain.then(async () => {
+      tab = TABS.some(([k]) => k === tab2) ? tab2 : "direct"; sub = sub2;
+      if (closedView && !CLOSED_TABS.includes(tab)) { ctx.go(`#/s/${sid}/ressources`); return; }
+      markNav();
+      await renderTab();
+    }).catch((e) => console.error(e)));
+    return true;
+  };
+  return done;
+
+  // Entrée active de la colonne de gauche
+  function markNav() {
+    const here = `#/s/${sid}/${tab}`;
+    $$(".side-path a", root).forEach((a) => a.classList.toggle("cur", a.getAttribute("href") === here));
+    $$(".side-nav a", root).forEach((a) => (a.getAttribute("href") === here ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
+    drawEm();
+  }
+
+  async function renderTab() {
+    tabCleanups.forEach((f) => f && f()); tabCleanups = []; tabHandlers.clear();
+    delete body.dataset.tools;
+    const extra = $("#sideExtra", root); if (extra) extra.innerHTML = ""; // complément du cadrage
   if (tab === "direct") await tabDirect();
   else if (tab === "cadrage" && !hasCadrage(session)) ctx.go(`#/s/${sid}/direct`); // pas de cadrage en une journée
   else if (tab === "cadrage") await renderCadrage(body, $("#sideExtra", root), ctx, session, trainerPreview);
@@ -116,14 +151,13 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
       if (!trainerPreview) TOOL_IDS.forEach((id) => { const c = $(`#${id}`, body); if (c && !open.has(id)) c.hidden = true; });
     };
     drawTools();
-    onSession.add(drawTools);
+    tabHandlers.add(drawTools);
   }
   else if (tab === "discussion") await tabDiscussion();
   else if (tab === "assistant") ctx.go(`#/s/${sid}/ressources`); // assistant IA retiré
   else if (tab === "support") await tabSupport();
   else if (tab === "emargement") await tabEmargement();
-
-  return () => { cleanups.forEach((f) => f && f()); root.classList.remove("withside"); };
+  }
 
   /* ---------------- Le jour J : activité en direct + déroulé ---------------- */
   async function tabDirect() {
@@ -147,8 +181,8 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
       $("#pp", body).textContent = parcoursPct(session, progress, lastMod) + NB + "%";
     };
     drawParcours();
-    onSession.add(drawParcours);
-    const parcT = setInterval(drawParcours, 60000); cleanups.push(() => clearInterval(parcT));
+    tabHandlers.add(drawParcours);
+    const parcT = setInterval(drawParcours, 60000); tabCleanups.push(() => clearInterval(parcT));
 
     let poll = null, lastKey = null, olSeq = 0;
     const drawLive = async () => {
@@ -219,8 +253,8 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
       poll = setInterval(showResults, 4000); // les réponses des autres ne sont lisibles qu'agrégées
       lastKey = key;
     };
-    onSession.add(drawLive);
-    cleanups.push(() => clearInterval(poll));
+    tabHandlers.add(drawLive);
+    tabCleanups.push(() => clearInterval(poll));
     drawLive();
   }
 
@@ -300,7 +334,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   /* ---------------- Discussion (messagerie) ---------------- */
   async function tabDiscussion() {
     body.innerHTML = `<div class="pagehead"><div><div class="kicker-d">${T(session.title)}</div><h1>Discussion</h1></div></div><div id="chatBox"></div>`;
-    cleanups.push(mountChat($("#chatBox", body), { api, sid, me, staff: trainerPreview }));
+    tabCleanups.push(mountChat($("#chatBox", body), { api, sid, me, staff: trainerPreview }));
   }
 
   /* ---------------- Support ---------------- */
@@ -312,7 +346,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
     };
     await draw();
     const t = setInterval(draw, 60000); // le déblocage se fait à l'heure dite
-    cleanups.push(() => clearInterval(t));
+    tabCleanups.push(() => clearInterval(t));
   }
 
   /* ---------------- Émargement ---------------- */

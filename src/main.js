@@ -65,11 +65,16 @@ function header(route) {
 async function render() {
   const tok = ++renderTok; // un rendu plus récent annule celui-ci
   closeSheet();
-  if (cleanup) { try { cleanup(); } catch {} cleanup = null; }
   const h = location.hash || "#/";
   let m = null, route = null;
   for (const r of ROUTES) { m = h.match(r[0]); if (m) { route = { view: r[1], ...(r[2] || {}) }; break; } }
   if (!route) { go("#/"); return; }
+  // Même vue : elle peut ne redessiner qu'une partie de la page (onglets de l'espace stagiaire : la colonne
+  // de gauche reste en place). Elle renvoie false si un rendu complet est nécessaire.
+  if (cleanup?.retab && currentRoute?.view === route.view) {
+    try { if (await cleanup.retab(m.slice(1))) { if (tok === renderTok) window.scrollTo(0, 0); return; } } catch (e) { console.error(e); }
+  }
+  if (cleanup) { try { cleanup(); } catch {} cleanup = null; }
   currentRoute = route;
 
   const user = await api.currentUser();
