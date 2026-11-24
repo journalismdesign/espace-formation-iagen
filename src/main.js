@@ -88,6 +88,9 @@ async function render() {
   if (user && !booted) { booted = true; try { await api.claimInvites(); } catch (e) { console.warn(e); } }
   if (route.trainer && !isStaff(me)) { go("#/"); return; }
   if (route.admin && !isAdmin(me)) { go("#/admin"); return; } // pages réservées à l'administration
+  // Anti-cadre : le back-office et l'écran projeté ne s'affichent pas dans une page tierce (détournement de clics).
+  // GitHub Pages ne permet pas l'en-tête frame-ancestors, d'où ce contrôle en JS.
+  if (route.trainer && window.top !== window.self) { app.innerHTML = `<main id="view"><div class="card"><h2>Page non disponible ici</h2><p class="muted">Ouvrez le back-office directement dans le navigateur.</p></div></main>`; return; }
   if (tok !== renderTok) return;
 
   // Habillage du centre de formation (session ouverte, sinon habillage par défaut)
@@ -112,7 +115,7 @@ async function render() {
 // Lien court …/CODE6 (serveur de développement, hébergements qui renvoient index.html)
 {
   const seg = location.pathname.split("/").pop();
-  if (/^[A-Za-z0-9]{6}$/.test(seg) && !location.hash) {
+  if (/^[A-Za-z0-9]{6}(?:[A-Za-z0-9]{2})?$/.test(seg) && !location.hash) {
     history.replaceState(null, "", location.pathname.replace(/[^/]*$/, "") + "#/join/" + seg.toUpperCase());
   }
 }

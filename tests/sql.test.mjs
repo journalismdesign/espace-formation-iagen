@@ -3,7 +3,7 @@
 // un·e stagiaire ne voit ni les autres cadrages ni les réponses nominatives,
 // ne peut pas se promouvoir formateur, ne peut pas s'auto-émarger.
 import { PGlite } from "@electric-sql/pglite";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 const db = new PGlite();
 const ok = (c, m) => { if (!c) { console.error("ÉCHEC :", m); process.exitCode = 1; } else console.log("ok ·", m); };
@@ -19,7 +19,9 @@ grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid(), auth.jwt() to anon, authenticated;
 -- Pas de droits par défaut : comme les projets Supabase récents, les migrations doivent tout accorder elles-mêmes
 `);
-for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql", "20261122080000_premiere_connexion.sql", "20261122090000_droits_explicites.sql", "20261122100000_conducteur_habillages.sql", "20261123000000_roles_admin.sql", "20261123010000_reponses.sql", "20261124000000_discussion.sql", "20261124010000_en_ligne.sql", "20261124020000_duplication.sql", "20261124030000_pages_masquees.sql"]) {
+// Toutes les migrations, dans l'ordre de leur nom (plus de liste à tenir à jour)
+const MIGRATIONS = readdirSync(new URL("../supabase/migrations/", import.meta.url)).filter((f) => f.endsWith(".sql")).sort();
+for (const f of MIGRATIONS) {
   try { await db.exec(readFileSync(new URL("../supabase/migrations/" + f, import.meta.url), "utf8")); }
   catch (e) { console.error("Migration", f, ":", e.message, e.where || ""); process.exit(1); }
 }
@@ -39,7 +41,7 @@ const as = async (uid, email) => db.exec(`reset role; set test.uid='${uid}'; set
 await as(T, "formateur@exemple.fr");
 const s = await db.query(`insert into sessions (title) values ('Libération · 2 décembre') returning id, code`);
 const sid = s.rows[0].id, code = s.rows[0].code;
-ok(/^[0-9A-F]{6}$/.test(code), "code de session généré : " + code);
+ok(/^[ABCDEFGHJKMNPQRSTUVWXYZ2-9]{8}$/.test(code), "code de session généré, 8 caractères sans ambiguïté : " + code);
 await db.exec(`insert into session_invites values ('${sid}','alice@exemple.fr'); insert into resources (session_id,title,url) values ('${sid}','Charte','https://exemple.fr')`);
 await db.exec(`update sessions set status='live' where id='${sid}'`);
 
@@ -240,4 +242,73 @@ ok((await db.query(`select role from profiles where id='${F}'`)).rows[0].role ==
 // Anonyme : rien
 await db.exec(`reset role; set test.uid=''; set role anon;`);
 await fails(`select public.join_session('${code}')`, "un visiteur non connecté ne peut rien rejoindre");
+
+/* ---------- Durcissement (phase 0) ---------- */
+const su = () => db.exec(`reset role; set test.uid=''; set request.jwt.claims='';`);
+await su();
+// Droits d'exécution : liste blanche sans connexion, fonctions internes fermées aux comptes
+const anonFns = (await db.query(`select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'execute') order by 1`)).rows.map((r) => r.proname).join(",");
+ok(anonFns === "check_trainer_code,session_public,trainer_code_configured", "sans connexion, trois fonctions seulement : " + anonFns);
+const authFns = (await db.query(`select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname in ('staff_role','throttle_hit','try_access_code','purge_access_codes')
+  and has_function_privilege('authenticated', p.oid, 'execute')`)).rows.map((r) => r.proname);
+ok(authFns.length === 0, "fonctions internes fermées aux comptes connectés" + (authFns.length ? " : " + authFns.join(",") : ""));
+// Limites anti-abus
+const th = [];
+for (let i = 0; i < 3; i++) th.push((await db.query(`select public.throttle_hit('test', 2, 60) ok`)).rows[0].ok);
+ok(th.join() === "true,true,false", "limite : deux appels passent, le troisième est refusé");
+// Essais de code atomiques
+const S3 = (await db.query(`insert into sessions (title, status) values ('Durcissement', 'draft') returning id, code`)).rows[0];
+await db.exec(`insert into access_codes (session_id, email, code_hash, expires_at) values ('${S3.id}', 'carla@exemple.fr', 'bon', now() + interval '1 day')`);
+const tr = async (h) => (await db.query(`select public.try_access_code('${S3.id}', 'carla@exemple.fr', '${h}') r`)).rows[0].r;
+ok(await tr("faux") === "bad:7", "code faux : un essai de moins");
+ok(await tr("bon") === "ok", "bon code accepté, compteur remis à zéro");
+for (let i = 0; i < 8; i++) await tr("faux");
+ok(await tr("bon") === "locked", "après huit essais faux, même le bon code est bloqué");
+ok((await db.query(`select public.try_access_code('${S3.id}', 'inconnu@exemple.fr', 'x') r`)).rows[0].r === "none", "adresse sans code : aucun");
+// Mode « sur invitation » : join_session renvoie null (sans exception) pour une personne non invitée
+await db.exec(`update sessions set access_mode = 'invites' where id = '${S3.id}'`);
+await as(B, "bob@exemple.fr");
+ok((await db.query(`select public.join_session('${S3.code}') r`)).rows[0].r === null, "session sur invitation : Bob, non invité, n'entre pas");
+await as(T, "formateur@exemple.fr");
+await db.exec(`insert into session_invites (session_id, email) values ('${S3.id}', 'bob@exemple.fr')`);
+await as(B, "bob@exemple.fr");
+ok((await db.query(`select public.join_session('${S3.code}') r`)).rows[0].r === S3.id, "une fois invité, Bob entre");
+ok((await db.query(`select public.join_session('ZZZZZZZZ') r`)).rows[0].r === null, "code inconnu : null, pas d'erreur");
+// Réponses : seulement salle ouverte, seulement par submit_response
+await fails(`select public.submit_response('${S3.id}', 'niveau', '1'::jsonb)`, "salle fermée : pas de réponse");
+await as(T, "formateur@exemple.fr");
+await db.exec(`update sessions set status = 'live' where id = '${S3.id}'`);
+await db.exec(`insert into session_secrets (session_id, label, value) values ('${S3.id}', 'Compte test', 'secret-42')`);
+await as(B, "bob@exemple.fr");
+await db.exec(`select public.submit_response('${S3.id}', 'niveau', '1'::jsonb)`);
+ok((await db.query(`select count(*)::int n from responses where session_id='${S3.id}'`)).rows[0].n === 1, "salle ouverte : réponse enregistrée");
+await fails(`insert into responses (session_id, activity_id, value) values ('${S3.id}', 'triche', '1'::jsonb)`, "pas d'écriture directe dans les réponses");
+await fails(`update responses set value = '3'::jsonb where session_id = '${S3.id}'`, "pas de modification directe des réponses");
+ok((await db.query(`select count(*)::int n from session_secrets where session_id='${S3.id}'`)).rows[0].n === 1, "session ouverte : Bob lit les codes d'exercice");
+// Discussion : un stagiaire ne supprime pas une conversation ; pas de message vers le fil d'une autre session
+await db.exec(`insert into threads (session_id, title) values ('${S3.id}', 'Général')`);
+await db.exec(`delete from threads where session_id = '${S3.id}'`);
+ok((await db.query(`select count(*)::int n from threads where session_id='${S3.id}'`)).rows[0].n === 1, "un stagiaire ne supprime pas une conversation, même la sienne");
+await as(T, "formateur@exemple.fr");
+const th3 = (await db.query(`select id from threads where session_id='${S3.id}'`)).rows[0].id;
+await fails(`insert into posts (thread_id, session_id, body) values ('${th3}', '${sid}', 'mauvaise session')`, "message vers le fil d'une autre session refusé");
+// Clôture : codes d'exercice masqués aux stagiaires, visibles pour l'équipe
+await db.exec(`update sessions set status = 'closed' where id = '${S3.id}'`);
+ok((await db.query(`select count(*)::int n from session_secrets where session_id='${S3.id}'`)).rows[0].n === 1, "session close : l'équipe garde les codes d'exercice");
+await as(B, "bob@exemple.fr");
+ok((await db.query(`select count(*)::int n from session_secrets where session_id='${S3.id}'`)).rows[0].n === 0, "session close : Bob ne lit plus les codes d'exercice");
+// Équipe : adresses de connexion illisibles pour un·e stagiaire
+await fails(`select login_email from trainers`, "un stagiaire ne lit pas les adresses de connexion de l'équipe");
+ok((await db.query(`select count(*)::int n from trainers`)).rows[0].n >= 1, "il lit toujours les fiches des intervenant·es");
+ok((await db.query(`select count(*)::int n from public.trainer_logins()`)).rows[0].n === 0, "trainer_logins vide pour un stagiaire");
+await as(T, "formateur@exemple.fr");
+ok((await db.query(`select count(*)::int n from public.trainer_logins() where login_email is not null`)).rows[0].n >= 1, "l'équipe lit les adresses de connexion");
+// Contraintes et duplication
+await fails(`update sessions set emargement_url = 'javascript:alert(1)' where id = '${S3.id}'`, "lien d'émargement javascript: refusé");
+await fails(`update sessions set emargement_qr = 'javascript:alert(1)' where id = '${S3.id}'`, "QR d'émargement hors image refusé");
+await db.exec(`update sessions set emargement_qr = 'data:image/png;base64,AAAA' where id = '${S3.id}'`);
+const d4 = (await db.query(`select public.duplicate_session('${S3.id}') id`)).rows[0].id;
+ok((await db.query(`select access_mode from sessions where id='${d4}'`)).rows[0].access_mode === "invites", "la duplication reprend le mode d'accès");
 console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests SQL passent.");

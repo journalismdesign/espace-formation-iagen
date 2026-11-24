@@ -3,7 +3,7 @@
    Après (projets, émargement, bilan, duplication, résultats, ressources). */
 import { mountChat } from "../lib/chat.js";
 import { keepDraft } from "../lib/draft.js";
-import { $, $$, T, esc, fr, NB, guard, toast, debounce, dateFr, download, copyText } from "../lib/dom.js";
+import { $, $$, T, esc, fr, NB, guard, toast, debounce, dateFr, download, copyText, safeUrl, safeImg } from "../lib/dom.js";
 import { QUIZ } from "../data.js";
 import { ACT_TYPES, currentAct, respKey, renderResults, defaultActivities, countOf } from "../lib/activities.js";
 import { screenHtml, nextPage, stepLive, pageKey, modPages, skipSet } from "../lib/screen.js";
@@ -192,6 +192,9 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <div><label class="f" for="gS">Début</label><input type="time" id="gS" value="${esc(String(session.start_time || "09:30").slice(0, 5))}"></div>
             <div><label class="f" for="gE">Fin</label><input type="time" id="gE" value="${esc(String(session.end_time || "17:30").slice(0, 5))}"></div>
           </div>
+          <label class="f">Accès des stagiaires</label>
+          <div class="chips" id="gAcc">${[["ouvert", "Ouvert"], ["invites", "Sur invitation"]].map(([v, l]) => `<label class="radio"><input type="radio" name="acc" value="${v}"${(session.access_mode || "ouvert") === v ? " checked" : ""}> ${l}</label>`).join("")}</div>
+          <p class="small muted">${T("Ouvert : toute personne qui a le code ou le QR de la session peut demander son code d'accès. Sur invitation : seules les adresses ajoutées dans l'onglet Avant (et les personnes déjà inscrites).")}</p>
         </div>
         <div class="card" style="margin-top:14px" id="condCard"><h3>Conducteur</h3>
           <p class="small" id="condSrc"></p>
@@ -290,7 +293,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     $("#gE2", box).onchange = syncE2; syncE2();
     const drawEv = async () => {
       const q = await evaluationQr({ evaluation_qr: evQr, evaluation_url: $("#gEvU", box).value.trim() }, 600);
-      $("#evPrev", box).innerHTML = q ? `<img src="${q}" alt="QR de l'évaluation" class="thumb lg"><div class="chips" style="margin-top:6px"><a class="btn sm ghost" href="${q}" download="evaluation-${esc(session.code)}.png">Télécharger le QR (PNG)</a>${evQr ? `<button type="button" class="linkbtn small" id="evDel">Retirer l'image</button>` : ""}</div>` : "";
+      $("#evPrev", box).innerHTML = q ? `<img src="${safeImg(q)}" alt="QR de l'évaluation" class="thumb lg"><div class="chips" style="margin-top:6px"><a class="btn sm ghost" href="${safeImg(q)}" download="evaluation-${esc(session.code)}.png">Télécharger le QR (PNG)</a>${evQr ? `<button type="button" class="linkbtn small" id="evDel">Retirer l'image</button>` : ""}</div>` : "";
       $("#evDel", box)?.addEventListener("click", () => { evQr = null; drawEv(); });
     };
     $("#gEvU", box).oninput = debounce(drawEv, 400); drawEv();
@@ -300,7 +303,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     box.querySelectorAll('input[name="fmt"]').forEach((r) => (r.onchange = syncD2)); syncD2();
     const drawEm = async () => {
       const qrUrl2 = await emargementQr({ emargement_qr: emQr, emargement_url: $("#gEm", box).value.trim() }, 600);
-      $("#emPrev", box).innerHTML = qrUrl2 ? `<img src="${qrUrl2}" alt="QR d'émargement" class="thumb lg"><div class="chips" style="margin-top:6px"><a class="btn sm ghost" href="${qrUrl2}" download="emargement-${esc(session.code)}.png">Télécharger le QR (PNG)</a>${emQr ? `<button type="button" class="linkbtn small" id="emDel">Retirer l'image</button>` : ""}</div>` : `<p class="small muted">Aucun émargement configuré.</p>`;
+      $("#emPrev", box).innerHTML = qrUrl2 ? `<img src="${safeImg(qrUrl2)}" alt="QR d'émargement" class="thumb lg"><div class="chips" style="margin-top:6px"><a class="btn sm ghost" href="${safeImg(qrUrl2)}" download="emargement-${esc(session.code)}.png">Télécharger le QR (PNG)</a>${emQr ? `<button type="button" class="linkbtn small" id="emDel">Retirer l'image</button>` : ""}</div>` : `<p class="small muted">Aucun émargement configuré.</p>`;
       $("#emDel", box)?.addEventListener("click", () => { emQr = null; drawEm(); });
     };
     $("#gEm", box).oninput = debounce(drawEm, 400); drawEm();
@@ -334,6 +337,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         brand_id: box.querySelector('input[name="brand"]:checked')?.value || null, ...(admin ? { trainer_id: $("#gTr", box).value || null, skin_id: $("#gSk", box).value || null } : {}),
         emargement_url: $("#gEm", box).value.trim() || null, emargement_qr: emQr, emargement_label: $("#gEl", box).value.trim() || null,
         emargement2_enabled: $("#gE2", box).checked, emargement2_text: $("#gEt", box).value.trim() || null,
+        access_mode: box.querySelector('input[name="acc"]:checked')?.value || "ouvert",
         slides_url: $("#gSl", box).value.trim() || null, skip_pages: formatPages(parsePages($("#gSkip", box).value)), support_unlocked: $("#gSuF", box).checked, decks,
         evaluation_url: $("#gEvU", box).value.trim() || null, evaluation_qr: evQr,
         evaluation_title: $("#gEvT", box).value.trim() || null, evaluation_text: $("#gEvX", box).value.trim() || null,
@@ -418,6 +422,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
           </div>
           <div class="card" style="margin-top:14px">
             <h3>Invitations par e-mail</h3>
+            ${session.access_mode === "invites" ? `<p class="small" style="margin:0 0 6px"><span class="pill">Sur invitation</span> ${T("Seules ces adresses peuvent demander un code d'accès (réglage dans l'onglet Réglages).")}</p>` : ""}
             <p class="small muted" style="margin-top:0">${T("La personne invitée retrouve la session dès sa première connexion avec cette adresse. Aucun e-mail n'est envoyé par la plateforme : transmettez le lien de connexion vous-même.")}</p>
             <form id="invF"><textarea id="invT" placeholder="Une adresse par ligne"></textarea><button class="btn sm" type="submit" style="margin-top:8px">Ajouter</button></form>
             <div class="chips" style="margin-top:10px">${invites.map((i) => `<span class="chip">${esc(i.email)} ${joined.has(i.email) ? "✓" : ""}<button class="linkbtn" data-uninv="${esc(i.email)}" aria-label="Retirer l'invitation">✕</button></span>`).join("") || `<span class="small muted">Aucune invitation.</span>`}</div>
@@ -612,7 +617,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         const desc = { welcome: "Accueil affiché à l'écran, avec le QR code.", cloud: "Ils envoient leurs mots ; le nuage se forme à l'écran.", poll: "Ils répondent au sondage ; les résultats s'affichent à l'écran.", quiz: "Ils répondent ; affichez la bonne réponse quand tout le monde a voté.", vote: "Ils votent pour un cas d'usage.", projects: "Les cas d'usage validés défilent à l'écran." }[act.type];
         c = `<p class="small" style="margin:0 0 8px">${T(desc)}</p><div class="chips">`;
         if (act.type === "quiz") {
-          const n = QUIZ[act.quiz].q.length, qi = live.qi || 0;
+          const n = QUIZ[act.quiz]?.q.length || 0, qi = live.qi || 0; // clé de quiz inconnue : pas de plantage
           c += `<button class="btn sm ghost" data-q="-1" ${qi === 0 ? "disabled" : ""}>← Question précédente</button>
             <button class="btn sm" data-rev ${live.reveal ? "disabled" : ""}>Afficher la réponse</button>
             <button class="btn sm ghost" data-q="1" ${qi >= n - 1 ? "disabled" : ""}>Question suivante →</button>`;
@@ -694,7 +699,7 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
 
       <div class="grid g2" style="margin-top:14px">
         <div class="card"><h3>Ressources de la session</h3><p class="small muted" style="margin-top:0">Visibles par les participant·es dans « Ressources du jour ».</p>
-          ${resources.map((r) => `<div class="prow"><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${T(r.title)} ↗</a><button class="iconbtn danger" data-rres="${r.id}" aria-label="Retirer">✕</button></div>`).join("")}
+          ${resources.map((r) => `<div class="prow"><a href="${safeUrl(r.url)}" target="_blank" rel="noopener noreferrer">${T(r.title)} ↗</a><button class="iconbtn danger" data-rres="${r.id}" aria-label="Retirer">✕</button></div>`).join("")}
           <form id="resF" class="askrow" style="margin-top:10px"><input type="text" id="rT" placeholder="Titre" required><input type="url" id="rU" placeholder="https://" required><button class="btn sm" type="submit">Ajouter</button></form></div>
         <div class="card"><h3>Codes et accès des exercices</h3><p class="small muted" style="margin-top:0">${T("Comptes de démonstration, clés d'API de test… Les stagiaires les copient depuis « Ressources du jour ». N'y mettez jamais d'identifiant personnel.")}</p>
           ${secrets.map((s) => `<div class="secret-edit"><div class="small"><b>${T(s.label)}</b> <span class="muted">${s.value ? "renseigné" : "aucune valeur"}</span> <button class="linkbtn small" data-rsec="${s.id}">Retirer</button></div><form class="askrow" data-sec="${s.id}"><input type="text" placeholder="Coller la valeur" value="${esc(s.value)}"><button class="btn sm" type="submit">Enregistrer</button></form></div>`).join("")}
@@ -712,7 +717,10 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
         return [r.full_name, r.email, r.attended ? "oui" : "non", r.metier, r.niveau, r.project_status === "validated" ? "validé" : r.project_id ? `${r.project_steps}/${STEPS.length}` : "non commencé",
           p?.data?.retenu?.titre, p?.trainer_comment, Object.values(r.progress?.done || {}).filter(Boolean).length, ...quizzes.map((q) => r.progress?.quiz?.[q] ?? "")];
       });
-      const csv = [head, ...lines].map((l) => l.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
+      // Une cellule qui commence par = + - @ (ou tabulation, retour chariot) serait lue comme une formule par le tableur :
+      // on la préfixe d'une apostrophe (« injection de formule »)
+      const cell = (v) => { const s = String(v ?? ""); return `"${(/^[=+\-@\t\r]/.test(s) ? "'" + s : s).replace(/"/g, '""')}"`; };
+      const csv = [head, ...lines].map((l) => l.map(cell).join(";")).join("\n");
       download(`bilan-${(session.client || session.title).toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${session.date || "session"}.csv`, csv);
     };
     $("#resF", box).onsubmit = async (e) => { e.preventDefault(); if (await guard(() => api.addResource(sid, { title: $("#rT", box).value.trim(), url: $("#rU", box).value.trim() }), "Ressource ajoutée.")) reload(); };
@@ -727,7 +735,7 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
     for (const act of session.activities) {
       if (["welcome", "projects"].includes(act.type)) continue;
       if (act.type === "quiz") {
-        const qs = QUIZ[act.quiz].q;
+        const qs = QUIZ[act.quiz]?.q || [];
         const rows = await Promise.all(qs.map((_, qi) => api.results(sid, `${act.id}#${qi}`)));
         if (!rows.some((r) => r.length)) continue;
         blocks.push(`<div class="res-block"><b>${T(act.titre)}</b>${qs.map((q, qi) => { const n = countOf(rows[qi]), good = rows[qi].filter((r) => r.value === q[2]).reduce((a, r) => a + r.n, 0); return `<div class="small prow"><span>${qi + 1}. ${T(q[0])}</span><b>${n ? Math.round((good / n) * 100) + NB + "%" : "—"}</b></div>`; }).join("")}<div class="small muted">Taux de bonnes réponses par question</div></div>`);

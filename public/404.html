@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Redirection…</title>
 <script>
-  // Lien court : …/CODE6 → …/#/join/CODE6 (GitHub Pages sert ce fichier pour toute adresse inconnue)
+  // Lien court : …/CODE (6 ou 8 caractères) → …/#/join/CODE (GitHub Pages sert ce fichier pour toute adresse inconnue)
   (function () {
     var parts = location.pathname.replace(/\/+$/, "").split("/");
     var code = parts.pop();
     var base = parts.join("/") + "/";
-    location.replace(/^[A-Za-z0-9]{6}$/.test(code) ? base + "#/join/" + code.toUpperCase() : base);
+    location.replace(/^[A-Za-z0-9]{6}(?:[A-Za-z0-9]{2})?$/.test(code) ? base + "#/join/" + code.toUpperCase() : base);
   })();
 </script></head><body></body></html>

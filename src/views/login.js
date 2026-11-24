@@ -192,8 +192,8 @@ export async function viewLogin(root, _p, { go }) {
     <div class="login-card card">
       <div class="kicker" style="color:var(--muted)">Espace stagiaire</div>
       <h1 style="color:var(--ink);margin:4px 0 6px">Rejoindre votre formation</h1>
-      <p class="muted">${T("Scannez le QR code projeté par votre formateur, ou saisissez le code de session à six caractères.")}</p>
-      <form id="sForm" class="askrow" style="margin-top:12px"><input type="text" id="sCode" maxlength="6" required class="mono" style="text-transform:uppercase" placeholder="Code de session" aria-label="Code de session"><button class="btn" type="submit">Continuer</button></form>
+      <p class="muted">${T("Scannez le QR code projeté par votre formateur, ou saisissez le code de session.")}</p>
+      <form id="sForm" class="askrow" style="margin-top:12px"><input type="text" id="sCode" maxlength="8" required class="mono" style="text-transform:uppercase" placeholder="Code de session" aria-label="Code de session"><button class="btn" type="submit">Continuer</button></form>
       <p class="small" style="margin-top:22px"><a href="#/formateur">Espace formateur →</a></p>
     </div>
   </div>`;

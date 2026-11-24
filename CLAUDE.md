@@ -61,8 +61,16 @@ Plateforme de formation de Gerald Holubowicz (journalism.design). Elle comprend 
 - Session close (`status = closed`) : le stagiaire ne garde que ressources, fiches, outils d'exercice (tous débloqués) et support (`CLOSED_TABS` dans `session.js`) ; plus de discussion, d'émargement ni de déroulé.
 - `resources`/`session_secrets` pour les ressources de la session, `ai_usage` pour le quota IA.
 
+## Sécurité (phase 0, migration `…_durcissement.sql`)
+- Fonction `access` : refuse les adresses de l'équipe (message explicite vers l'espace formateur), ne crée le compte qu'au premier code juste, n'enregistre le code qu'après l'envoi, essais comptés par `try_access_code` (atomique, 8 au plus), limites `throttle_hit` (IP, session, e-mails par jour : `ACCESS_LIMITS` dans `src/lib/accessRules.js`, bloc recopié dans la fonction et vérifié par `tests/access.test.mjs`), prénom contrôlé (`checkFirstName`). Refuse de tourner sans `CODE_PEPPER` ni `ALLOWED_ORIGIN`.
+- `sessions.access_mode` (`ouvert` / `invites`, Réglages de la session) : respecté par `access` et `join_session` (qui renvoie null au lieu d'une erreur, pour que la limite soit comptée ; l'API lève l'erreur). Nouveaux codes de session : 8 caractères (`gen_session_code`), les codes à 6 restent valables (lien court et champs acceptent 6 ou 8).
+- Droits : sans connexion, seules `session_public`, `trainer_code_configured` et `check_trainer_code` (limitée à 20 essais par quart d'heure) sont appelables ; `staff_role`, `throttle_hit`, `try_access_code`, `purge_access_codes` réservées au serveur. Toute nouvelle fonction interne doit être révoquée de `public`, `anon` et `authenticated` (test de liste blanche dans `sql.test.mjs`). `trainers.login_email` illisible hors équipe (`trainer_logins()`, colonnes explicites `TRAINER_COLS` dans `supabase.js`). Réponses écrites seulement par `submit_response`, salle ouverte. Codes d'exercice masqués aux stagiaires après clôture. Conversation supprimable par l'équipe seulement ; message rattaché à un fil de la même session (déclencheur).
+- Front : `safeUrl()` / `safeImg()` (`dom.js`) pour tout `href`/`src` venu de la base ; champs techniques du déroulé normalisés dans `modulesFor` (`safeModules`) ; export CSV protégé contre les formules ; CSP en `<meta>` au build (`vite.config.js`) ; back-office et écran refusés dans un cadre (`main.js`).
+- CI : `.github/workflows/ci.yml` (tests et build hors main), actions épinglées par SHA. Les tests lisent le dossier des migrations trié.
+- Non fait, volontairement : bcrypt pour le code formateur (pgcrypto absent des tests), `set_trainer_code` réservé à l'admin (casserait « Code oublié ? »), inscriptions libres coupées dans Supabase Auth, `slides_url` caché aux stagiaires (nécessaire au mode en ligne). Feuille de route complète (catalogue de formations, éditeurs, retours, assistant de déroulé) : voir le plan validé le 24 novembre 2026.
+
 ## Tester
-- `npm run test:sql` : migration et droits dans PGlite, avec simulation du schéma `auth`, puis aller-retour du conducteur Markdown sur D1/D2.
+- `npm run test:sql` : migrations (lues dans l'ordre du dossier) et droits dans PGlite avec simulation du schéma `auth`, migrations rejouées deux fois, aller-retour du conducteur, e-mail du code, règles d'accès.
 - `npm run build && npx vite preview --port 4173`, puis `python3 tests/e2e.py` : parcours complet en démo. La variable `CHROME` permet de choisir le navigateur.
 
 ## Points ouverts

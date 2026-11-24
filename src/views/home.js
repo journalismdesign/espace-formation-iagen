@@ -39,7 +39,7 @@ export async function viewHome(root, _p, { api, me, go }) {
     <div class="card todo" style="grid-column:1/-1">
       <div class="kicker-d">À faire maintenant</div>
       <h2 style="margin:6px 0">Rejoindre votre session</h2>
-      <p class="muted">${T("Votre formateur vous a donné un code à six caractères, ou un QR code à scanner. Si vous avez été invité·e par e-mail, la session apparaît ici automatiquement.")}</p>
+      <p class="muted">${T("Votre formateur vous a donné un code de session, ou un QR code à scanner. Si vous avez été invité·e par e-mail, la session apparaît ici automatiquement.")}</p>
       ${joinForm()}
     </div>`;
 
@@ -84,4 +84,4 @@ export async function viewHome(root, _p, { api, me, go }) {
   }));
 }
 
-const joinForm = () => `<form data-join class="askrow" style="max-width:380px;margin-top:8px"><input type="text" maxlength="6" placeholder="Code (ex. DEMO42)" aria-label="Code de session" class="mono" style="text-transform:uppercase" required><button class="btn" type="submit">Rejoindre</button></form>`;
+const joinForm = () => `<form data-join class="askrow" style="max-width:380px;margin-top:8px"><input type="text" maxlength="8" placeholder="Code (ex. DEMO42)" aria-label="Code de session" class="mono" style="text-transform:uppercase" required><button class="btn" type="submit">Rejoindre</button></form>`;

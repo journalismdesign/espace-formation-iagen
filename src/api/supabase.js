@@ -3,6 +3,9 @@
    que traduire les appels de l'interface. */
 import { createClient } from "@supabase/supabase-js";
 
+// Colonnes lisibles de trainers (login_email est réservé à l'équipe, lu par trainer_logins())
+const TRAINER_COLS = "id, name, photo, roles, tagline, tagline_sub, email, website, socials, created_at";
+
 export function createSupabaseApi(url, anonKey) {
   const sb = createClient(url, anonKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce" } });
   const ok = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
@@ -37,11 +40,18 @@ export function createSupabaseApi(url, anonKey) {
     },
 
     /* ---------- Profils des intervenant·es ---------- */
-    async listTrainers() { return ok(await sb.from("trainers").select("*").order("name")); },
+    // Adresses de connexion (login_email) : illisibles pour les stagiaires, lues par l'équipe via trainer_logins()
+    async listTrainers() {
+      const list = ok(await sb.from("trainers").select(TRAINER_COLS).order("name"));
+      const { data: logins } = await sb.rpc("trainer_logins"); // vide (ou refusé) hors équipe
+      const by = Object.fromEntries((logins || []).map((r) => [r.id, r.login_email]));
+      return list.map((t) => ({ ...t, login_email: by[t.id] ?? null }));
+    },
     async saveTrainer(t) {
       const row = { name: t.name, login_email: (t.login_email || "").trim().toLowerCase() || null, photo: t.photo ?? null, roles: t.roles || [], tagline: t.tagline || null, tagline_sub: t.tagline_sub || null, email: t.email || null, website: t.website || null, socials: t.socials || [] };
-      if (t.id) return ok(await sb.from("trainers").update(row).eq("id", t.id).select().single());
-      return ok(await sb.from("trainers").insert(row).select().single());
+      const saved = t.id ? ok(await sb.from("trainers").update(row).eq("id", t.id).select(TRAINER_COLS).single())
+        : ok(await sb.from("trainers").insert(row).select(TRAINER_COLS).single());
+      return { ...saved, login_email: row.login_email };
     },
     async deleteTrainer(id) { ok(await sb.from("trainers").delete().eq("id", id)); },
     /* ---------- Équipe (admin) ---------- */
@@ -133,7 +143,8 @@ export function createSupabaseApi(url, anonKey) {
     async duplicateSession(id, o = {}) {
       return ok(await sb.rpc("duplicate_session", { p_session: id, p_title: o.title || null, p_date: o.date || null, p_date2: o.date2 || null, p_invites: !!o.invites, p_secret_values: !!o.secretValues }));
     },
-    async joinSession(code) { return ok(await sb.rpc("join_session", { p_code: code })); },
+    // join_session renvoie null sans erreur quand l'entrée est refusée (pour que la limite anti-abus soit comptée)
+    async joinSession(code) { const sid = ok(await sb.rpc("join_session", { p_code: code })); if (!sid) throw new Error("Code inconnu, session close ou réservée aux personnes invitées."); return sid; },
     async memberCounts() {
       const rows = ok(await sb.from("session_members").select("session_id"));
       return rows.reduce((a, r) => ((a[r.session_id] = (a[r.session_id] || 0) + 1), a), {});

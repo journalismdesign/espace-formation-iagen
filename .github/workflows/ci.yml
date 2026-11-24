@@ -1,0 +1,27 @@
+# Vérifications à chaque envoi sur une autre branche que main et à chaque demande de fusion :
+# tests SQL (droits, migrations rejouables), conducteur, e-mail du code, règles d'accès, puis construction du site.
+# Sur main, le workflow « Publier le site » refait les mêmes vérifications avant de publier.
+# Actions épinglées par empreinte (SHA) et non par étiquette.
+name: Vérifications
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:sql
+      - run: npm run build
