@@ -73,6 +73,36 @@ export function trainerSlideHtml(session, t, cls = "", right = "") {
 }
 
 // d = { session, rows, participants, qrUrl, projects, branding, emQr, support, trainer }
+/* Avancer ou reculer d'une page (flèches du clavier, télécommande) : nouvel état « live » ou null.
+   Page du support : pages de la séquence (ou ±1 hors liste) ; séquence → sa première page ;
+   présentation Google Slides : page ±1. */
+export function stepLive(session, dir) {
+  const live = session.live || {}, now = new Date().toISOString();
+  const mod = live.module ? modulesFor(session).find((m) => m.id === live.module) : null;
+  const pages = mod ? parsePages(mod.pages) : [];
+  if ((live.view === "slide" || live.view === "module") && pages.length && session.slides_url) {
+    const i = live.view === "slide" ? pages.indexOf(live.slide) : -1;
+    if (i < 0 && live.view === "slide") { const p = Math.max(1, (live.slide || 1) + dir); return { ...live, view: "slide", slide: p, started_at: now }; }
+    const j = Math.min(pages.length - 1, Math.max(0, i + dir));
+    if (live.view === "slide" && j === i) return null;
+    return { ...live, view: "slide", slide: pages[j], started_at: now };
+  }
+  if (live.view === "slide" && session.slides_url) return { ...live, slide: Math.max(1, (live.slide || 1) + dir), started_at: now };
+  if (live.view === "deck") {
+    const d = (session.decks || []).find((x) => x.id === live.deck);
+    if (d && deckKind(d.url) === "slides") { const p = Math.max(1, (live.page || 1) + dir); return p === (live.page || 1) ? null : { ...live, page: p, started_at: now }; }
+  }
+  return null;
+}
+// Touches de pilotage : flèches, Page suivante/précédente (télécommandes de présentation), espace
+export function pageKey(e) {
+  const t = e.target, tag = t?.tagName;
+  if (e.altKey || e.ctrlKey || e.metaKey || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return 0;
+  if (["ArrowRight", "PageDown", "ArrowDown"].includes(e.key)) return 1;
+  if (["ArrowLeft", "PageUp", "ArrowUp"].includes(e.key)) return -1;
+  return 0;
+}
+
 /* Page suivante de ce qui est projeté : { src, label } ou null.
    Page du support → page suivante de la séquence (ou +1) ; séquence avec pages → sa première page ;
    présentation Google Slides → page +1. */
@@ -93,13 +123,13 @@ export function nextPage(session) {
 }
 
 export function screenHtml(d, compact = false) {
-  const { session, rows = [], participants = 0, qrUrl = "", projects = [], branding = null, emQr = null, support = null, evalQr = null, trainer = null, forTrainee = false } = d;
+  const { session, rows = [], participants = 0, qrUrl = "", projects = [], branding = null, emQr = null, support = null, evalQr = null, trainer = null, forTrainee = false, joinLabel = "" } = d;
   const cls = compact ? "compact" : "";
   const live = session.live || {};
   const isLive = session.status === "live";
   const act = isLive ? currentAct(session) : null;
   // salle fermée : seuls les écrans d'ouverture et de clôture se projettent (les stagiaires, eux, ne les voient pas)
-  const view = isLive || ["title", "trainer", "emargement", "support", "evaluation"].includes(live.view) ? live.view : null;
+  const view = isLive || ["title", "trainer", "emargement", "support", "evaluation", "qr"].includes(live.view) ? live.view : null;
   const mod = live.module ? modulesFor(session).find((m) => m.id === live.module) : null;
   const right = forTrainee ? "" : `Code ${esc(session.code)} · ${participants} participant${participants > 1 ? "s" : ""}`;
 
@@ -197,7 +227,16 @@ export function screenHtml(d, compact = false) {
       n || act.type === "cloud" ? main : `<div class="ds-wait">En attente des premières réponses…</div>${main}`, right, cls);
   }
 
+  // Accueil en salle : grand QR code, lien court et étapes de connexion (vue « qr » et écran d'attente)
+  const joinSlide = (kick, title, sub = "") => dark(session, `<div class="ds-joinbig">
+      <div class="ds-joinbig-txt"><div class="ds-kick">${T(kick)}</div><div class="ds-title">${T(title)}</div>${sub ? `<div class="ds-sub">${T(sub)}</div>` : ""}
+        <ol class="ds-steps"><li>${T("Scannez le QR code, ou tapez l'adresse :")}<b class="mono">${esc(joinLabel || session.code)}</b></li><li>${T("Indiquez votre prénom et votre e-mail")}</li><li>${T("Saisissez le code reçu par e-mail")}</li></ol></div>
+      ${qrUrl ? `<div class="ds-joinbig-qr"><img src="${qrUrl}" alt="QR code pour rejoindre"><b class="mono">${esc(session.code)}</b></div>` : ""}
+    </div>`, right, cls);
+  if (view === "qr") return joinSlide("Rejoindre l'espace de formation", "Connectez-vous", session.title);
+
   // Rien de lancé : écran d'attente
+  if (session.status !== "closed" && qrUrl) return joinSlide("En attente", "La formation va commencer", session.title);
   const next = session.activities?.[0];
   return dark(session, `<div class="ds-left">
       <div class="ds-kick">${session.status === "closed" ? "Fin de la formation" : "En attente"}</div>

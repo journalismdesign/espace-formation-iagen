@@ -6,7 +6,7 @@ import { keepDraft } from "../lib/draft.js";
 import { $, $$, T, esc, fr, NB, guard, toast, debounce, dateFr, download, copyText } from "../lib/dom.js";
 import { QUIZ } from "../data.js";
 import { ACT_TYPES, currentAct, respKey, renderResults, defaultActivities, countOf } from "../lib/activities.js";
-import { screenHtml, nextPage } from "../lib/screen.js";
+import { screenHtml, nextPage, stepLive, pageKey } from "../lib/screen.js";
 import { openSheet } from "../lib/content.js";
 import { joinUrl, joinUrlLabel, qr, showQr, parseEmails, openDuplicate } from "./admin.js";
 import { STATUS } from "./home.js";
@@ -39,7 +39,7 @@ const firstName = (r) => (r.full_name || r.email.split("@")[0]).split(" ")[0];
 
 // Données de l'écran projeté (réponses agrégées, participants, projets)
 // Écrans d'ouverture et de clôture (projetables salle fermée)
-export const OPENING_VIEWS = new Set(["title", "trainer", "emargement", "support", "evaluation"]);
+export const OPENING_VIEWS = new Set(["title", "trainer", "emargement", "support", "evaluation", "qr"]);
 
 export async function loadScreenData(api, session, { trainee = false } = {}) {
   const act = currentAct(session);
@@ -84,7 +84,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
   if ($("#dupBtn", root)) $("#dupBtn", root).onclick = () => openDuplicate(api, session, ctx.go);
   $$("[data-status]", root).forEach((b) => (b.onclick = async () => {
     const st = b.dataset.status;
-    await guard(() => api.updateSession(sid, { status: st, live: st === "live" ? { ...(session.live || {}), started: stamp(session.live) } : (session.live?.started ? { started: session.live.started } : {}) }), st === "live" ? "Salle ouverte : les stagiaires peuvent répondre." : "Salle fermée.");
+    await guard(() => api.updateSession(sid, { status: st, live: st === "live" ? { ...(session.live || {}), ...(!session.live?.view && !session.live?.act ? { view: "title", started_at: new Date().toISOString() } : {}), started: stamp(session.live) } : (session.live?.started ? { started: session.live.started } : {}) }), st === "live" ? "Salle ouverte : les stagiaires peuvent répondre." : "Salle fermée.");
     go(location.hash);
   }));
 
@@ -422,7 +422,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       </div>`;
     cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: true, compact: true }));
     $("#openScr", box).onclick = () => window.open(`#/ecran/${sid}`, "ecran-" + sid, "popup=yes,width=1280,height=760");
-    $("#pjQ", box).onclick = async () => showQr(session, await qr(joinUrl(session.code), 900));
+    $("#pjQ", box).onclick = () => show("qr"); // sur l'écran projeté (salle ouverte ou non)
     const tick = () => {
       const el = $("#clock", box); if (!el) return;
       const now = new Date(), hm = now.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).replace(":", " h ");
@@ -468,6 +468,13 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       return setLive(live);
     };
     let modDay = 1;
+    // Flèches du clavier (et télécommandes de présentation) : page suivante / précédente
+    const onKey = (e) => {
+      const dir = pageKey(e); if (!dir) return;
+      const nl = stepLive(session, dir); if (!nl) return;
+      e.preventDefault(); setLive(nl);
+    };
+    document.addEventListener("keydown", onKey); cleanups.push(() => document.removeEventListener("keydown", onKey));
     const launch = async (act) => {
       const live = { ...keep(), view: "activity", act: act.id, qi: 0, reveal: false, started_at: new Date().toISOString() };
       if (act.type === "vote") {
@@ -559,7 +566,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       $("[data-next]", box)?.addEventListener("click", () => launch(session.activities[session.activities.findIndex((a) => a.id === act.id) + 1]));
       $("[data-stop]", box)?.addEventListener("click", () => setLive({ ...keep(), view: live.module ? "module" : null }));
       const sd = await loadScreenData(api, session);
-      morph($("#preview", box), screenHtml({ ...sd, session, qrUrl }, true)); // sans clignotement
+      morph($("#preview", box), screenHtml({ ...sd, session, qrUrl, joinLabel: joinUrlLabel(session.code) }, true)); // sans clignotement
       // Aperçu de la page suivante (pour le formateur seulement)
       const nx = nextPage(session);
       $("#nextBox", box).hidden = !nx?.src;

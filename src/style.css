@@ -912,3 +912,13 @@ select:disabled{background-image:none;padding-right:12px !important}
 .pill.em{background:var(--oktint);color:var(--ok)}
 .mod.em-slot.now .mhead{border-color:var(--ok);box-shadow:0 0 0 3px var(--oktint)}
 .ok-btn{background:var(--ok);border-color:var(--ok);color:#fff}
+
+/* Slide « Rejoindre » (vue qr et écran d'attente) : grand QR, adresse courte et étapes */
+.ds-joinbig{position:absolute;inset:0;display:grid;grid-template-columns:1.25fr 1fr;align-items:center;gap:4cqw;padding:0 5cqw 4cqw}
+.ds-joinbig-txt .ds-title{font-size:4.2cqw;margin:.6cqw 0 1cqw}
+.ds-steps{margin:2.2cqw 0 0;padding-left:2.4cqw;font-size:1.75cqw;line-height:1.5;color:#fff}
+.ds-steps li{margin-bottom:.9cqw}
+.ds-steps b{display:block;font-size:2.4cqw;color:var(--yel);margin-top:.3cqw;word-break:break-all}
+.ds-joinbig-qr{justify-self:center;background:#fff;border-radius:1cqw;padding:2cqw;display:flex;flex-direction:column;align-items:center;gap:1cqw;color:var(--dnavy)}
+.ds-joinbig-qr img{width:26cqw;height:26cqw;display:block}
+.ds-joinbig-qr b{font-size:3cqw;letter-spacing:.3cqw}

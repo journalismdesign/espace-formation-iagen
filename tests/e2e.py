@@ -151,6 +151,19 @@ async def main():
         assert "page" in (await tr.inner_text("#nextLbl")).lower()
         ck = await tr.inner_text("#clock")
         assert " h " in ck and "écoulé" in ck.lower(), "horloge du pilotage : " + ck
+        # Flèches du clavier : page suivante puis retour
+        p0 = await tr.inner_text(".slidebar .chip.on")
+        await tr.locator("body").press("ArrowRight"); await tr.wait_for_timeout(600)
+        p1 = await tr.inner_text(".slidebar .chip.on")
+        assert int(p1) == int(p0) + 1, f"flèche droite : {p0} → {p1}"
+        await tr.locator("body").press("ArrowLeft"); await tr.wait_for_timeout(600)
+        assert await tr.inner_text(".slidebar .chip.on") == p0, "flèche gauche"
+        # « Projeter le QR code » : grand QR et adresse sur l'écran projeté (aperçu)
+        await tr.click("#pjQ"); await tr.wait_for_selector("#preview .ds-joinbig-qr img", timeout=5000)
+        assert "DEMO42" in await tr.inner_text("#preview")
+        await shot(tr, "05f-qr-projete")
+        await tr.click("[data-mod='j1-etat']"); await tr.wait_for_selector("[data-page]")
+        await tr.click("[data-page] >> nth=2"); await tr.wait_for_selector(".slidebar .chip.on")
         await st.wait_for_selector("#liveCard:has-text('page')", timeout=5000)
         await shot(tr, "05a-formateur-pilotage"); await shot(st, "04a-stagiaire-sequence")
         await st.wait_for_timeout(800); ptxt = await st.inner_text("#parcours")
