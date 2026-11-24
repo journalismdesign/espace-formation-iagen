@@ -24,6 +24,8 @@ export function createSupabaseApi(url, anonKey) {
 
     /* ---------- Accès stagiaire par code personnel (fonction Edge « access ») ---------- */
     async sessionPublic(code) { return ok(await sb.rpc("session_public", { p_code: code }))?.[0] || null; },
+    // Réveille la fonction Edge « access » (démarrage à froid) pendant que le stagiaire saisit son nom
+    warmAccess() { fetch(`${url}/functions/v1/access`, { method: "OPTIONS" }).catch(() => {}); },
     async requestAccess(sid, first_name, email) { return invoke("access", { action: "request", session_id: sid, first_name, email }); },
     async verifyAccess(sid, email, code) {
       const { token_hash } = await invoke("access", { action: "verify", session_id: sid, email, code });
@@ -208,11 +210,13 @@ export function createSupabaseApi(url, anonKey) {
     async deletePost(id) { ok(await sb.from("posts").delete().eq("id", id)); },
 
     /* ---------- Temps réel ---------- */
-    watch(sid, cb) {
+    // tables : limiter l'abonnement (côté stagiaire, la session seule) — chaque table suivie coûte au serveur
+    // une vérification des droits par abonné et par écriture
+    watch(sid, cb, tables = ["sessions", "responses", "threads", "posts", "projects", "session_members"]) {
       const ch = sb.channel("s-" + sid + "-" + Math.random().toString(36).slice(2, 7));
       const on = (table, filter) => ch.on("postgres_changes", { event: "*", schema: "public", table, filter }, (p) => cb({ table, payload: p }));
-      on("sessions", `id=eq.${sid}`);
-      ["responses", "threads", "posts", "projects", "session_members"].forEach((t) => on(t, `session_id=eq.${sid}`));
+      if (tables.includes("sessions")) on("sessions", `id=eq.${sid}`);
+      tables.filter((t) => t !== "sessions").forEach((t) => on(t, `session_id=eq.${sid}`));
       ch.subscribe();
       return () => sb.removeChannel(ch);
     },

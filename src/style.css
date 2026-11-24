@@ -889,3 +889,6 @@ select:disabled{background-image:none;padding-right:12px !important}
 .side-em b{color:#fff}
 /* Pastille d'état : toujours sur une ligne */
 .state{white-space:nowrap}
+/* Page suivante préchargée : chargée et peinte, mais invisible et inerte sous la page affichée */
+.deck-slide.frame>iframe[data-preload]{position:absolute;inset:0;opacity:0;pointer-events:none;z-index:0}
+.deck-slide.frame>iframe:not([data-preload]){position:relative;z-index:1}

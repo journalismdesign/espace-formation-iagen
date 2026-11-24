@@ -368,6 +368,7 @@ export function createDemoApi({ defaultActivities }) {
     },
     async deletePost(id) { db.posts = db.posts.filter((p) => p.id !== id); commit(); },
 
+    warmAccess() {},
     watch(_sid, cb) { const f = () => cb({ table: "*" }); listeners.add(f); return () => listeners.delete(f); },
 
     // Pas de modèle de langage en démo : des réponses types, signalées comme telles

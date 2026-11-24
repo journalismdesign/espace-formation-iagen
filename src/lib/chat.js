@@ -151,7 +151,7 @@ export function mountChat(el, { api, sid, me, staff = false, compact = false }) 
       await refreshMsgs();
     }
   }, 250);
-  const unwatch = api.watch(sid, onChange);
+  const unwatch = api.watch(sid, onChange, ["threads", "posts"]);
 
   (async () => {
     await loadThreads();

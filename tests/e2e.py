@@ -140,6 +140,12 @@ async def main():
         await st.wait_for_selector("#liveCard h3:has-text('Étude de cas')", timeout=5000)
         await tr.click("[data-mod='j1-etat']"); await tr.wait_for_selector("[data-page]")
         await tr.click("[data-page] >> nth=2"); await tr.wait_for_selector("#preview iframe")
+        # Page suivante préchargée ; en avançant, l'iframe préchargée devient la page affichée (pas de rechargement)
+        await tr.wait_for_selector("#preview iframe[data-preload]", state="attached")
+        await tr.evaluate("document.querySelector('#preview iframe[data-preload]').__marque = 1")
+        await tr.click("[data-sl='next']"); await tr.wait_for_timeout(700)
+        assert await tr.evaluate("[...document.querySelectorAll('#preview iframe:not([data-preload])')].some(f => f.__marque === 1)"), "page préchargée réutilisée"
+        assert await tr.locator("#preview iframe[data-preload]").count() == 1, "nouvelle page préchargée"
         await st.wait_for_selector("#liveCard:has-text('page')", timeout=5000)
         await shot(tr, "05a-formateur-pilotage"); await shot(st, "04a-stagiaire-sequence")
         await st.wait_for_timeout(800); ptxt = await st.inner_text("#parcours")

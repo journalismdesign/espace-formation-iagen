@@ -84,7 +84,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   // Clôture ou réouverture pendant la consultation : on redessine avec les bons onglets
   const status0 = session.status;
   onSession.add(() => { if (!trainerPreview && (session.status === "closed") !== (status0 === "closed")) ctx.go(location.hash); });
-  cleanups.push(api.watch(sid, (e) => { if (e.table === "sessions" || e.table === "*") refreshSession(); }));
+  cleanups.push(api.watch(sid, (e) => { if (e.table === "sessions" || e.table === "*") refreshSession(); }, ["sessions"]));
   // Émargement : bouton vert sous « En direct », affiché pendant les créneaux (début de journée et reprise
   // de l'après-midi, 30 min chacun) ou quand le formateur projette l'émargement ; toujours en aperçu formateur
   const drawEm = () => {

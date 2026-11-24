@@ -16,6 +16,7 @@ export async function viewEntry(root, [code], ctx) {
     root.innerHTML = slide(`<div class="slide-title">Session introuvable</div><p class="slide-sub">${T("Ce code ne correspond à aucune formation en cours. Vérifiez le lien ou le QR code fourni par votre formateur.")}</p><a class="btn light" href="#/login">Saisir un code</a>`);
     return;
   }
+  api.warmAccess?.(); // la fonction d'envoi du code démarre pendant la lecture de la slide de titre
   const br = await resolveBranding(api, pub);
   let user = await api.currentUser();
   let step = "title", email = "", first = "", demoCode = null;

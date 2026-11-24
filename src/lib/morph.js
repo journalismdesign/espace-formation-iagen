@@ -28,6 +28,7 @@ function morphChildren(from, to) {
 
 function morphNode(a, b) {
   if (a.nodeType !== b.nodeType || a.nodeName !== b.nodeName) { a.replaceWith(b.cloneNode(true)); return; }
+  if (a.nodeType === 1 && a.classList.contains("frame") && b.classList?.contains("frame")) { morphFrame(a, b); return; }
   if (a.nodeType === 3 || a.nodeType === 8) { if (a.nodeValue !== b.nodeValue) a.nodeValue = b.nodeValue; return; }
   if (a.nodeType !== 1) return;
   if (a.nodeName === "IFRAME") { morphIframe(a, b); return; }
@@ -55,4 +56,30 @@ function morphIframe(a, b) {
   };
   fresh.addEventListener("load", () => setTimeout(reveal, 150), { once: true }); // court délai : Google Slides finit de peindre après « load »
   setTimeout(reveal, 4000); // filet de sécurité si « load » ne vient jamais
+}
+
+/* Cadre de présentation : une page affichée + la suivante préchargée (data-preload), invisible.
+   Si la page demandée est déjà chargée (préchargement), on l'affiche aussitôt ; sinon fondu classique. */
+function morphFrame(a, b) {
+  for (const { name } of [...a.attributes]) if (!b.hasAttribute(name)) a.removeAttribute(name);
+  for (const { name, value } of [...b.attributes]) if (a.getAttribute(name) !== value) a.setAttribute(name, value);
+  const want = [...b.children];
+  const shown = want.find((x) => x.nodeName === "IFRAME" && !x.hasAttribute("data-preload"));
+  const pre = want.find((x) => x.hasAttribute("data-preload"));
+  if (!shown) { morphChildren(a, b); return; } // pas de présentation (message à la place)
+  const live = [...a.querySelectorAll(":scope > iframe")].filter((f) => !f.hasAttribute(LEAVING));
+  [...a.children].forEach((c) => { if (c.nodeName !== "IFRAME") c.remove(); }); // ancien contenu non-iframe
+  const cur = live.find((f) => !f.hasAttribute("data-preload"));
+  const ready = live.find((f) => f.getAttribute("src") === shown.getAttribute("src"));
+  if (ready && ready !== cur) {
+    // la page préchargée devient la page affichée, instantanément
+    ready.removeAttribute("data-preload"); ready.removeAttribute("aria-hidden"); ready.removeAttribute("tabindex");
+    ready.title = shown.title; ready.setAttribute("allowfullscreen", "");
+    if (cur) cur.remove();
+  } else if (cur) morphIframe(cur, shown);
+  else a.appendChild(shown.cloneNode(true));
+  // préchargement de la page d'après
+  const oldPre = [...a.querySelectorAll(":scope > iframe[data-preload]")];
+  if (pre && oldPre[0]?.getAttribute("src") === pre.getAttribute("src")) oldPre.slice(1).forEach((f) => f.remove());
+  else { oldPre.forEach((f) => f.remove()); if (pre) a.appendChild(pre.cloneNode(true)); }
 }

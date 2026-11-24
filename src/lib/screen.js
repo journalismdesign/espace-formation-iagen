@@ -10,7 +10,7 @@ import { QUIZ } from "../data.js";
 import { currentAct, quizQ, countOf } from "./activities.js";
 import { datesFr, hhmm, titleDate, samsaHtml, pickLogo, emargementLabels, MAIL_ICON, evaluationInfo } from "./brand.js";
 import { modulesFor, typeLabel } from "./content.js";
-import { slideEmbedUrl, deckEmbedUrl } from "../deck.js";
+import { slideEmbedUrl, deckEmbedUrl, deckKind, parsePages } from "../deck.js";
 import { skinFooter } from "./skin.js";
 
 const LETTERS = "ABCDEFGHIJKL";
@@ -96,15 +96,21 @@ export function screenHtml(d, compact = false) {
 
   // Page du support Google Slides
   if (view === "slide") {
-    const src = slideEmbedUrl(session.slides_url, live.slide || 1);
-    return `<div class="deck-slide frame ${cls}">${src ? `<iframe src="${esc(src)}" title="Support, page ${live.slide}" allowfullscreen></iframe>` : dark(session, `<div class="ds-kick">Support</div><div class="ds-title">Aucune présentation associée</div><div class="ds-sub">Ajoutez le lien Google Slides dans l'onglet Réglages.</div>`, right)}</div>`;
+    const cur = live.slide || 1;
+    const src = slideEmbedUrl(session.slides_url, cur);
+    // Page suivante préchargée, invisible : quand le formateur avance, elle s'affiche sans attendre Google
+    const pages = mod ? parsePages(mod.pages) : [];
+    const nxt = pages.includes(cur) ? pages[pages.indexOf(cur) + 1] || null : cur + 1;
+    const pre = nxt ? slideEmbedUrl(session.slides_url, nxt) : null;
+    return `<div class="deck-slide frame ${cls}">${src ? `<iframe src="${esc(src)}" title="Support, page ${cur}" allowfullscreen></iframe>${pre ? `<iframe src="${esc(pre)}" title="Page suivante (préchargée)" data-preload aria-hidden="true" tabindex="-1"></iframe>` : ""}` : dark(session, `<div class="ds-kick">Support</div><div class="ds-title">Aucune présentation associée</div><div class="ds-sub">Ajoutez le lien Google Slides dans l'onglet Réglages.</div>`, right)}</div>`;
   }
 
   // Présentation supplémentaire (Google Slides par page, ou PDF dans la visionneuse Drive)
   if (view === "deck") {
     const d = (session.decks || []).find((x) => x.id === live.deck);
     const src = d ? deckEmbedUrl(d.url, live.page || 1) : null;
-    return `<div class="deck-slide frame ${cls}">${src ? `<iframe src="${esc(src)}" title="${esc(d.title)}" allowfullscreen allow="autoplay"></iframe>` : dark(session, `<div class="ds-kick">Présentation</div><div class="ds-title">Présentation introuvable</div>`, right)}</div>`;
+    const pre = d && deckKind(d.url) === "slides" ? deckEmbedUrl(d.url, (live.page || 1) + 1) : null;
+    return `<div class="deck-slide frame ${cls}">${src ? `<iframe src="${esc(src)}" title="${esc(d.title)}" allowfullscreen allow="autoplay"></iframe>${pre ? `<iframe src="${esc(pre)}" title="Page suivante (préchargée)" data-preload aria-hidden="true" tabindex="-1"></iframe>` : ""}` : dark(session, `<div class="ds-kick">Présentation</div><div class="ds-title">Présentation introuvable</div>`, right)}</div>`;
   }
 
   // Séquence du déroulé : comme les séparateurs de partie du support
