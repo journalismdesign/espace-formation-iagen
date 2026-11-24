@@ -228,9 +228,12 @@ export function screenHtml(d, compact = false) {
   }
 
   // Accueil en salle : grand QR code, lien court et étapes de connexion (vue « qr » et écran d'attente)
+  // L'adresse tient sur une ligne : au-delà de 36 caractères, la police rétrécit (chasse fixe : 0,6 em par caractère)
+  const addr = joinLabel || session.code || "";
+  const addrSize = Math.min(2.4, 52 / (Math.max(addr.length, 1) * 0.6)).toFixed(2);
   const joinSlide = (kick, title, sub = "") => dark(session, `<div class="ds-joinbig">
       <div class="ds-joinbig-txt"><div class="ds-kick">${T(kick)}</div><div class="ds-title">${T(title)}</div>${sub ? `<div class="ds-sub">${T(sub)}</div>` : ""}
-        <ol class="ds-steps"><li>${T("Scannez le QR code, ou tapez l'adresse :")}<b class="mono">${esc(joinLabel || session.code)}</b></li><li>${T("Indiquez votre prénom et votre e-mail")}</li><li>${T("Saisissez le code reçu par e-mail")}</li></ol></div>
+        <ol class="ds-steps"><li>${T("Scannez le QR code, ou tapez l'adresse :")}<b class="mono ds-addr" style="font-size:${addrSize}cqw">${esc(addr)}</b></li><li>${T("Indiquez votre prénom et votre e-mail")}</li><li>${T("Saisissez le code reçu par e-mail")}</li></ol></div>
       ${qrUrl ? `<div class="ds-joinbig-qr"><img src="${qrUrl}" alt="QR code pour rejoindre"><b class="mono">${esc(session.code)}</b></div>` : ""}
     </div>`, right, cls);
   if (view === "qr") return joinSlide("Rejoindre l'espace de formation", "Connectez-vous", session.title);

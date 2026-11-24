@@ -77,11 +77,9 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       <div class="chips"><span class="state ${session.status}" id="stateP">${STATUS[session.status]}</span><span class="pill" id="rtP"><span class="dot rt"></span>Temps réel</span></div>
     </div>
     <div class="head-actions"><a class="btn ghost sm" href="#/s/${sid}" title="Voir l'espace tel que le voient les stagiaires">Voir côté stagiaire</a>
-      ${isAdmin(ctx.me) ? `<button class="btn ghost sm" id="dupBtn" title="Créer une nouvelle formation à partir de celle-ci">Dupliquer</button>` : ""}
       ${session.status === "draft" ? `<button class="btn sm" data-status="live">Ouvrir la salle</button>` : session.status === "live" ? `<button class="btn sm ghost" data-status="draft">Fermer la salle</button>` : `<button class="btn sm ghost" data-status="live">Rouvrir</button>`}</div></div>
     <div class="phases">${PHASES.map(([k, l]) => `<a href="#/admin/s/${sid}/${k}"${k === phase ? ' aria-current="page"' : ""}>${phaseLabel(k, l, session)}</a>`).join("")}</div>
     <div id="phase"></div>`;
-  if ($("#dupBtn", root)) $("#dupBtn", root).onclick = () => openDuplicate(api, session, ctx.go);
   $$("[data-status]", root).forEach((b) => (b.onclick = async () => {
     const st = b.dataset.status;
     await guard(() => api.updateSession(sid, { status: st, live: st === "live" ? { ...(session.live || {}), ...(!session.live?.view && !session.live?.act ? { view: "title", started_at: new Date().toISOString() } : {}), started: stamp(session.live) } : (session.live?.started ? { started: session.live.started } : {}) }), st === "live" ? "Salle ouverte : les stagiaires peuvent répondre." : "Salle fermée.");
@@ -429,9 +427,11 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const st = session.live?.started?.day === parisDay() ? new Date(session.live.started.at) : null;
       const hmOf = (d) => d.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).replace(":", " h ");
       const dur = (ms) => { const m = Math.max(0, Math.floor(ms / 60000)); return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m} min`; };
-      const sub = !st ? (session.status === "live" ? "salle ouverte" : "salle fermée")
-        : session.status === "live" ? `écoulé : ${dur(now - st)} (depuis ${hmOf(st)})` : `salle fermée · journée commencée à ${hmOf(st)}`;
-      const html = `<b>${hm}</b><span>${fr(sub)}</span>`;
+      // Même dessin que le minuteur de pratique des stagiaires : pavé sombre, libellé à gauche, heure en chasse fixe
+      const on = session.status === "live";
+      const state = on ? `<span class="state live">En direct</span>` : `<span class="clk-state">Salle fermée</span>`;
+      const sub = !st ? "" : on ? `écoulé ${dur(now - st)} · depuis ${hmOf(st)}` : `journée commencée à ${hmOf(st)}`;
+      const html = `<span class="clk-lbl">${state}${sub ? `<span>${fr(sub)}</span>` : ""}</span><b class="t">${hm}</b>`;
       if (el.innerHTML !== html) el.innerHTML = html;
       el.classList.toggle("on", session.status === "live");
     };

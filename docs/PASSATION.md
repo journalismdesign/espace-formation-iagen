@@ -42,7 +42,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 
 - Migrations `roles_admin` et `reponses` exécutées ; configuration d'URL pour formation.journalism.design ; secret `ALLOWED_ORIGIN` ; fonction `access` redéployée.
 - Limites d'authentification relevées à 150 (*token verifications* et *sign ups and sign ins*), pour 15 stagiaires derrière le même Wi-Fi.
-- **À confirmer** : exécution des trois migrations du 24 novembre, dans l'ordre `…_discussion.sql`, `…_en_ligne.sql`, `…_duplication.sql`. Gerald n'a pas confirmé explicitement.
+- Migrations du 24 novembre exécutées (confirmé par Gerald le 24 novembre 2026) : `…_discussion.sql`, `…_en_ligne.sql`, `…_duplication.sql`.
 
 ## Points ouverts et pistes non traitées
 
