@@ -8,7 +8,7 @@ import { renderParcours, parcoursPct, ficheById, ficheHtml, bindRefs, openPrompt
 import { currentAct, renderInput, renderResults, respKey } from "../lib/activities.js";
 import { renderCadrage } from "./cadrage.js";
 import { STATUS } from "./home.js";
-import { modulesFor } from "../lib/content.js";
+import { modulesFor, emargementOpen } from "../lib/content.js";
 import { resolveBranding, logosHtml, datesFr, emargementQr, emargementLabels, emargementStepsHtml, evaluationQr, evaluationHtml } from "../lib/brand.js";
 import { supportBlock } from "./entry.js";
 import { mountChat } from "../lib/chat.js";
@@ -57,14 +57,15 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
       ${logosHtml(br, "sm")}
       <div class="side-head"><div><b>${T(session.title)}</b><div class="small muted">${T(datesFr(session))}</div></div></div>
       <div class="side-live${live() ? " on" : ""}" id="sideLive"><span class="dot${live() ? " on" : ""}"></span>${live() ? "En direct" : STATUS[session.status]}</div>
+      <div id="sideEm"></div>
 ${closedView ? `      <p class="small muted" style="margin:0 0 12px">${T("La formation est terminée. Vous gardez l'accès aux ressources, aux fiches pratiques, aux exercices et au support.")}</p>` : `      <div class="side-label">Le parcours</div>
       <div class="side-path">
-${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "cadrage" ? "cur" : ""}"><span class="ring${project?.status === "validated" ? " on" : ""}">${project?.status === "validated" ? "✓" : ""}</span><div><b>Mon cadrage</b><div class="small muted">${project?.status === "validated" ? "Cas validé" : "Avant la formation"}</div></div></a>` : ""}
         <a href="#/s/${sid}/direct" class="${tab === "direct" ? "cur" : ""}"><span class="ring"></span><div><b>Le jour J</b><div class="small muted">La formation en direct</div></div></a>
+${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "cadrage" ? "cur" : ""}"><span class="ring${project?.status === "validated" ? " on" : ""}">${project?.status === "validated" ? "✓" : ""}</span><div><b>Mon cadrage</b><div class="small muted">${project?.status === "validated" ? "Cas validé" : "Avant la formation"}</div></div></a>` : ""}
       </div>`}
       <div id="sideExtra"></div>
       <div class="side-label">Ressources</div>
-      <nav class="side-nav">${shownTabs.filter(([k]) => !["direct", "cadrage"].includes(k)).map(([k, l]) => `<a href="#/s/${sid}/${k}"${k === tab ? ' aria-current="page"' : ""}${k === "outils" ? ` id="navOutils"${toolsVisible() ? "" : " hidden"}` : ""}>${l}<span>›</span></a>`).join("")}</nav>
+      <nav class="side-nav">${shownTabs.filter(([k]) => !["direct", "cadrage", "emargement"].includes(k)).map(([k, l]) => `<a href="#/s/${sid}/${k}"${k === tab ? ' aria-current="page"' : ""}${k === "outils" ? ` id="navOutils"${toolsVisible() ? "" : " hidden"}` : ""}>${l}<span>›</span></a>`).join("")}</nav>
       ${trainerPreview ? `<p class="small muted" style="margin-top:14px">Aperçu formateur : vos clics ne sont pas enregistrés. <a href="#/admin/s/${sid}">Retour au back-office</a></p>` : ""}
     </aside>
     <section class="sidemain" id="tabBody"></section>`;
@@ -84,6 +85,19 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   const status0 = session.status;
   onSession.add(() => { if (!trainerPreview && (session.status === "closed") !== (status0 === "closed")) ctx.go(location.hash); });
   cleanups.push(api.watch(sid, (e) => { if (e.table === "sessions" || e.table === "*") refreshSession(); }));
+  // Émargement : bouton vert sous « En direct », affiché pendant les créneaux (début de journée et reprise
+  // de l'après-midi, 30 min chacun) ou quand le formateur projette l'émargement ; toujours en aperçu formateur
+  const drawEm = () => {
+    const box = $("#sideEm", root); if (!box) return;
+    const slot = closedView ? null : emargementOpen(session);
+    const projected = session.status === "live" && session.live?.view === "emargement";
+    const show = !closedView && (trainerPreview || slot || projected);
+    const html = show ? `<a class="side-em${tab === "emargement" ? " cur" : ""}" href="#/s/${sid}/emargement"><span>✍</span><span><b>Émargement</b><small>${T(slot ? `${slot.label.replace("Émargement ", "")} · jusqu'à ${hm30(slot.t)}` : projected ? "Le formateur l'affiche maintenant" : "Aperçu : visible aux créneaux prévus")}</small></span><span>›</span></a>` : "";
+    if (box.innerHTML !== html) box.innerHTML = html;
+  };
+  const hm30 = (t) => { const [h, m] = t.split(":").map(Number), x = h * 60 + m + 30; return `${Math.floor(x / 60)} h ${String(x % 60).padStart(2, "0")}`; };
+  drawEm(); onSession.add(drawEm);
+  const emTimer = setInterval(drawEm, 30000); cleanups.push(() => clearInterval(emTimer));
 
   if (tab === "direct") await tabDirect();
   else if (tab === "cadrage" && !hasCadrage(session)) ctx.go(`#/s/${sid}/direct`); // pas de cadrage en une journée

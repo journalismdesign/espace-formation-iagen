@@ -13,7 +13,7 @@ import { STATUS } from "./home.js";
 import { logoPair } from "./settings.js";
 import { STEPS, SENSIB, VERIF } from "./cadrageModel.js";
 import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml, EM2_DEFAULT, evaluationQr, EVAL_TITLE, EVAL_TEXT } from "../lib/brand.js";
-import { modulesFor, daysOf, typeLabel, hasCadrage } from "../lib/content.js";
+import { modulesFor, daysOf, typeLabel, hasCadrage, emargementSlots } from "../lib/content.js";
 import { parseConducteur, conducteurMarkdown } from "../lib/conducteur.js";
 import { loadSkins, skinFor, applySkin, currentSkin } from "../lib/skin.js";
 import { samsaHtml } from "../lib/brand.js";
@@ -470,7 +470,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const act = currentAct(session), live = session.live || {};
       $("#hint", box).textContent = session.status === "live" ? "La salle est ouverte. Chaque clic change l'écran projeté et ce que voient les stagiaires dans leur espace." : "La salle est fermée : les écrans d'ouverture et de clôture se projettent sans l'ouvrir, les stagiaires ne les verront qu'à l'ouverture de la salle. Lancer une séquence ou une activité ouvre la salle.";
       const V = session.status === "live" || OPENING_VIEWS.has(live.view) ? live.view : null;
-      $("#opening", box).innerHTML = [["title", "Slide de titre", "Titre, logos, dates, QR"], ["trainer", "Formateur", session.trainer_id ? "Fiche de l'intervenant" : "À choisir"], ["emargement", "Émargement", session.emargement_url || session.emargement_qr ? "QR de l'organisme" : "À configurer"], ["support", "Support", "Annonce du téléchargement"], ["evaluation", "Évaluation", session.evaluation_url || session.evaluation_qr ? "QR et lien du formulaire" : "À configurer"], ["", "Écran d'attente", "Rien de projeté"]]
+      $("#opening", box).innerHTML = [["title", "Slide de titre", "Titre, logos, dates, QR"], ["emargement", "Émargement", session.emargement_url || session.emargement_qr ? "QR de l'organisme" : "À configurer"], ["trainer", "Formateur", session.trainer_id ? "Fiche de l'intervenant" : "À choisir"], ["support", "Support", "Annonce du téléchargement"], ["evaluation", "Évaluation", session.evaluation_url || session.evaluation_qr ? "QR et lien du formulaire" : "À configurer"], ["", "Écran d'attente", "Rien de projeté"]]
         .map(([v, l, sub]) => `<button class="act${(V || "") === v && !act ? " on" : ""}" data-view="${v}"><span>${v ? "▣" : "□"}</span>${l}<small>${T(sub)}</small></button>`).join("");
       $$("[data-view]", box).forEach((b) => (b.onclick = () => {
         // Écran « Formateur » sans fiche choisie : on prévient au lieu de projeter une slide vide
@@ -478,18 +478,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         return show(b.dataset.view || null);
       }));
       // Émargements : arrivée du matin (début de journée) et reprise de l'après-midi (fin du déjeuner)
-      const all = modulesFor(session);
-      const days = session.format === "2" ? [1, 2] : [1];
-      const slots = days.flatMap((d) => {
-        const dm = all.filter((m) => (m.day || 1) === d);
-        const lunch = dm.find((m) => m.type === "pause" && /jeuner/i.test(m.titre));
-        const am = String(session.start_time || dm[0]?.t[0] || "09:30").slice(0, 5);
-        const pm = lunch ? lunch.t[1] : "13:30";
-        const date = d === 2 ? session.date2 : session.date;
-        const out = [{ key: `j${d}-matin`, day: d, t: am, label: "Émargement du matin", date }, { key: `j${d}-aprem`, day: d, t: pm, label: "Émargement de l'après-midi", date }];
-        if (d === days[days.length - 1]) { const last = dm.filter((m) => m.type !== "pause").pop(); if (last) out.push({ key: `j${d}-eval`, day: d, t: last.t[0], label: "Évaluation de fin de stage", date, kind: "evaluation" }); }
-        return out;
-      });
+      const slots = emargementSlots(session);
       const emDone = live.emarg || {};
       const showEm = (k) => show(k.endsWith("-eval") ? "evaluation" : "emargement", { emKey: k, emarg: { ...emDone, [k]: new Date().toISOString() } });
       // Rappel : de 15 min avant à 30 min après l'heure prévue, le jour J

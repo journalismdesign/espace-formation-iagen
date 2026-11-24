@@ -21,7 +21,7 @@ Plateforme de formation de Gerald Holubowicz (journalism.design). Elle comprend 
 - Parcours stagiaire : toute séquence antérieure à celle lancée par le formateur est validée d'office, en vert (« ✓ Validé »), et compte dans la progression.
 - Émargement en deux étapes (page « Informations générales » du support) : « Pour Samsa.fr » avec le QR de l'organisme, puis « Pour <client> » avec le lien reçu par e-mail. Le libellé client est modifiable (`sessions.emargement_label`, sinon le nom de l'entreprise). Le second émargement peut être masqué (`emargement2_enabled`) et son texte modifié (`emargement2_text`).
 - « En direct » : toujours en rouge (`--live`), avec un rond qui clignote.
-- Émargement : deux créneaux par jour, à l'arrivée (heure de début) et à la reprise (fin de la pause déjeuner). Ils sont insérés dans le déroulé du pilotage, avec un rappel de 15 min avant à 30 min après. Ce qui a été présenté est conservé dans `live.emarg`.
+- Émargement : deux créneaux par jour, à l'arrivée (heure de début) et à la reprise (fin de la pause déjeuner). Ils sont insérés dans le déroulé du pilotage, avec un rappel de 15 min avant à 30 min après. Ce qui a été présenté est conservé dans `live.emarg`. Créneaux calculés par `emargementSlots(session)` (`content.js`). Côté stagiaire, « Émargement » n'est plus dans les ressources : bouton vert sous « En direct », visible de l'heure prévue à 30 min après (`emargementOpen`, heure de Paris), quand le formateur projette l'émargement, et toujours en aperçu formateur. Parcours : « Le jour J » au-dessus de « Mon cadrage ».
 - Sobriété : pas de dépendance lourde, pas de traceur, pas de ressource tierce au chargement.
 
 ## Parcours et pilotage (v3)

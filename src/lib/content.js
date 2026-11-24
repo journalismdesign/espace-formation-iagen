@@ -7,6 +7,32 @@ import { T, esc, fr, $, $$, NB, norm, mins, hfr, fmtMin, bindCopy } from "./dom.
 export const ficheById = (id) => FICHES.find((f) => f.id === id);
 // Déroulé d'une session : conducteur importé (sessions.programme) s'il existe, sinon déroulé par défaut du format.
 // Accepte la session entière ou, pour les anciens appels, le seul format ("1" ou "2").
+// Créneaux d'émargement : arrivée du matin (heure de début) et reprise de l'après-midi (fin du déjeuner),
+// pour chaque journée ; sur la dernière, l'évaluation de fin de stage avant la dernière séquence.
+export function emargementSlots(session) {
+  const all = modulesFor(session);
+  const days = session.format === "2" ? [1, 2] : [1];
+  return days.flatMap((d) => {
+    const dm = all.filter((m) => (m.day || 1) === d);
+    const lunch = dm.find((m) => m.type === "pause" && /jeuner/i.test(m.titre));
+    const am = String(session.start_time || dm[0]?.t[0] || "09:30").slice(0, 5);
+    const pm = lunch ? lunch.t[1] : "13:30";
+    const date = d === 2 ? session.date2 : session.date;
+    const out = [{ key: `j${d}-matin`, day: d, t: am, label: "Émargement du matin", date }, { key: `j${d}-aprem`, day: d, t: pm, label: "Émargement de l'après-midi", date }];
+    if (d === days[days.length - 1]) { const last = dm.filter((m) => m.type !== "pause").pop(); if (last) out.push({ key: `j${d}-eval`, day: d, t: last.t[0], label: "Évaluation de fin de stage", date, kind: "evaluation" }); }
+    return out;
+  });
+}
+// Heure de Paris : date du jour (AAAA-MM-JJ) et minutes depuis minuit
+export function parisNow(d = new Date()) {
+  const [h, m] = d.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).split(":").map(Number);
+  return { date: d.toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" }), min: h * 60 + m };
+}
+// Côté stagiaire : créneau d'émargement ouvert maintenant (de l'heure prévue à 30 min après), ou null
+export function emargementOpen(session, d = new Date()) {
+  const n = parisNow(d), toM = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+  return emargementSlots(session).find((x) => !x.kind && x.date === n.date && n.min >= toM(x.t) && n.min < toM(x.t) + 30) || null;
+}
 export const modulesFor = (x) => (x && typeof x === "object" ? (x.programme?.modules?.length ? x.programme.modules : x.format === "2" ? D2 : D1) : x === "2" ? D2 : D1);
 // Nombre de journées et titres des journées
 export const daysOf = (x) => {

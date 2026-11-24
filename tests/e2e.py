@@ -123,6 +123,12 @@ async def main():
         assert "lien reçu de la DRH" in await tr.inner_text("#preview"), "texte du second émargement modifiable"
         await shot(tr, "05b-emargement-ecran")
         await st.wait_for_selector("#liveCard h3:has-text('émarger')", timeout=5000)
+        # Bouton vert « Émargement » sous « En direct » pendant que le formateur l'affiche ; parcours : Le jour J avant Mon cadrage
+        await st.wait_for_selector("#sideEm .side-em", timeout=5000)
+        assert await st.locator(".side-nav a:has-text('Émargement')").count() == 0, "Émargement retiré de la liste des ressources"
+        path = await st.inner_text(".side-path")
+        assert "Mon cadrage" not in path or path.index("Le jour J") < path.index("Mon cadrage"), "Le jour J au-dessus de Mon cadrage"
+        await shot(st, "03e-stagiaire-emargement")
         assert "présenté" in await tr.inner_text("[data-em='j1-matin']"), "l'émargement du matin doit être marqué comme présenté"
         assert await tr.locator("[data-em='j1-aprem']").count() == 1, "créneau d'émargement de l'après-midi attendu"
         await tr.click("[data-view='evaluation']"); await tr.wait_for_selector("#preview .ds-eval .ds-qrbox img")
