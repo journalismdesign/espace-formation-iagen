@@ -861,11 +861,6 @@ select:disabled{background-image:none;padding-right:12px !important}
 @media (prefers-reduced-motion:reduce){.chat-msgs{scroll-behavior:auto}}
 
 /* ===== Formation en ligne ===== */
-.online-toggle{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin:0 0 12px;border:1px solid var(--line);border-radius:var(--r);cursor:pointer;background:var(--light)}
-.online-toggle input{margin-top:3px}
-.online-toggle>span{display:flex;flex-direction:column;gap:2px}
-.online-toggle .small{color:var(--muted)}
-.online-toggle.on{border-color:var(--blue);background:var(--tint)}
 .online-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
 .online-screen{position:relative;border-radius:8px;overflow:hidden;background:var(--navy)}
 /* le stagiaire suit la page choisie par le formateur : pas de navigation dans la présentation intégrée */
@@ -894,7 +889,27 @@ select:disabled{background-image:none;padding-right:12px !important}
 
 /* En-tête de session : état de la salle, heure, temps écoulé depuis la première ouverture de la salle du jour */
 /* même dessin que le minuteur de pratique des stagiaires (#timerBox) */
-.clock{display:inline-flex;align-items:center;gap:12px;margin-top:6px;background:var(--navy);color:#fff;border-radius:12px;padding:8px 14px;font-variant-numeric:tabular-nums}
+/* l'horloge et le bloc « Rejoindre la session » côte à côte, étirés à la même hauteur */
+.head-live{display:flex;flex-wrap:wrap;align-items:stretch;gap:10px;margin-top:6px}
+.head-live>*{min-height:52px} /* même hauteur aussi quand l'écran est trop étroit et que le bloc passe à la ligne */
+.joinbox{display:flex;align-items:center;gap:12px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:0 12px 0 8px}
+.joinbox img{width:40px;height:40px;display:block}
+.joinbox .jb-txt{display:flex;flex-direction:column;gap:2px;line-height:1.2}
+.joinbox .jb-txt .small{color:var(--muted)}
+.joinbox .jb-txt b{font-size:17px;letter-spacing:.06em;color:var(--ink)}
+/* Interrupteur « Formation en ligne » : la case native, dessinée en interrupteur (elle reste cochable au clavier) */
+.onlinebox{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:0 14px 0 12px;cursor:pointer}
+.onlinebox.on{border-color:var(--blue);background:var(--tint)}
+.onlinebox .ob-txt{display:flex;flex-direction:column;gap:2px;line-height:1.2}
+.onlinebox .ob-txt b{font-size:14px;color:var(--ink)}
+.onlinebox .ob-txt .small{color:var(--muted)}
+.onlinebox input{appearance:none;-webkit-appearance:none;flex:none;margin:0;width:36px;height:20px;border-radius:10px;background:var(--line);position:relative;cursor:pointer;transition:background .15s}
+.onlinebox input::before{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s}
+.onlinebox input:checked{background:var(--blue)}
+.onlinebox input:checked::before{transform:translateX(16px)}
+.onlinebox input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.onlinebox input,.onlinebox input::before{transition:none}}
+.clock{display:flex;align-items:center;gap:12px;background:var(--navy);color:#fff;border-radius:12px;padding:8px 14px;font-variant-numeric:tabular-nums}
 .clock .t{font-family:"IBM Plex Mono",monospace;font-size:22px;font-weight:500;line-height:1;white-space:nowrap}
 .clock .clk-lbl{display:flex;flex-direction:column;align-items:flex-start;gap:3px;font-size:12px;line-height:1.25;color:rgba(255,255,255,.75);text-align:left}
 .clock .clk-sub{white-space:nowrap}

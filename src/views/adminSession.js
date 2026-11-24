@@ -6,7 +6,7 @@ import { keepDraft } from "../lib/draft.js";
 import { $, $$, T, esc, fr, NB, guard, toast, debounce, dateFr, download, copyText } from "../lib/dom.js";
 import { QUIZ } from "../data.js";
 import { ACT_TYPES, currentAct, respKey, renderResults, defaultActivities, countOf } from "../lib/activities.js";
-import { screenHtml, nextPage, stepLive, pageKey } from "../lib/screen.js";
+import { screenHtml, nextPage, stepLive, pageKey, modPages, skipSet } from "../lib/screen.js";
 import { openSheet } from "../lib/content.js";
 import { joinUrl, joinUrlLabel, qr, showQr, parseEmails, openDuplicate } from "./admin.js";
 import { logoPair } from "./settings.js";
@@ -18,7 +18,7 @@ import { loadSkins, skinFor, applySkin, currentSkin } from "../lib/skin.js";
 import { samsaHtml } from "../lib/brand.js";
 import { isAdmin } from "../lib/roles.js";
 import { morph } from "../lib/morph.js";
-import { parsePages, slideEmbedUrl, deckId, deckKind } from "../deck.js";
+import { parsePages, formatPages, slideEmbedUrl, deckId, deckKind } from "../deck.js";
 
 const PHASES = [["reglages", "Réglages"], ["avant", "Avant — inscription et cadrage"], ["jour", "Jour J — pilotage"], ["apres", "Après — suivi"]];
 const phaseLabel = (k, l, session) => (k === "avant" && !hasCadrage(session) ? "Avant — inscription" : l);
@@ -32,6 +32,8 @@ function interleave(mods, slots) {
   return out;
 }
 const parisDay = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
+// Seconde ligne de l'interrupteur « Formation en ligne » de l'en-tête
+const onlineSub = (on) => (on ? "écran visible par les stagiaires" : "désactivée");
 // Première ouverture de la salle du jour : point de départ du chronomètre du pilotage
 const stamp = (live) => (live?.started?.day === parisDay() ? live.started : { day: parisDay(), at: new Date().toISOString() });
 const firstName = (r) => (r.full_name || r.email.split("@")[0]).split(" ")[0];
@@ -73,7 +75,9 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     <div class="pagehead"><div>
       <h1 style="margin:0">${T(session.title)}</h1>
       <p class="muted" style="margin:4px 0">${T(session.formation)} · ${T(datesFr(session))} · code <b class="mono">${esc(session.code)}</b></p>
-      <div class="clock" id="clock" aria-live="off"></div>
+      <div class="head-live"><div class="clock" id="clock" aria-live="off"></div>
+        <div class="joinbox"><img src="${qrUrl}" alt="QR code de la session"><span class="jb-txt"><span class="small">Rejoindre la session</span><b class="mono">${esc(session.code)}</b></span><button class="btn sm ghost" id="pjQ" title="Afficher le QR code sur l'écran projeté (salle ouverte ou non)">Projeter le QR code</button></div>
+        <label class="onlinebox${session.online ? " on" : ""}" id="onlineLbl" title="${esc(fr("Formation à distance : les stagiaires voient dans leur espace ce que montre l'écran projeté (pages du support, présentations, séquences, émargement)."))}"><input type="checkbox" role="switch" id="onlineMode"${session.online ? " checked" : ""}><span class="ob-txt"><b>Formation en ligne</b><span class="small" id="onlineSub">${onlineSub(session.online)}</span></span></label></div>
     </div>
     <div class="head-actions"><a class="btn ghost sm" href="#/s/${sid}" title="Voir l'espace tel que le voient les stagiaires">Voir côté stagiaire</a>
       ${session.status === "draft" ? `<button class="btn sm" data-status="live">Ouvrir la salle</button>` : session.status === "live" ? `<button class="btn sm ghost" data-status="draft">Fermer la salle</button>` : `<button class="btn sm ghost" data-status="live">Rouvrir</button>`}</div></div>
@@ -103,6 +107,21 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     if (el.innerHTML !== html) el.innerHTML = html;
   };
   tick(); const clockT = setInterval(tick, 5000); cleanups.push(() => clearInterval(clockT));
+  // Interrupteur « Formation en ligne » de l'en-tête (tous les onglets) : l'écran projeté s'affiche dans l'espace des stagiaires
+  $("#onlineMode", root).onchange = async (e) => {
+    const on = e.target.checked;
+    const s2 = await guard(() => api.updateSession(sid, { online: on }), on ? "Mode en ligne : les stagiaires voient l'écran dans leur espace." : "Mode en ligne désactivé.");
+    if (s2) session = s2; else e.target.checked = !on;
+    $("#onlineLbl", root).classList.toggle("on", !!session.online);
+    $("#onlineSub", root).textContent = onlineSub(session.online);
+  };
+  // « Projeter le QR code » de l'en-tête : slide « Rejoindre » sur l'écran projeté, salle ouverte ou non,
+  // depuis n'importe quel onglet (le pilotage du Jour J remplace ce gestionnaire par le sien, qui redessine)
+  $("#pjQ", root).onclick = async () => {
+    const l = session.live || {};
+    const live = { module: l.module || null, emarg: l.emarg || {}, tools: l.tools || [], ...(l.started ? { started: l.started } : {}), view: "qr", started_at: new Date().toISOString() };
+    session = await guard(() => api.updateSession(sid, { live }), "QR code affiché sur l'écran projeté.") || session;
+  };
 
   if (phase === "reglages") await phaseReglages();
   else if (phase === "avant") await phaseAvant();
@@ -182,6 +201,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         <details class="card acc-set" name="regacc" data-acc="sl"><summary><h3>Slides projetées</h3></summary>
           <label class="f" for="gSl">Présentation Google Slides</label><input type="url" id="gSl" placeholder="https://docs.google.com/presentation/d/…" value="${esc(session.slides_url || "")}">
           <p class="small muted">${T("Appelées pendant les séquences « Comprendre » depuis l'onglet Jour J. L'écran projeté doit être ouvert dans un navigateur connecté à un compte Google qui a accès à la présentation : inutile de la rendre publique.")}</p>
+          <label class="f" for="gSkip">Pages masquées</label><input type="text" id="gSkip" placeholder="ex. 12, 40 à 45" value="${esc(session.skip_pages || "")}">
+          <p class="small muted" id="skipHelp">${T("Google Slides affiche quand même une slide masquée quand le pilotage l'appelle. Indiquez ici les numéros de page à sauter : ils disparaissent du pilotage et les flèches passent par-dessus.")}</p>
           <label class="f" style="margin-top:14px">Autres présentations à projeter</label>
           <p class="small muted" style="margin-top:0">${T("Google Slides ou PDF déposé sur Drive (lien « Partager »). Le PDF s'affiche dans la visionneuse Drive : on change de page directement sur l'écran projeté.")}</p>
           <div id="deckList"></div>
@@ -277,7 +298,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         brand_id: box.querySelector('input[name="brand"]:checked')?.value || null, ...(admin ? { trainer_id: $("#gTr", box).value || null, skin_id: $("#gSk", box).value || null } : {}),
         emargement_url: $("#gEm", box).value.trim() || null, emargement_qr: emQr, emargement_label: $("#gEl", box).value.trim() || null,
         emargement2_enabled: $("#gE2", box).checked, emargement2_text: $("#gEt", box).value.trim() || null,
-        slides_url: $("#gSl", box).value.trim() || null, support_unlocked: $("#gSuF", box).checked, decks,
+        slides_url: $("#gSl", box).value.trim() || null, skip_pages: formatPages(parsePages($("#gSkip", box).value)), support_unlocked: $("#gSuF", box).checked, decks,
         evaluation_url: $("#gEvU", box).value.trim() || null, evaluation_qr: evQr,
         evaluation_title: $("#gEvT", box).value.trim() || null, evaluation_text: $("#gEvX", box).value.trim() || null,
       };
@@ -368,7 +389,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         </div>
         <div>
           <div class="card qrcard"><img src="${qrUrl}" alt="QR code de la session"><div class="small" style="margin:6px 0">Lien à transmettre :</div><div class="mono linkbox" id="jl">${esc(joinUrlLabel(session.code))}</div>
-            <div class="chips" style="justify-content:center;margin-top:8px"><button class="btn sm ghost" id="cpL">Copier le lien</button><button class="btn sm ghost" id="pjQ">Projeter le QR code</button></div></div>
+            <div class="chips" style="justify-content:center;margin-top:8px"><button class="btn sm ghost" id="cpL">Copier le lien</button><button class="btn sm ghost" id="fsQ">Afficher en plein écran</button></div></div>
         </div>
       </div>`;
       $("#invF", box).onsubmit = async (e) => { e.preventDefault(); const em = parseEmails($("#invT", box).value); if (!em.length) return toast("Aucune adresse valide.", "ko"); await guard(() => api.addInvites(sid, em), `${em.length} invitation(s) ajoutée(s).`); draw(); };
@@ -376,7 +397,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       $$("[data-rm]", box).forEach((b) => (b.onclick = async () => { if (confirm("Retirer cette personne de la session ? Son cadrage reste enregistré.")) { await guard(() => api.removeMember(sid, b.dataset.rm)); draw(); } }));
       $$("[data-proj]", box).forEach((b) => (b.onclick = () => openProject(b.dataset.proj, roster, draw)));
       $("#cpL", box).onclick = (e) => copyText(joinUrl(session.code), e.target);
-      $("#pjQ", box).onclick = async () => showQr(session, await qr(joinUrl(session.code), 900));
+      $("#fsQ", box).onclick = async () => showQr(session, await qr(joinUrl(session.code), 900));
     };
     await draw();
     cleanups.push(api.watch(sid, debounce((e) => { if (["session_members", "projects", "*"].includes(e.table) && !box.contains(document.activeElement)) draw(); }, 600)));
@@ -410,7 +431,6 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         <div>
           <div class="card">
             <h3>Pilotage</h3>
-            <label class="online-toggle${session.online ? " on" : ""}" id="onlineLbl"><input type="checkbox" id="onlineMode"${session.online ? " checked" : ""}><span><b>Formation en ligne</b><span class="small">${T("Les stagiaires voient dans leur espace ce que montre l'écran projeté : pages du support, présentations, séquences, émargement.")}</span></span></label>
             <p class="small muted" id="hint" style="margin-top:0"></p>
             <div id="emRemind"></div>
             <div class="kicker-d" style="margin:10px 0 6px">Écrans de la session · ouverture et clôture</div>
@@ -430,19 +450,12 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="kicker-d live-tag"><span class="dot on"></span>Écran projeté · en direct</div><button class="btn sm" id="openScr">Ouvrir l'écran projeté</button></div>
           <div id="preview" class="preview"></div>
           <div id="nextBox" class="next-box" hidden><div class="kicker-d">À suivre · <span id="nextLbl"></span></div><div id="nextPrev" class="preview"></div></div>
-          <div class="card qrcard row" style="margin-top:14px"><img src="${qrUrl}" alt="QR code"><div><div class="small">Rejoindre la session</div><b class="mono">${esc(session.code)}</b><br><button class="btn sm ghost" id="pjQ" style="margin-top:8px">Projeter le QR code</button></div></div>
           <div class="card chat-card" style="margin-top:14px"><h3>Discussion des stagiaires</h3><div id="chatAdm"></div></div>
         </aside>
       </div>`;
     cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: true, compact: true }));
     $("#openScr", box).onclick = () => window.open(`#/ecran/${sid}`, "ecran-" + sid, "popup=yes,width=1280,height=760");
-    $("#pjQ", box).onclick = () => show("qr"); // sur l'écran projeté (salle ouverte ou non)
-    $("#onlineMode", box).onchange = async (e) => {
-      const on = e.target.checked;
-      const s2 = await guard(() => api.updateSession(sid, { online: on }), on ? "Mode en ligne : les stagiaires voient l'écran dans leur espace." : "Mode en ligne désactivé.");
-      if (s2) session = s2; else e.target.checked = !on;
-      $("#onlineLbl", box).classList.toggle("on", !!session.online);
-    };
+    $("#pjQ", root).onclick = () => show("qr"); // bouton de l'en-tête : sur l'écran projeté (salle ouverte ou non)
     $("#closeDay", box).onchange = async (e) => { session = await guard(() => api.updateSession(sid, e.target.checked ? { status: "closed", live: {} } : { status: "live", live: { ...(session.live || {}), started: stamp(session.live) } }), e.target.checked ? "Journée close." : "Session rouverte.") || session; draw(); };
 
     // Outils d'exercice débloqués : on ajoute celui de la séquence lancée, sans jamais en retirer
@@ -457,7 +470,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       draw();
     };
     // la séquence en cours et les émargements déjà présentés survivent à chaque changement d'écran
-    const keep = () => ({ module: session.live?.module || null, emarg: session.live?.emarg || {}, tools: session.live?.tools || [] });
+    // (et l'heure de première ouverture du jour, sinon projeter un écran d'ouverture salle fermée la perdait)
+    const keep = () => ({ module: session.live?.module || null, emarg: session.live?.emarg || {}, tools: session.live?.tools || [], ...(session.live?.started ? { started: session.live.started } : {}) });
     // Écrans d'ouverture et de clôture : projetables salle fermée, sans l'ouvrir. Les stagiaires ne les voient
     // dans leur espace qu'une fois la salle ouverte (session active).
     const show = async (view, extra = {}) => {
@@ -517,18 +531,19 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const cur = mods.find((m) => m.id === live.module);
       if (cur?.day) modDay = cur.day;
       const shown = mods.filter((m) => session.format !== "2" || (m.day || 1) === modDay);
+      const skip = skipSet(session), hidden = (m) => parsePages(m.pages).filter((p) => skip.has(p)).length; // pages masquées de la séquence
       $("#modules", box).innerHTML = `${session.format === "2" ? `<div class="days" style="margin:0 0 8px">${[1, 2].map((d) => `<button type="button" data-mday="${d}" aria-pressed="${d === modDay}">Jour ${d}</button>`).join("")}</div>` : ""}
         <div class="modlist">${interleave(shown, slots.filter((x) => session.format !== "2" || x.day === modDay)).map((m) => {
           if (m.slot) return `<div class="modrow em${emDone[m.key] ? " done" : ""}${(V === "emargement" || V === "evaluation") && live.emKey === m.key ? " on" : ""}"><button type="button" data-em="${m.key}"><span class="mono small">${hhmmT(m.t)}</span><span class="pill tf">${m.kind === "evaluation" ? "Évaluation" : "Émargement"}</span><b>${T(m.label)}</b>${emDone[m.key] ? `<span class="small muted" style="margin-left:auto">✓ présenté à ${new Date(emDone[m.key]).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>` : ""}</button></div>`;
-          const on = m.id === live.module, pages = parsePages(m.pages);
+          const on = m.id === live.module, pages = modPages(session, m);
           return `<div class="modrow${on ? " on" : ""}"><button type="button" data-mod="${m.id}"><span class="mono small">${hhmmT(m.t[0])}</span><span class="pill ${m.type}">${T(typeLabel(m.type))}</span><span class="modtxt"><b>${T(m.titre)}</b>${m.cas ? `<small>${T(m.cas)}</small>` : ""}</span></button>
-            ${on && pages.length && session.slides_url ? `<div class="slidebar"><button type="button" class="iconbtn" data-sl="prev" aria-label="Page précédente">←</button>${pages.map((p) => `<button type="button" class="chip${V === "slide" && live.slide === p ? " on" : ""}" data-page="${p}">${p}</button>`).join("")}<button type="button" class="iconbtn" data-sl="next" aria-label="Page suivante">→</button></div>` : ""}
+            ${on && pages.length && session.slides_url ? `<div class="slidebar"><button type="button" class="iconbtn" data-sl="prev" aria-label="Page précédente">←</button>${pages.map((p) => `<button type="button" class="chip${V === "slide" && live.slide === p ? " on" : ""}" data-page="${p}">${p}</button>`).join("")}<button type="button" class="iconbtn" data-sl="next" aria-label="Page suivante">→</button>${hidden(m) ? `<span class="small muted" title="Réglages → Slides projetées">${hidden(m)} masquée${hidden(m) > 1 ? "s" : ""}</span>` : ""}</div>` : ""}
             ${on && pages.length && !session.slides_url ? `<div class="small muted" style="padding:4px 8px">Pages ${T(m.pages)} · associez la présentation dans l'onglet Réglages pour les projeter.</div>` : ""}</div>`;
         }).join("")}</div>`;
       $$("[data-mday]", box).forEach((b) => (b.onclick = () => { modDay = +b.dataset.mday; draw(); }));
       $$("[data-em]", box).forEach((b) => (b.onclick = () => showEm(b.dataset.em)));
       $$("[data-mod]", box).forEach((b) => (b.onclick = () => setLive({ ...keep(), module: b.dataset.mod, view: "module", started_at: new Date().toISOString() })));
-      const pages = cur ? parsePages(cur.pages) : [];
+      const pages = modPages(session, cur);
       const goPage = (p) => setLive({ ...keep(), module: cur.id, view: "slide", slide: p, started_at: new Date().toISOString() });
       $$("[data-page]", box).forEach((b) => (b.onclick = () => goPage(+b.dataset.page)));
       // ← → : même règle que les flèches du clavier (au bout de la séquence, on passe à la voisine)

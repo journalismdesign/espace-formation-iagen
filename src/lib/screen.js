@@ -73,6 +73,18 @@ export function trainerSlideHtml(session, t, cls = "", right = "") {
 }
 
 // d = { session, rows, participants, qrUrl, projects, branding, emQr, support, trainer }
+/* Pages masquées du support (sessions.skip_pages, ex. « 12, 40 à 45 ») : Google Slides affiche une slide
+   masquée quand on l'appelle, le pilotage les saute donc lui-même. */
+export const skipSet = (session) => new Set(parsePages(session?.skip_pages));
+// Pages d'une séquence, sans les pages masquées
+export const modPages = (session, mod) => { const s = skipSet(session); return mod ? parsePages(mod.pages).filter((p) => !s.has(p)) : []; };
+// Page ±1 hors liste, par-dessus les pages masquées (null avant la page 1)
+function freeStep(session, p, dir) {
+  const s = skipSet(session); let n = (p || 1) + dir;
+  while (n >= 1 && s.has(n)) n += dir;
+  return n >= 1 ? n : null;
+}
+
 // Séquence voisine dans le déroulé, sans changer de journée
 function neighbourModule(session, mod, dir) {
   const mods = modulesFor(session), n = mods[mods.findIndex((m) => m.id === mod.id) + dir];
@@ -81,7 +93,7 @@ function neighbourModule(session, mod, dir) {
 // Entrer dans une séquence au clavier : sa première page (sa dernière en reculant), ou son écran si elle n'a pas de pages.
 // Son outil d'exercice est débloqué, comme quand on la lance depuis le pilotage.
 function enterModule(session, live, m, dir, now) {
-  const pages = session.slides_url ? parsePages(m.pages) : [];
+  const pages = session.slides_url ? modPages(session, m) : [];
   const tools = m.outil ? [...new Set([...(live.tools || []), m.outil])] : live.tools;
   const base = { ...live, module: m.id, started_at: now, ...(tools ? { tools } : {}) };
   return pages.length ? { ...base, view: "slide", slide: dir > 0 ? pages[0] : pages[pages.length - 1] } : { ...base, view: "module" };
@@ -94,9 +106,9 @@ function enterModule(session, live, m, dir, now) {
 export function stepLive(session, dir) {
   const live = session.live || {}, now = new Date().toISOString();
   const mod = live.module ? modulesFor(session).find((m) => m.id === live.module) : null;
-  const pages = mod && session.slides_url ? parsePages(mod.pages) : [];
-  // page projetée hors de la liste de la séquence : on avance page par page
-  if (live.view === "slide" && pages.length && !pages.includes(live.slide)) return { ...live, slide: Math.max(1, (live.slide || 1) + dir), started_at: now };
+  const pages = mod && session.slides_url ? modPages(session, mod) : [];
+  // page projetée hors de la liste de la séquence : on avance page par page (en sautant les pages masquées)
+  if (live.view === "slide" && pages.length && !pages.includes(live.slide)) { const p = freeStep(session, live.slide, dir); return p ? { ...live, slide: p, started_at: now } : null; }
   if (mod && (live.view === "module" || (live.view === "slide" && pages.length))) {
     const j = live.view === "slide" ? pages.indexOf(live.slide) + dir : -1;
     if (j >= 0 && j < pages.length) return { ...live, view: "slide", slide: pages[j], started_at: now };
@@ -104,7 +116,7 @@ export function stepLive(session, dir) {
     const n = neighbourModule(session, mod, dir);
     return n ? enterModule(session, live, n, dir, now) : null;
   }
-  if (live.view === "slide" && session.slides_url) return { ...live, slide: Math.max(1, (live.slide || 1) + dir), started_at: now };
+  if (live.view === "slide" && session.slides_url) { const p = freeStep(session, live.slide, dir); return p ? { ...live, slide: p, started_at: now } : null; }
   if (live.view === "deck") {
     const d = (session.decks || []).find((x) => x.id === live.deck);
     if (d && deckKind(d.url) === "slides") { const p = Math.max(1, (live.page || 1) + dir); return p === (live.page || 1) ? null : { ...live, page: p, started_at: now }; }

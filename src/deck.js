@@ -32,6 +32,16 @@ export function parsePages(s) {
   });
   return [...new Set(out)];
 }
+// [12, 40, 41, 42, 5] → « 5, 12, 40 à 42 » (forme enregistrée des pages masquées)
+export function formatPages(list) {
+  const ps = [...new Set(list)].filter((n) => n > 0).sort((a, b) => a - b), out = [];
+  for (let i = 0; i < ps.length; i++) {
+    let j = i; while (ps[j + 1] === ps[j] + 1) j++;
+    out.push(j - i >= 2 ? `${ps[i]} à ${ps[j]}` : j > i ? `${ps[i]}, ${ps[j]}` : String(ps[i]));
+    i = j;
+  }
+  return out.join(", ");
+}
 
 /* ---------- Présentations supplémentaires ---------- */
 // Fichier Drive (PDF, etc.) : https://drive.google.com/file/d/<id>/view
