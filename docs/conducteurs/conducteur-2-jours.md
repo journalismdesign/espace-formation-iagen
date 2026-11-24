@@ -6,7 +6,7 @@ formation: Prendre en main les IA génératives
 
 ## 09:30–09:50 · Accueil, objectifs, vos attentes
 type: discussion
-pages: 3, 5, 6, 8, 9
+pages: 3 à 9
 activité: niveau
 
 ### Objectifs

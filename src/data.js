@@ -228,7 +228,7 @@ const QUIZ = {
 /* Déroulé d'une journée : calqué sur la slide « Déroulé » du support (p. 5-6).
    cas = l'exemple de rédaction cité pour chaque séquence. */
 const D1 = [
-  {"id":"j1-accueil","t":["09:30","09:40"],"type":"discussion","titre":"Accueil, objectifs, niveau et attentes du groupe","cas":"Un service, pas un outil","pages":"3, 8, 9","obj":["Situer la journée : comprendre jusqu'à 10 h 45, pratiquer ensuite.","Dire où vous en êtes avec l'IA et ce que vous attendez."],"pts":["Un assistant d'IA est un service, pas un outil : on loue un accès dont les conditions et les prix peuvent changer.","Il ne peut pas être une source à lui seul."],"disc":["Quel est votre niveau avec l'IA ? Qu'en attendez-vous pour votre travail ?","Votre rédaction a-t-elle une charte IA ? L'avez-vous lue ?"],"live":"niveau"},
+  {"id":"j1-accueil","t":["09:30","09:40"],"type":"discussion","titre":"Accueil, objectifs, niveau et attentes du groupe","cas":"Un service, pas un outil","pages":"3 à 9","obj":["Situer la journée : comprendre jusqu'à 10 h 45, pratiquer ensuite.","Dire où vous en êtes avec l'IA et ce que vous attendez."],"pts":["Un assistant d'IA est un service, pas un outil : on loue un accès dont les conditions et les prix peuvent changer.","Il ne peut pas être une source à lui seul."],"disc":["Quel est votre niveau avec l'IA ? Qu'en attendez-vous pour votre travail ?","Votre rédaction a-t-elle une charte IA ? L'avez-vous lue ?"],"live":"niveau"},
   {"id":"j1-etat","t":["09:40","09:55"],"type":"comprendre","titre":"Où en est l'IA : argent, énergie, droit d'auteur, travail caché","cas":"Le New York Times poursuit OpenAI tout en outillant sa rédaction","pages":"11 à 16","obj":["Mesurer ce que coûte l'IA : argent, énergie, droit d'auteur, travail caché.","Comprendre pourquoi un LLM produit des réponses fluides mais parfois fausses."]},
   {"id":"j1-llm","t":["09:55","10:10"],"type":"comprendre","titre":"D'où vient l'IA, comment se fabrique un LLM","cas":"Des régularités, pas des faits : d'où la relecture systématique","pages":"18, 24, 27 à 31","pts":["Un LLM se fabrique en étapes : données d'entraînement, pré-entraînement, alignement (RLHF), filtres.","Le pré-entraînement apprend des régularités, pas des faits : d'où la relecture systématique.","Les règles de ce qui est permis ou refusé sont fixées par chaque entreprise."],"quiz":"llm","fiches":["interface"]},
   {"id":"j1-overviews","t":["10:10","10:20"],"type":"comprendre","titre":"L'IA et la presse : AI Overviews, la fin du clic","cas":"Le choc de trafic subi par la presse française depuis l'été 2026","pages":"33 à 35"},
@@ -252,7 +252,7 @@ const D1 = [
 
 const D2 = [
  // ---------- Jour 1 : comprendre, puis temps fort 1 ----------
- {id:"a-accueil", day:1, t:["09:30","09:50"], type:"discussion", titre:"Accueil, objectifs, vos attentes", pages:"3, 5, 6, 8, 9",
+ {id:"a-accueil", day:1, t:["09:30","09:50"], type:"discussion", titre:"Accueil, objectifs, vos attentes", pages:"3 à 9",
   obj:["Situer les deux journées : comprendre et Gemini Notebook le jour 1, les assistants et les méthodes le jour 2."],
   pts:["Un assistant d'IA est un service, pas un outil.","Il ne peut pas être une source à lui seul."],
   disc:["Quel est votre niveau avec l'IA ? Qu'en attendez-vous ?","Votre rédaction a-t-elle une charte IA ?"], live:"niveau"},

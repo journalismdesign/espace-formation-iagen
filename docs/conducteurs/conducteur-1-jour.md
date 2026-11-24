@@ -5,7 +5,7 @@ formation: Prendre en main les IA génératives
 ## 09:30–09:40 · Accueil, objectifs, niveau et attentes du groupe
 type: discussion
 cas: Un service, pas un outil
-pages: 3, 8, 9
+pages: 3 à 9
 activité: niveau
 
 ### Objectifs
