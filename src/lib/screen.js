@@ -73,6 +73,25 @@ export function trainerSlideHtml(session, t, cls = "", right = "") {
 }
 
 // d = { session, rows, participants, qrUrl, projects, branding, emQr, support, trainer }
+/* Page suivante de ce qui est projeté : { src, label } ou null.
+   Page du support → page suivante de la séquence (ou +1) ; séquence avec pages → sa première page ;
+   présentation Google Slides → page +1. */
+export function nextPage(session) {
+  const live = session.live || {};
+  const mod = live.module ? modulesFor(session).find((m) => m.id === live.module) : null;
+  const pages = mod ? parsePages(mod.pages) : [];
+  if (live.view === "slide") {
+    const cur = live.slide || 1, n = pages.includes(cur) ? pages[pages.indexOf(cur) + 1] : cur + 1;
+    return n ? { src: slideEmbedUrl(session.slides_url, n), label: `Page ${n} du support` } : null;
+  }
+  if (live.view === "module" && pages.length && session.slides_url) return { src: slideEmbedUrl(session.slides_url, pages[0]), label: `Page ${pages[0]} du support` };
+  if (live.view === "deck") {
+    const d = (session.decks || []).find((x) => x.id === live.deck);
+    if (d && deckKind(d.url) === "slides") { const n = (live.page || 1) + 1; return { src: deckEmbedUrl(d.url, n), label: `${d.title} · page ${n}` }; }
+  }
+  return null;
+}
+
 export function screenHtml(d, compact = false) {
   const { session, rows = [], participants = 0, qrUrl = "", projects = [], branding = null, emQr = null, support = null, evalQr = null, trainer = null, forTrainee = false } = d;
   const cls = compact ? "compact" : "";

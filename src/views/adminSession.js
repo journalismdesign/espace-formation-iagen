@@ -3,10 +3,10 @@
    Après (projets, émargement, bilan, duplication, résultats, ressources). */
 import { mountChat } from "../lib/chat.js";
 import { keepDraft } from "../lib/draft.js";
-import { $, $$, T, esc, NB, guard, toast, debounce, dateFr, download, copyText } from "../lib/dom.js";
+import { $, $$, T, esc, fr, NB, guard, toast, debounce, dateFr, download, copyText } from "../lib/dom.js";
 import { QUIZ } from "../data.js";
 import { ACT_TYPES, currentAct, respKey, renderResults, defaultActivities, countOf } from "../lib/activities.js";
-import { screenHtml } from "../lib/screen.js";
+import { screenHtml, nextPage } from "../lib/screen.js";
 import { openSheet } from "../lib/content.js";
 import { joinUrl, joinUrlLabel, qr, showQr, parseEmails, openDuplicate } from "./admin.js";
 import { STATUS } from "./home.js";
@@ -32,6 +32,9 @@ function interleave(mods, slots) {
   rest.forEach((x) => out.push({ ...x, slot: true }));
   return out;
 }
+const parisDay = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
+// Première ouverture de la salle du jour : point de départ du chronomètre du pilotage
+const stamp = (live) => (live?.started?.day === parisDay() ? live.started : { day: parisDay(), at: new Date().toISOString() });
 const firstName = (r) => (r.full_name || r.email.split("@")[0]).split(" ")[0];
 
 // Données de l'écran projeté (réponses agrégées, participants, projets)
@@ -81,7 +84,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
   if ($("#dupBtn", root)) $("#dupBtn", root).onclick = () => openDuplicate(api, session, ctx.go);
   $$("[data-status]", root).forEach((b) => (b.onclick = async () => {
     const st = b.dataset.status;
-    await guard(() => api.updateSession(sid, { status: st, ...(st !== "live" ? { live: {} } : {}) }), st === "live" ? "Salle ouverte : les stagiaires peuvent répondre." : "Salle fermée.");
+    await guard(() => api.updateSession(sid, { status: st, live: st === "live" ? { ...(session.live || {}), started: stamp(session.live) } : (session.live?.started ? { started: session.live.started } : {}) }), st === "live" ? "Salle ouverte : les stagiaires peuvent répondre." : "Salle fermée.");
     go(location.hash);
   }));
 
@@ -392,7 +395,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       <div class="grid jour2">
         <div>
           <div class="card">
-            <h3>Pilotage</h3>
+            <div class="pilot-head"><h3>Pilotage</h3><div class="clock" id="clock" aria-live="off"></div></div>
             <label class="online-toggle${session.online ? " on" : ""}" id="onlineLbl"><input type="checkbox" id="onlineMode"${session.online ? " checked" : ""}><span><b>Formation en ligne</b><span class="small">${T("Les stagiaires voient dans leur espace ce que montre l'écran projeté : pages du support, présentations, séquences, émargement.")}</span></span></label>
             <p class="small muted" id="hint" style="margin-top:0"></p>
             <div id="emRemind"></div>
@@ -412,6 +415,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         <aside class="jour-side">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="kicker-d live-tag"><span class="dot on"></span>Écran projeté · en direct</div><button class="btn sm" id="openScr">Ouvrir l'écran projeté</button></div>
           <div id="preview" class="preview"></div>
+          <div id="nextBox" class="next-box" hidden><div class="kicker-d">À suivre · <span id="nextLbl"></span></div><div id="nextPrev" class="preview"></div></div>
           <div class="card qrcard row" style="margin-top:14px"><img src="${qrUrl}" alt="QR code"><div><div class="small">Rejoindre la session</div><b class="mono">${esc(session.code)}</b><br><button class="btn sm ghost" id="pjQ" style="margin-top:8px">Projeter le QR code</button></div></div>
           <div class="card chat-card" style="margin-top:14px"><h3>Discussion des stagiaires</h3><div id="chatAdm"></div></div>
         </aside>
@@ -419,13 +423,26 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: true, compact: true }));
     $("#openScr", box).onclick = () => window.open(`#/ecran/${sid}`, "ecran-" + sid, "popup=yes,width=1280,height=760");
     $("#pjQ", box).onclick = async () => showQr(session, await qr(joinUrl(session.code), 900));
+    const tick = () => {
+      const el = $("#clock", box); if (!el) return;
+      const now = new Date(), hm = now.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).replace(":", " h ");
+      const st = session.live?.started?.day === parisDay() ? new Date(session.live.started.at) : null;
+      const hmOf = (d) => d.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).replace(":", " h ");
+      const dur = (ms) => { const m = Math.max(0, Math.floor(ms / 60000)); return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m} min`; };
+      const sub = !st ? (session.status === "live" ? "salle ouverte" : "salle fermée")
+        : session.status === "live" ? `écoulé : ${dur(now - st)} (depuis ${hmOf(st)})` : `salle fermée · journée commencée à ${hmOf(st)}`;
+      const html = `<b>${hm}</b><span>${fr(sub)}</span>`;
+      if (el.innerHTML !== html) el.innerHTML = html;
+      el.classList.toggle("on", session.status === "live");
+    };
+    tick(); const clockT = setInterval(tick, 5000); cleanups.push(() => clearInterval(clockT));
     $("#onlineMode", box).onchange = async (e) => {
       const on = e.target.checked;
       const s2 = await guard(() => api.updateSession(sid, { online: on }), on ? "Mode en ligne : les stagiaires voient l'écran dans leur espace." : "Mode en ligne désactivé.");
       if (s2) session = s2; else e.target.checked = !on;
       $("#onlineLbl", box).classList.toggle("on", !!session.online);
     };
-    $("#closeDay", box).onchange = async (e) => { session = await guard(() => api.updateSession(sid, e.target.checked ? { status: "closed", live: {} } : { status: "live" }), e.target.checked ? "Journée close." : "Session rouverte.") || session; draw(); };
+    $("#closeDay", box).onchange = async (e) => { session = await guard(() => api.updateSession(sid, e.target.checked ? { status: "closed", live: {} } : { status: "live", live: { ...(session.live || {}), started: stamp(session.live) } }), e.target.checked ? "Journée close." : "Session rouverte.") || session; draw(); };
 
     // Outils d'exercice débloqués : on ajoute celui de la séquence lancée, sans jamais en retirer
     const withTools = (live) => {
@@ -435,7 +452,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     const setLive = async (live, extra = {}) => {
       live = withTools(live);
       if (session.status !== "live") { if (!confirm("La salle est fermée. L'ouvrir et lancer l'activité ?")) return; }
-      session = await guard(() => api.updateSession(sid, { status: "live", live, ...extra })) || session;
+      session = await guard(() => api.updateSession(sid, { status: "live", live: { ...live, started: stamp(session.live) }, ...extra })) || session;
       draw();
     };
     // la séquence en cours et les émargements déjà présentés survivent à chaque changement d'écran
@@ -543,6 +560,10 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       $("[data-stop]", box)?.addEventListener("click", () => setLive({ ...keep(), view: live.module ? "module" : null }));
       const sd = await loadScreenData(api, session);
       morph($("#preview", box), screenHtml({ ...sd, session, qrUrl }, true)); // sans clignotement
+      // Aperçu de la page suivante (pour le formateur seulement)
+      const nx = nextPage(session);
+      $("#nextBox", box).hidden = !nx?.src;
+      if (nx?.src) { $("#nextLbl", box).textContent = fr(nx.label); morph($("#nextPrev", box), `<div class="deck-slide frame compact"><iframe src="${esc(nx.src)}" title="Page suivante" tabindex="-1"></iframe></div>`); }
       const roster = await api.roster(sid);
       $("#pTitle", box).textContent = `Participant·es (${roster.length})`;
       $("#plist", box).innerHTML = roster.map((r) => `<div class="prow"><span>${T(r.full_name || r.email)}</span>${r.project_status === "validated" ? `<span class="tag ok">✓ Cadrage</span>` : r.project_id ? `<span class="tag">${r.project_steps}/${STEPS.length}</span>` : `<span class="tag muted">—</span>`}</div>`).join("") || `<p class="small muted">Personne pour l'instant. Projetez le QR code.</p>`;

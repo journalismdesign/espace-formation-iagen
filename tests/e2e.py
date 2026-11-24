@@ -146,6 +146,11 @@ async def main():
         await tr.click("[data-sl='next']"); await tr.wait_for_timeout(700)
         assert await tr.evaluate("[...document.querySelectorAll('#preview iframe:not([data-preload])')].some(f => f.__marque === 1)"), "page préchargée réutilisée"
         assert await tr.locator("#preview iframe[data-preload]").count() == 1, "nouvelle page préchargée"
+        # Formateur : aperçu de la page suivante et horloge avec temps écoulé
+        assert await tr.locator("#nextBox:not([hidden]) #nextPrev iframe").count() == 1, "aperçu de la page suivante"
+        assert "page" in (await tr.inner_text("#nextLbl")).lower()
+        ck = await tr.inner_text("#clock")
+        assert " h " in ck and "écoulé" in ck.lower(), "horloge du pilotage : " + ck
         await st.wait_for_selector("#liveCard:has-text('page')", timeout=5000)
         await shot(tr, "05a-formateur-pilotage"); await shot(st, "04a-stagiaire-sequence")
         await st.wait_for_timeout(800); ptxt = await st.inner_text("#parcours")
