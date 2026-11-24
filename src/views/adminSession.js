@@ -92,21 +92,37 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
   const box = $("#phase", root);
   const cleanups = [];
 
-  // En-tête : état de la salle, heure et temps écoulé depuis la première ouverture de la salle du jour.
-  // Même dessin que le minuteur de pratique des stagiaires : pavé sombre, libellé à gauche, heure en chasse fixe.
+  /* En-tête : état de la salle, heure de Paris et minuteur de la journée.
+     Le minuteur part de l'heure d'ouverture prévue dans la session (Réglages → heure de début), ou de l'heure
+     de la remise à zéro faite ce jour-là avec le bouton ↺ (live.clock = {day, at}).
+     Même dessin que le minuteur de pratique des stagiaires : pavé sombre, libellé à gauche, heure en chasse fixe. */
+  const hm2 = (h, m) => `${String(h).padStart(2, "0")} h ${String(m).padStart(2, "0")}`;
+  const parisMin = (d) => { const [h, m] = d.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).split(":").map(Number); return h * 60 + m; };
+  const clockRef = () => { // minute du jour (heure de Paris) d'où part le minuteur
+    const c = session.live?.clock;
+    if (c?.day === parisDay()) return parisMin(new Date(c.at));
+    const [h, m] = String(session.start_time || "09:30").split(":").map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
   const tick = () => {
     const el = $("#clock", root); if (!el) return;
-    const hmOf = (d) => d.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).replace(":", " h ");
-    const dur = (ms) => { const m = Math.max(0, Math.floor(ms / 60000)); return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m} min`; };
-    const now = new Date(), on = session.status === "live";
-    const st = session.live?.started?.day === parisDay() ? new Date(session.live.started.at) : null;
+    const dur = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m} min`);
+    const nowMin = parisMin(new Date()), ref = clockRef(), refTxt = hm2(Math.floor(ref / 60), ref % 60), on = session.status === "live";
     // Pastille d'état toujours au même gabarit (rond + libellé) et seconde ligne toujours présente : le pavé ne change pas de hauteur
     const state = on ? `<span class="state live">En direct</span>` : `<span class="state off">${session.status === "closed" ? "Session terminée" : "Salle fermée"}</span>`;
-    const sub = session.status === "closed" ? "" : !st ? (on ? "" : "pas encore ouverte aujourd'hui") : on ? `écoulé ${dur(now - st)} · depuis ${hmOf(st)}` : `journée commencée à ${hmOf(st)}`;
-    const html = `<span class="clk-lbl">${state}<span class="clk-sub">${sub ? fr(sub) : "&nbsp;"}</span></span><b class="t">${hmOf(now)}</b>`;
+    const sub = session.status === "closed" ? "" : nowMin < ref ? `début prévu à ${refTxt}` : on ? `écoulé ${dur(nowMin - ref)} · depuis ${refTxt}` : `journée commencée à ${refTxt}`;
+    const html = `<span class="clk-lbl">${state}<span class="clk-sub">${sub ? fr(sub) : "&nbsp;"}</span></span><b class="t">${hm2(Math.floor(nowMin / 60), nowMin % 60)}</b>`
+      + `<button type="button" class="clk-reset" data-clk-reset title="Remettre le minuteur à zéro : le temps écoulé repart de maintenant" aria-label="Remettre le minuteur à zéro">↺</button>`;
     if (el.innerHTML !== html) el.innerHTML = html;
+    qrBtn(); // l'écran a pu changer depuis le pilotage ou l'écran projeté
   };
-  tick(); const clockT = setInterval(tick, 5000); cleanups.push(() => clearInterval(clockT));
+  // ↺ du minuteur (délégation : le contenu du pavé est réécrit à chaque minute)
+  $("#clock", root).onclick = async (e) => {
+    if (!e.target.closest("[data-clk-reset]")) return;
+    const live = { ...(session.live || {}), clock: { day: parisDay(), at: new Date().toISOString() } };
+    session = await guard(() => api.updateSession(sid, { live }), "Minuteur remis à zéro : le temps écoulé repart de maintenant.") || session;
+    tick(); afterLive();
+  };
   // Interrupteur « Formation en ligne » de l'en-tête (tous les onglets) : l'écran projeté s'affiche dans l'espace des stagiaires
   $("#onlineMode", root).onchange = async (e) => {
     const on = e.target.checked;
@@ -115,13 +131,28 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     $("#onlineLbl", root).classList.toggle("on", !!session.online);
     $("#onlineSub", root).textContent = onlineSub(session.online);
   };
-  // « Projeter le QR code » de l'en-tête : slide « Rejoindre » sur l'écran projeté, salle ouverte ou non,
-  // depuis n'importe quel onglet (le pilotage du Jour J remplace ce gestionnaire par le sien, qui redessine)
+  /* « Projeter le QR code » de l'en-tête, en bascule, depuis tous les onglets, salle ouverte ou non :
+     un clic met la slide « Rejoindre » sur l'écran projeté (pour un·e retardataire) en gardant de côté ce qui
+     était projeté (live.prev) ; un second clic remet cet écran. Lancer autre chose entre-temps abandonne live.prev. */
+  const KEEP = ["module", "emarg", "tools", "started", "clock"]; // ce qui survit à tout changement d'écran
+  const pick = (o, keep) => Object.fromEntries(Object.entries(o).filter(([k]) => keep(k)));
+  let afterLive = () => {}; // le pilotage du Jour J redessine l'aperçu
+  function qrBtn() {
+    const b = $("#pjQ", root); if (!b) return;
+    const on = session.live?.view === "qr", label = on ? "QR code projeté" : "Projeter le QR code";
+    if (b.textContent !== label) b.textContent = label;
+    b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on));
+    b.title = on ? "Revenir à l'écran projeté avant le QR code" : "Afficher le QR code sur l'écran projeté (salle ouverte ou non)";
+  }
   $("#pjQ", root).onclick = async () => {
-    const l = session.live || {};
-    const live = { module: l.module || null, emarg: l.emarg || {}, tools: l.tools || [], ...(l.started ? { started: l.started } : {}), view: "qr", started_at: new Date().toISOString() };
-    session = await guard(() => api.updateSession(sid, { live }), "QR code affiché sur l'écran projeté.") || session;
+    const l = session.live || {}, base = pick(l, (k) => KEEP.includes(k));
+    const back = l.view === "qr";
+    const live = back ? { ...base, ...(l.prev || {}) }
+      : { ...base, view: "qr", prev: pick(l, (k) => !KEEP.includes(k) && k !== "prev"), started_at: new Date().toISOString() };
+    session = await guard(() => api.updateSession(sid, { live }), back ? "Retour à l'écran précédent." : "QR code projeté. Un second clic remet l'écran précédent.") || session;
+    qrBtn(); afterLive();
   };
+  tick(); const clockT = setInterval(tick, 5000); cleanups.push(() => clearInterval(clockT));
 
   if (phase === "reglages") await phaseReglages();
   else if (phase === "avant") await phaseAvant();
@@ -443,6 +474,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <div id="ctrl" style="margin:12px 0"></div>
             <details style="margin-top:14px"><summary class="small" style="cursor:pointer">Ajouter ou retirer des activités</summary><div id="actEdit"></div></details>
             <hr><label class="f inline"><input type="checkbox" id="closeDay"${session.status === "closed" ? " checked" : ""}> Clore la journée (les stagiaires gardent ressources, fiches, exercices et support ; discussion, émargement et déroulé se ferment)</label>
+            <div class="reset-live"><button type="button" class="btn sm ghost" id="resetLive">Remettre le direct à zéro</button>
+              <span class="small muted">${T("Après des essais : ferme la salle, efface la séquence lancée, les outils débloqués, les émargements projetés et l'heure d'ouverture du jour. Inscrit·es, réponses et discussion ne bougent pas.")}</span></div>
           </div>
           <div class="card" style="margin-top:14px"><h3 id="pTitle">Participant·es</h3><div id="plist"></div></div>
         </div>
@@ -455,7 +488,13 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       </div>`;
     cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: true, compact: true }));
     $("#openScr", box).onclick = () => window.open(`#/ecran/${sid}`, "ecran-" + sid, "popup=yes,width=1280,height=760");
-    $("#pjQ", root).onclick = () => show("qr"); // bouton de l'en-tête : sur l'écran projeté (salle ouverte ou non)
+    afterLive = () => draw(); // bascule du QR code de l'en-tête : l'aperçu suit
+    // Remise à zéro du direct (après des essais) : salle fermée, état diffusé vidé ; rien d'autre n'est touché
+    $("#resetLive", box).onclick = async () => {
+      if (!confirm("Remettre le direct à zéro ?\n\nLa salle sera fermée. La séquence lancée, les outils d'exercice débloqués, les émargements déjà projetés et l'heure d'ouverture du jour seront effacés. Les inscrit·es, les réponses et la discussion sont conservés.")) return;
+      session = await guard(() => api.updateSession(sid, { status: "draft", live: {} }), "Direct remis à zéro : salle fermée.") || session;
+      go(location.hash); // l'en-tête (horloge, bouton de la salle) suit
+    };
     $("#closeDay", box).onchange = async (e) => { session = await guard(() => api.updateSession(sid, e.target.checked ? { status: "closed", live: {} } : { status: "live", live: { ...(session.live || {}), started: stamp(session.live) } }), e.target.checked ? "Journée close." : "Session rouverte.") || session; draw(); };
 
     // Outils d'exercice débloqués : on ajoute celui de la séquence lancée, sans jamais en retirer
@@ -470,8 +509,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       draw();
     };
     // la séquence en cours et les émargements déjà présentés survivent à chaque changement d'écran
-    // (et l'heure de première ouverture du jour, sinon projeter un écran d'ouverture salle fermée la perdait)
-    const keep = () => ({ module: session.live?.module || null, emarg: session.live?.emarg || {}, tools: session.live?.tools || [], ...(session.live?.started ? { started: session.live.started } : {}) });
+    // (et l'heure de première ouverture du jour, sinon projeter un écran d'ouverture salle fermée la perdait, et la remise à zéro du minuteur)
+    const keep = () => ({ module: session.live?.module || null, emarg: session.live?.emarg || {}, tools: session.live?.tools || [], ...(session.live?.started ? { started: session.live.started } : {}), ...(session.live?.clock ? { clock: session.live.clock } : {}) });
     // Écrans d'ouverture et de clôture : projetables salle fermée, sans l'ouvrir. Les stagiaires ne les voient
     // dans leur espace qu'une fois la salle ouverte (session active).
     const show = async (view, extra = {}) => {

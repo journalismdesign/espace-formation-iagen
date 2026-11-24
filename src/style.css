@@ -48,6 +48,19 @@ h3{font-size:16px;margin:0 0 6px;color:var(--ink)}
 .btn.ghost{background:#fff;color:var(--blue)}
 .btn.sm{padding:5px 10px;font-size:13px}
 .btn:disabled{opacity:.5;cursor:default}
+/* Trois états : repos ; survol, qui annonce que le bouton va agir (halo, teinte) ; appui, pendant le clic (enfoncé) */
+.btn,.iconbtn,.chip{transition:background-color .12s,border-color .12s,color .12s,box-shadow .12s,filter .12s,transform .06s}
+.btn:not(:disabled):hover{box-shadow:0 0 0 3px var(--tint)}
+.btn:not(.ghost):not(:disabled):hover{filter:brightness(1.12)}
+.btn.ghost:not(:disabled):hover{background:var(--tint)}
+.btn:not(:disabled):active,.iconbtn:not(:disabled):active,.chip:active{transform:translateY(1px);box-shadow:inset 0 2px 3px rgba(0,0,0,.2)}
+.btn:not(.ghost):not(:disabled):active{filter:brightness(.88)}
+.btn.ghost:not(:disabled):active{background:var(--blue);color:var(--on-accent,#fff)}
+.iconbtn:not(:disabled):hover{border-color:var(--blue);background:var(--tint);color:var(--blue)}
+/* Bouton à bascule activé (ex. « QR code projeté ») : plein ; au survol, il annonce le retour */
+.btn.ghost.on{background:var(--blue);color:var(--on-accent,#fff)}
+.btn.ghost.on:not(:disabled):hover{background:var(--tint);color:var(--blue)}
+@media (prefers-reduced-motion:reduce){.btn,.iconbtn,.chip{transition:none}.btn:active,.iconbtn:active,.chip:active{transform:none}}
 .muted{color:var(--muted)}
 .small{font-size:13px}
 input[type=text],input[type=search],textarea,select{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:#fff}
@@ -96,7 +109,7 @@ label.f{display:block;font-weight:600;font-size:13px;margin:10px 0 4px;color:var
 .disc{background:var(--yelt);border-radius:var(--r);padding:14px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 11px;font-size:13px;cursor:pointer;color:var(--blue);font-weight:600}
-.chip:hover{border-color:var(--blue)}
+.chip:hover{border-color:var(--blue);background:var(--tint)}
 /* ---------- Quiz ---------- */
 .quiz{border:1px solid var(--line);border-radius:var(--r);padding:16px;background:#fff}
 .qq{margin:0 0 14px}
@@ -897,6 +910,7 @@ select:disabled{background-image:none;padding-right:12px !important}
 .joinbox .jb-txt{display:flex;flex-direction:column;gap:2px;line-height:1.2}
 .joinbox .jb-txt .small{color:var(--muted)}
 .joinbox .jb-txt b{font-size:17px;letter-spacing:.06em;color:var(--ink)}
+.joinbox #pjQ{min-width:11.8em;text-align:center} /* même largeur pour « Projeter le QR code » et « QR code projeté » */
 /* Interrupteur « Formation en ligne » : la case native, dessinée en interrupteur (elle reste cochable au clavier) */
 .onlinebox{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:0 14px 0 12px;cursor:pointer}
 .onlinebox.on{border-color:var(--blue);background:var(--tint)}
@@ -917,8 +931,15 @@ select:disabled{background-image:none;padding-right:12px !important}
 .clock .state{font-size:11px;padding:2px 7px;line-height:1.25;display:inline-flex;align-items:center;gap:6px;border:0} /* sans le cadre de la règle générique .live */
 .clock .state.off{background:rgba(255,255,255,.14);color:#fff}
 .clock .state.off::before{content:"";width:7px;height:7px;border-radius:50%;box-sizing:border-box;border:1.5px solid rgba(255,255,255,.7)}
+/* ↺ du minuteur : très discret, il ne se révèle qu'au survol */
+.clock .clk-reset{align-self:flex-start;margin:-3px -9px 0 -6px;padding:0 4px;background:none;border:0;border-radius:4px;color:rgba(255,255,255,.28);font-size:12px;line-height:1.4;cursor:pointer}
+.clock .clk-reset:hover,.clock .clk-reset:focus-visible{color:#fff;background:rgba(255,255,255,.14)}
+.clock .clk-reset:active{background:rgba(255,255,255,.3)}
 /* Aperçu de la page suivante, sous l'écran projeté */
 .next-box{margin-top:12px}
+/* Pilotage : remise à zéro du direct après des essais */
+.reset-live{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.reset-live .small{flex:1;min-width:220px}
 .next-box .preview{width:55%;margin-top:6px}
 .next-box .deck-slide.frame iframe{pointer-events:none}
 

@@ -150,7 +150,7 @@ async def main():
         await tr.wait_for_selector("#nextBox:not([hidden]) #nextPrev iframe", state="attached", timeout=5000)
         assert "page" in (await tr.inner_text("#nextLbl")).lower()
         ck = await tr.inner_text("#clock")
-        assert " h " in ck and "écoulé" in ck.lower(), "horloge du pilotage : " + ck
+        assert " h " in ck and ("écoulé" in ck.lower() or "prévu" in ck.lower()), "horloge du pilotage : " + ck  # avant l'heure de début de la session : « début prévu à »
         # Flèches du clavier : page suivante puis retour
         p0 = await tr.inner_text(".slidebar .chip.on")
         await tr.locator("body").press("ArrowRight"); await tr.wait_for_timeout(600)
