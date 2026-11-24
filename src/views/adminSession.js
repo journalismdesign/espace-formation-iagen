@@ -72,16 +72,16 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
 
   root.innerHTML = `
     <p><a href="#/admin">← Sessions</a></p>
-    <div class="pagehead"><div>
+    <div class="pagehead sess-head"><div>
       <h1 style="margin:0">${T(session.title)}</h1>
       <p class="muted" style="margin:4px 0">${T(session.formation)} · ${T(datesFr(session))} · code <b class="mono">${esc(session.code)}</b></p>
-      <div class="head-live"><div class="clock" id="clock" aria-live="off"></div>
-        <div class="joinbox"><img src="${qrUrl}" alt="QR code de la session"><span class="jb-txt"><span class="small">Rejoindre la session</span><b class="mono">${esc(session.code)}</b></span><button class="btn sm ghost" id="pjQ" title="Afficher le QR code sur l'écran projeté (salle ouverte ou non)">Projeter le QR code</button></div>
-        <label class="onlinebox${session.online ? " on" : ""}" id="onlineLbl" title="${esc(fr("Formation à distance : les stagiaires voient dans leur espace ce que montre l'écran projeté (pages du support, présentations, séquences, émargement)."))}"><input type="checkbox" role="switch" id="onlineMode"${session.online ? " checked" : ""}><span class="ob-txt"><b>Formation en ligne</b><span class="small" id="onlineSub">${onlineSub(session.online)}</span></span></label></div>
     </div>
     <div class="head-actions"><a class="btn ghost sm" href="#/s/${sid}" title="Voir l'espace tel que le voient les stagiaires">Voir côté stagiaire</a>
       ${session.status === "draft" ? `<button class="btn sm" data-status="live">Ouvrir la salle</button>` : session.status === "live" ? `<button class="btn sm ghost" data-status="draft">Fermer la salle</button>` : `<button class="btn sm ghost" data-status="live">Rouvrir</button>`}</div></div>
     <div class="phases">${PHASES.map(([k, l]) => `<a href="#/admin/s/${sid}/${k}"${k === phase ? ' aria-current="page"' : ""}>${phaseLabel(k, l, session)}</a>`).join("")}</div>
+    ${phase === "jour" ? `<div class="head-live"><div class="clock" id="clock" aria-live="off"></div>
+        <div class="joinbox"><img src="${qrUrl}" alt="QR code de la session"><span class="jb-txt"><span class="small">Rejoindre la session</span><b class="mono">${esc(session.code)}</b></span><button class="btn sm ghost" id="pjQ" title="Afficher le QR code sur l'écran projeté (salle ouverte ou non)">Projeter le QR code</button></div>
+        <label class="onlinebox${session.online ? " on" : ""}" id="onlineLbl" title="${esc(fr("Formation à distance : les stagiaires voient dans leur espace ce que montre l'écran projeté (pages du support, présentations, séquences, émargement)."))}"><input type="checkbox" role="switch" id="onlineMode"${session.online ? " checked" : ""}><span class="ob-txt"><b>Formation en ligne</b><span class="small" id="onlineSub">${onlineSub(session.online)}</span></span></label></div>` : ""}
     <div id="phase"></div>`;
   $$("[data-status]", root).forEach((b) => (b.onclick = async () => {
     const st = b.dataset.status;
@@ -92,7 +92,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
   const box = $("#phase", root);
   const cleanups = [];
 
-  /* En-tête : état de la salle, heure de Paris et minuteur de la journée.
+  /* Bandeau du Jour J (sous les onglets) : état de la salle, heure de Paris et minuteur de la journée.
      Le minuteur part de la première ouverture de la salle ce jour-là (live.started = {day, at}, posé par
      « Ouvrir la salle » ou le lancement d'une séquence), ou de la remise à zéro faite ce jour-là avec le bouton ↺
      (live.clock = {day, at}). Tant que la salle n'a pas été ouverte dans la journée : « début prévu à » l'heure
@@ -122,21 +122,21 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     qrBtn(); // l'écran a pu changer depuis le pilotage ou l'écran projeté
   };
   // ↺ du minuteur (délégation : le contenu du pavé est réécrit à chaque minute)
-  $("#clock", root).onclick = async (e) => {
+  if ($("#clock", root)) $("#clock", root).onclick = async (e) => { // pavé présent dans l'onglet Jour J seulement
     if (!e.target.closest("[data-clk-reset]")) return;
     const live = { ...(session.live || {}), clock: { day: parisDay(), at: new Date().toISOString() } };
     session = await guard(() => api.updateSession(sid, { live }), "Minuteur remis à zéro : le temps écoulé repart de maintenant.") || session;
     tick(); afterLive();
   };
-  // Interrupteur « Formation en ligne » de l'en-tête (tous les onglets) : l'écran projeté s'affiche dans l'espace des stagiaires
-  $("#onlineMode", root).onchange = async (e) => {
+  // Interrupteur « Formation en ligne » du bandeau du Jour J : l'écran projeté s'affiche dans l'espace des stagiaires
+  if ($("#onlineMode", root)) $("#onlineMode", root).onchange = async (e) => {
     const on = e.target.checked;
     const s2 = await guard(() => api.updateSession(sid, { online: on }), on ? "Mode en ligne : les stagiaires voient l'écran dans leur espace." : "Mode en ligne désactivé.");
     if (s2) session = s2; else e.target.checked = !on;
     $("#onlineLbl", root).classList.toggle("on", !!session.online);
     $("#onlineSub", root).textContent = onlineSub(session.online);
   };
-  /* « Projeter le QR code » de l'en-tête, en bascule, depuis tous les onglets, salle ouverte ou non :
+  /* « Projeter le QR code » du bandeau du Jour J, en bascule, salle ouverte ou non :
      un clic met la slide « Rejoindre » sur l'écran projeté (pour un·e retardataire) en gardant de côté ce qui
      était projeté (live.prev) ; un second clic remet cet écran. Lancer autre chose entre-temps abandonne live.prev. */
   const KEEP = ["module", "emarg", "tools", "started", "clock"]; // ce qui survit à tout changement d'écran
@@ -149,7 +149,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on));
     b.title = on ? "Revenir à l'écran projeté avant le QR code" : "Afficher le QR code sur l'écran projeté (salle ouverte ou non)";
   }
-  $("#pjQ", root).onclick = async () => {
+  if ($("#pjQ", root)) $("#pjQ", root).onclick = async () => {
     const l = session.live || {}, base = pick(l, (k) => KEEP.includes(k));
     const back = l.view === "qr";
     const live = back ? { ...base, ...(l.prev || {}) }

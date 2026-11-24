@@ -271,11 +271,12 @@ select::-ms-expand{display:none}
 @keyframes dot3{0%,74%{opacity:0}75%,100%{opacity:1}}
 @media (prefers-reduced-motion:reduce){.tab-loading .dots span{animation:none;opacity:1}}
 /* Attente avant l'ouverture de la salle (jour de la formation) : colonne de gauche grisée, message en grand */
-#view.waiting .side-path a,#view.waiting .side-nav a{opacity:.4;filter:grayscale(1);pointer-events:none;cursor:default}
+#view.waiting .side-path a.off,#view.waiting .side-nav a.off{opacity:.4;filter:grayscale(1);pointer-events:none;cursor:default}
 .wait-screen{max-width:620px;margin:9vh auto 0;padding:0 12px;text-align:center}
 .wait-screen .wait-smile{font-size:64px;line-height:1;margin-bottom:20px}
 .wait-screen h1{font-size:36px;margin:0 0 14px;color:var(--ink)}
 .wait-screen .wait-lead{font-size:21px;line-height:1.45;color:var(--ink);margin:0 0 20px}
+.wait-screen .wait-more{font-size:16px;color:var(--ink);margin:-8px 0 20px}
 .wait-screen .small{color:var(--muted)}
 /* Direct (stagiaire) */
 .card.live{border:2px solid var(--navy)}
@@ -335,6 +336,11 @@ section.cad.done .ck:after{content:"✓";color:#fff;font-size:13px;font-weight:8
 }
 /* Back-office */
 .head-actions{display:flex;gap:8px;flex-wrap:wrap}
+/* En-tête de session : titre à gauche, « Voir côté stagiaire » et la salle en haut à droite, onglets juste dessous */
+.sess-head{flex-wrap:nowrap}
+.sess-head>div:first-child{min-width:0}
+.sess-head .head-actions{flex:none;justify-content:flex-end}
+@media (max-width:720px){.sess-head{flex-wrap:wrap}}
 .phases{display:inline-flex;gap:4px;background:var(--tint);border-radius:10px;padding:4px;margin-bottom:16px;flex-wrap:wrap}
 .phases a{padding:8px 14px;border-radius:8px;text-decoration:none;color:var(--ink);font-weight:600;font-size:14px}
 .phases a[aria-current=page]{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -920,7 +926,7 @@ select:disabled{background-image:none;padding-right:12px !important}
 /* En-tête de session : état de la salle, heure, temps écoulé depuis la première ouverture de la salle du jour */
 /* même dessin que le minuteur de pratique des stagiaires (#timerBox) */
 /* l'horloge et le bloc « Rejoindre la session » côte à côte, étirés à la même hauteur */
-.head-live{display:flex;flex-wrap:wrap;align-items:stretch;gap:10px;margin-top:6px}
+.head-live{display:flex;flex-wrap:wrap;align-items:stretch;gap:10px;margin:0 0 16px} /* bandeau du Jour J, sous les onglets */
 .head-live>*{min-height:52px} /* même hauteur aussi quand l'écran est trop étroit et que le bloc passe à la ligne */
 .joinbox{display:flex;align-items:center;gap:12px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:0 12px 0 8px}
 .joinbox img{width:40px;height:40px;display:block}
