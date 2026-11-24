@@ -147,7 +147,7 @@ async def main():
         assert await tr.evaluate("[...document.querySelectorAll('#preview iframe:not([data-preload])')].some(f => f.__marque === 1)"), "page préchargée réutilisée"
         assert await tr.locator("#preview iframe[data-preload]").count() == 1, "nouvelle page préchargée"
         # Formateur : aperçu de la page suivante et horloge avec temps écoulé
-        assert await tr.locator("#nextBox:not([hidden]) #nextPrev iframe").count() == 1, "aperçu de la page suivante"
+        await tr.wait_for_selector("#nextBox:not([hidden]) #nextPrev iframe", state="attached", timeout=5000)
         assert "page" in (await tr.inner_text("#nextLbl")).lower()
         ck = await tr.inner_text("#clock")
         assert " h " in ck and "écoulé" in ck.lower(), "horloge du pilotage : " + ck
@@ -156,6 +156,9 @@ async def main():
         await st.wait_for_timeout(800); ptxt = await st.inner_text("#parcours")
         assert "En ce moment" in ptxt or "EN CE MOMENT" in ptxt, "la séquence pilotée doit être signalée"
         assert await st.locator(".mod.passed[data-id='j1-accueil']").count() == 1, "la séquence passée doit être validée en vert"
+        assert await st.locator(".mod.em-slot.passed[data-slot='j1-matin']").count() == 1, "émargement du matin présenté : validé dans le déroulé"
+        assert await st.locator(".mod.em-slot[data-slot='j1-aprem']").count() == 1, "émargement de l'après-midi dans le déroulé"
+        await st.locator(".mod.em-slot >> nth=0").scroll_into_view_if_needed(); await shot(st, "04b-deroule-emargement")
         # Outils d'exercice : masqués tant que l'exercice n'est pas lancé, puis disponibles pour de bon
         assert await st.locator("#navOutils[hidden]").count() == 1, "outils masqués avant l'exercice"
         await tr.click("[data-mod='j1-rmctf']"); await st.wait_for_selector("#navOutils:not([hidden])", timeout=5000)

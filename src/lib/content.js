@@ -120,7 +120,7 @@ export function renderParcours(root, format, progress, onChange, opts = {}) {
         <div class="legend">${[["comprendre", "Comprendre", "var(--comp)"], ["pratique", "Pratique", "var(--prat)"], ["discussion", "Discussion libre", "var(--disc)"]].map(([k, l, c]) => `<span><b style="background:${c}"></b>${l} · ${fmtMin(t[k])}</span>`).join("")}</div>
       </div>
       ${D.n > 1 ? `<div class="days">${Array.from({ length: D.n }, (_, k) => k + 1).map((d) => `<button data-day="${d}" aria-pressed="${d === curDay}">Jour ${d}${D.titles[d] ? ` · ${T(D.titles[d])}` : ""}</button>`).join("")}</div>` : ""}
-      <div class="tl">${mods.map((m) => modHtml(m, progress, nm, curIdx < 0 ? null : list.indexOf(m) - curIdx)).join("")}</div>`;
+      <div class="tl">${withSlots(mods, format, curDay, curMod).map((m) => m.slot ? slotHtml(m, format) : modHtml(m, progress, nm, curIdx < 0 ? null : list.indexOf(m) - curIdx)).join("")}</div>`;
     $$("[data-day]", root).forEach((b) => (b.onclick = () => { curDay = +b.dataset.day; draw(); }));
     $$(".mod[data-id]", root).forEach((el) => {
       const head = $(".mhead", el), id = el.dataset.id;
@@ -139,6 +139,31 @@ export function renderParcours(root, format, progress, onChange, opts = {}) {
   };
   draw();
 }
+/* Créneaux d'émargement dans le déroulé du stagiaire (session connue seulement), à leur heure :
+   validés quand ils sont passés (30 min après l'heure prévue, jour passé), présentés par le formateur,
+   ou dépassés par la séquence lancée ; « en cours » pendant le créneau. */
+function withSlots(mods, session, day, curMod) {
+  if (!session || typeof session !== "object" || !session.id) return mods;
+  const toM = (t) => mins(t);
+  const n = parisNow(), emarg = session.live?.emarg || {};
+  const slots = emargementSlots(session).filter((x) => !x.kind && x.day === day).map((x) => {
+    const past = (x.date && x.date < n.date) || (x.date === n.date && n.min >= toM(x.t) + 30)
+      || !!emarg[x.key] || (curMod && (curMod.day || 1) === x.day && toM(curMod.t[0]) > toM(x.t));
+    const open = !past && x.date === n.date && n.min >= toM(x.t) && n.min < toM(x.t) + 30;
+    return { ...x, slot: true, past, open };
+  });
+  const out = [], rest = [...slots];
+  mods.forEach((m) => { while (rest.length && toM(rest[0].t) <= toM(m.t[0])) out.push(rest.shift()); out.push(m); });
+  return out.concat(rest);
+}
+function slotHtml(x, session) {
+  const end = (() => { const v = mins(x.t) + 30; return `${String(Math.floor(v / 60)).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`; })();
+  const tag = x.past ? `<span class="pill passed">✓ Validé</span>` : x.open ? `<a class="btn sm ok-btn" href="#/s/${session.id}/emargement">Émarger maintenant</a>` : `<span class="pill">À venir</span>`;
+  return `<div class="mod em-slot${x.past ? " done passed" : ""}${x.open ? " now" : ""}" data-type="emargement" data-slot="${x.key}">
+    <div class="time"><b>${hfr(x.t)}</b>${hfr(end)}</div>
+    <div class="body"><div class="mhead"><span class="check" aria-hidden="true">${x.past ? "✓" : ""}</span><div class="meta"><span class="pill em">Émargement</span><b>${T(x.label)}</b>${tag}</div></div></div></div>`;
+}
+
 // rel : position par rapport à la séquence en cours (null si le formateur n'a rien lancé)
 function modHtml(m, progress, nm, rel = null) {
   const dur = mins(m.t[1]) - mins(m.t[0]);

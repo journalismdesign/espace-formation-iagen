@@ -136,14 +136,19 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
       <div id="parcours"></div>`;
     const save = debounce((p) => membership && api.saveProgress(sid, p).catch(() => {}), 600);
     let lastMod;
+    let parcLast;
+    // créneaux d'émargement validés à l'heure : clé de redessin = séquence + émargements présentés + quart d'heure
+    const parcKey = () => [session.live?.module || "", Object.keys(session.live?.emarg || {}).sort().join(","), Math.floor(Date.now() / 300000)].join("|");
     const drawParcours = () => {
-      if (lastMod === (session.live?.module || null)) return; // ne redessine que si la séquence change
+      if (parcLast === parcKey()) return; // ne redessine que si quelque chose a changé
+      parcLast = parcKey();
       lastMod = session.live?.module || null;
       renderParcours($("#parcours", body), session, progress, (p) => { $("#pp", body).textContent = parcoursPct(session, p, lastMod) + NB + "%"; save(p); }, { currentId: lastMod });
       $("#pp", body).textContent = parcoursPct(session, progress, lastMod) + NB + "%";
     };
     drawParcours();
     onSession.add(drawParcours);
+    const parcT = setInterval(drawParcours, 60000); cleanups.push(() => clearInterval(parcT));
 
     let poll = null, lastKey = null, olSeq = 0;
     const drawLive = async () => {
