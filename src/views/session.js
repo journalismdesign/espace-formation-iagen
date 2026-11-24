@@ -74,7 +74,7 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   const openTools = () => (session.status === "closed" ? new Set(TOOL_IDS) : unlockedTools(session)); // après clôture : tous les exercices
 
   root.classList.add("withside");
-  root.classList.toggle("waiting", isWaiting);
+  root.classList.toggle("wait-mode", isWaiting); // (pas « waiting » : classe déjà prise par les activités, en italique)
   root.innerHTML = `
     <aside class="side">
       ${logosHtml(br, "sm")}

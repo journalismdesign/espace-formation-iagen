@@ -271,7 +271,7 @@ select::-ms-expand{display:none}
 @keyframes dot3{0%,74%{opacity:0}75%,100%{opacity:1}}
 @media (prefers-reduced-motion:reduce){.tab-loading .dots span{animation:none;opacity:1}}
 /* Attente avant l'ouverture de la salle (jour de la formation) : colonne de gauche grisée, message en grand */
-#view.waiting .side-path a.off,#view.waiting .side-nav a.off{opacity:.4;filter:grayscale(1);pointer-events:none;cursor:default}
+#view.wait-mode .side-path a.off,#view.wait-mode .side-nav a.off{opacity:.4;filter:grayscale(1);pointer-events:none;cursor:default}
 .wait-screen{max-width:620px;margin:9vh auto 0;padding:0 12px;text-align:center}
 .wait-screen .wait-smile{font-size:64px;line-height:1;margin-bottom:20px}
 .wait-screen h1{font-size:36px;margin:0 0 14px;color:var(--ink)}
