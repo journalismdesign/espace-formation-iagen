@@ -51,17 +51,18 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   const membership = await api.myMembership(sid).catch(() => null);
   const trainerPreview = isStaff(me) && !membership;
   const closedView = session.status === "closed" && !trainerPreview;
-  /* Attente : tant que la salle n'a pas été ouverte dans la journée (live.started du jour) et que la session
-     n'est pas close. Déroulé et carte « En direct » masqués, colonne de gauche grisée, message d'attente en grand.
-     Restent actifs : l'émargement, et « Mon cadrage » avant le premier jour (préparation des formations de deux
-     journées). Une fermeture de la salle en cours de journée (déjeuner) ne remet pas l'attente ;
-     « Remettre le direct à zéro » si. L'aperçu formateur montre la même chose. */
-  const waitingNow = () => !closedView && session.status === "draft" && session.live?.started?.day !== parisDay();
+  /* Attente : dès que la salle est fermée (status draft) et que la session n'est pas close. Déroulé et carte
+     « En direct » masqués, colonne de gauche grisée, message d'attente en grand. Restent actifs : l'émargement,
+     et « Mon cadrage » avant le premier jour (préparation des formations de deux journées). Message selon le
+     moment : avant le premier jour, la date ; salle déjà ouverte dans la journée (pause), « va reprendre » ;
+     sinon « va commencer ». L'aperçu formateur montre la même chose. */
+  const waitingNow = () => !closedView && session.status === "draft";
   const isWaiting = waitingNow();
   const beforeDay1 = !!session.date && parisDay() < session.date;
+  const resumed = session.live?.started?.day === parisDay(); // salle déjà ouverte aujourd'hui : c'est une pause
   const WAIT = beforeDay1
     ? waitHtml(`La formation commencera le ${dateFr(session.date).replace(/^(\S+) 1 /, "$1 1er ")}${session.start_time ? `, à ${String(session.start_time).slice(0, 5).replace(":", " h ")}` : ""}.`, hasCadrage(session) ? "En attendant, vous pouvez préparer votre cadrage." : "")
-    : waitHtml("La formation va commencer dans quelques minutes… Vous pouvez encore aller chercher un café.");
+    : waitHtml(`La formation va ${resumed ? "reprendre" : "commencer"} dans quelques minutes… Vous pouvez encore aller chercher un café.`);
   const waitAllowed = (t) => t === "emargement" || (t === "cadrage" && beforeDay1); // onglets ouverts pendant l'attente
   if (closedView && !CLOSED_TABS.includes(tab)) { ctx.go(`#/s/${sid}/ressources`); return; }
   const shownTabs = TABS.filter(([k]) => !closedView || CLOSED_TABS.includes(k));
@@ -111,7 +112,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   // Clôture ou réouverture pendant la consultation : on redessine avec les bons onglets
   const status0 = session.status;
   onSession.add(() => { if (!trainerPreview && (session.status === "closed") !== (status0 === "closed")) { fullRender = true; ctx.go(location.hash); } });
-  // Ouverture de la salle pendant l'attente : place au jour J (ou retour à l'attente après « Remettre le direct à zéro »)
+  // Ouverture de la salle pendant l'attente : place au jour J ; fermeture (pause, fin de journée) : retour à l'attente
   onSession.add(() => { if (waitingNow() !== isWaiting) { fullRender = true; ctx.go(isWaiting ? `#/s/${sid}/direct` : location.hash); } });
   onSession.add(() => tabHandlers.forEach((f) => f()));
   cleanups.push(api.watch(sid, (e) => { if (e.table === "sessions" || e.table === "*") refreshSession(); }, ["sessions"]));
