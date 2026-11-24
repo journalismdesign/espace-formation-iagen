@@ -24,6 +24,14 @@ const TABS = [
 // Après la clôture, les stagiaires gardent leurs ressources, les fiches, les exercices et le support
 // (ni déroulé, ni discussion, ni émargement ; la discussion est aussi fermée côté base)
 const CLOSED_TABS = ["ressources", "fiches", "outils", "support"];
+// Colonne de droite en cours de chargement : « Chargement » et trois points qui apparaissent l'un après l'autre
+const LOADING = `<div class="tab-loading" role="status">Chargement<span class="dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></div>`;
+// Avant l'ouverture de la salle, le jour de la formation : message d'attente en grand, à la place du contenu
+const WAIT = `<div class="wait-screen" role="status"><div class="wait-smile" aria-hidden="true">🙂</div>
+  <h1>${T("Merci de patienter")}</h1>
+  <p class="wait-lead">${T("La formation va commencer dans quelques minutes… Vous pouvez encore aller chercher un café.")}</p>
+  <p class="small">${T("Cette page s'ouvrira d'elle-même dès l'ouverture de la salle.")}</p></div>`;
+const parisDay = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
 export const FICHE_CATS = [
   ["comprendre", "Comprendre", ["interface", "configuration"]],
   ["outils", "Les briques des assistants", ["projet", "plugin", "connecteur", "competence", "mcp", "instructions", "notebook"]],
@@ -42,6 +50,16 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   const membership = await api.myMembership(sid).catch(() => null);
   const trainerPreview = isStaff(me) && !membership;
   const closedView = session.status === "closed" && !trainerPreview;
+  /* Attente : le jour de la formation (ou sans date), tant que la salle n'a pas été ouverte ce jour-là
+     (live.started du jour). Déroulé et carte « En direct » masqués, colonne de gauche grisée (sauf l'émargement),
+     message d'attente en grand. Avant le jour J, l'espace reste consultable (cadrage, ressources). Une fermeture
+     de la salle en cours de journée (déjeuner) ne remet pas l'attente. L'aperçu formateur montre la même chose. */
+  const waitingNow = () => {
+    const today = parisDay();
+    const day = !session.date || session.date === today || (session.format === "2" && session.date2 === today);
+    return !closedView && session.status === "draft" && day && session.live?.started?.day !== today;
+  };
+  const isWaiting = waitingNow();
   if (closedView && !CLOSED_TABS.includes(tab)) { ctx.go(`#/s/${sid}/ressources`); return; }
   const shownTabs = TABS.filter(([k]) => !closedView || CLOSED_TABS.includes(k));
   const project = await api.myProject(sid).catch(() => null);
@@ -52,6 +70,7 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   const openTools = () => (session.status === "closed" ? new Set(TOOL_IDS) : unlockedTools(session)); // après clôture : tous les exercices
 
   root.classList.add("withside");
+  root.classList.toggle("waiting", isWaiting);
   root.innerHTML = `
     <aside class="side">
       ${logosHtml(br, "sm")}
@@ -70,6 +89,8 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
     </aside>
     <section class="sidemain" id="tabBody"></section>`;
   const body = $("#tabBody", root);
+  // En attente : liens du parcours et des ressources désactivés (l'émargement et le retour au back-office restent actifs)
+  if (isWaiting) $$(".side-path a, .side-nav a", root).forEach((a) => { a.setAttribute("aria-disabled", "true"); a.tabIndex = -1; a.addEventListener("click", (e) => e.preventDefault()); });
   const cleanups = [];
   // Écouteurs et minuteries propres à l'onglet affiché : coupés à chaque changement d'onglet
   let tabCleanups = [], fullRender = false;
@@ -87,6 +108,8 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   // Clôture ou réouverture pendant la consultation : on redessine avec les bons onglets
   const status0 = session.status;
   onSession.add(() => { if (!trainerPreview && (session.status === "closed") !== (status0 === "closed")) { fullRender = true; ctx.go(location.hash); } });
+  // Ouverture de la salle pendant l'attente : place au jour J (ou retour à l'attente après « Remettre le direct à zéro »)
+  onSession.add(() => { if (waitingNow() !== isWaiting) { fullRender = true; ctx.go(isWaiting ? `#/s/${sid}/direct` : location.hash); } });
   onSession.add(() => tabHandlers.forEach((f) => f()));
   cleanups.push(api.watch(sid, (e) => { if (e.table === "sessions" || e.table === "*") refreshSession(); }, ["sessions"]));
   // Émargement : bouton vert sous « En direct », affiché pendant les créneaux (début de journée et reprise
@@ -103,11 +126,13 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   drawEm(); onSession.add(drawEm);
   const emTimer = setInterval(drawEm, 30000); cleanups.push(() => clearInterval(emTimer));
 
+  body.innerHTML = LOADING;
   await renderTab();
 
   /* Changer d'onglet ne redessine que la colonne de droite (main.js appelle retab au lieu de tout reconstruire) :
-     la colonne de gauche reste en place, seule l'entrée active change ; l'ancien contenu reste affiché jusqu'à
-     ce que le nouveau soit prêt. Les changements d'onglet sont traités l'un après l'autre. */
+     la colonne de gauche reste en place, seule l'entrée active change. Si le nouvel onglet tarde (appels réseau),
+     « Chargement… » remplace l'ancien contenu au bout de 150 ms ; un onglet immédiat ne clignote pas.
+     Les changements d'onglet sont traités l'un après l'autre. */
   let chain = Promise.resolve();
   const done = () => { tabCleanups.forEach((f) => f && f()); cleanups.forEach((f) => f && f()); };
   done.retab = async ([sid2, tab2 = "direct", sub2]) => {
@@ -116,7 +141,9 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
       tab = TABS.some(([k]) => k === tab2) ? tab2 : "direct"; sub = sub2;
       if (closedView && !CLOSED_TABS.includes(tab)) { ctx.go(`#/s/${sid}/ressources`); return; }
       markNav();
-      await renderTab();
+      const before = body.firstElementChild; // l'ancien contenu : on ne remplace par « Chargement » que s'il est encore là
+      const slow = setTimeout(() => { if (body.firstElementChild === before) body.innerHTML = LOADING; }, 150);
+      try { await renderTab(); } finally { clearTimeout(slow); }
     }).catch((e) => console.error(e)));
     return true;
   };
@@ -133,6 +160,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   async function renderTab() {
     tabCleanups.forEach((f) => f && f()); tabCleanups = []; tabHandlers.clear();
     delete body.dataset.tools;
+    if (isWaiting && tab !== "emargement") { body.innerHTML = WAIT; return; } // avant l'ouverture de la salle
     const extra = $("#sideExtra", root); if (extra) extra.innerHTML = ""; // complément du cadrage
   if (tab === "direct") await tabDirect();
   else if (tab === "cadrage" && !hasCadrage(session)) ctx.go(`#/s/${sid}/direct`); // pas de cadrage en une journée

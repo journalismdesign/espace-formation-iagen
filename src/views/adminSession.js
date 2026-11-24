@@ -93,24 +93,29 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
   const cleanups = [];
 
   /* En-tête : état de la salle, heure de Paris et minuteur de la journée.
-     Le minuteur part de l'heure d'ouverture prévue dans la session (Réglages → heure de début), ou de l'heure
-     de la remise à zéro faite ce jour-là avec le bouton ↺ (live.clock = {day, at}).
+     Le minuteur part de la première ouverture de la salle ce jour-là (live.started = {day, at}, posé par
+     « Ouvrir la salle » ou le lancement d'une séquence), ou de la remise à zéro faite ce jour-là avec le bouton ↺
+     (live.clock = {day, at}). Tant que la salle n'a pas été ouverte dans la journée : « début prévu à » l'heure
+     de début de la session (Réglages).
      Même dessin que le minuteur de pratique des stagiaires : pavé sombre, libellé à gauche, heure en chasse fixe. */
   const hm2 = (h, m) => `${String(h).padStart(2, "0")} h ${String(m).padStart(2, "0")}`;
+  const hmMin = (x) => hm2(Math.floor(x / 60), x % 60);
   const parisMin = (d) => { const [h, m] = d.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).split(":").map(Number); return h * 60 + m; };
-  const clockRef = () => { // minute du jour (heure de Paris) d'où part le minuteur
-    const c = session.live?.clock;
-    if (c?.day === parisDay()) return parisMin(new Date(c.at));
-    const [h, m] = String(session.start_time || "09:30").split(":").map(Number);
-    return (h || 0) * 60 + (m || 0);
+  const clockRef = () => { // minute du jour (heure de Paris) d'où part le minuteur, ou null si la journée n'a pas commencé
+    const today = parisDay(), c = session.live?.clock, s = session.live?.started;
+    if (c?.day === today) return parisMin(new Date(c.at));
+    if (s?.day === today) return parisMin(new Date(s.at));
+    return null;
   };
+  const plannedTxt = () => { const [h, m] = String(session.start_time || "09:30").split(":").map(Number); return hm2(h || 0, m || 0); };
   const tick = () => {
     const el = $("#clock", root); if (!el) return;
     const dur = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m} min`);
-    const nowMin = parisMin(new Date()), ref = clockRef(), refTxt = hm2(Math.floor(ref / 60), ref % 60), on = session.status === "live";
+    const nowMin = parisMin(new Date()), ref = clockRef(), on = session.status === "live";
     // Pastille d'état toujours au même gabarit (rond + libellé) et seconde ligne toujours présente : le pavé ne change pas de hauteur
     const state = on ? `<span class="state live">En direct</span>` : `<span class="state off">${session.status === "closed" ? "Session terminée" : "Salle fermée"}</span>`;
-    const sub = session.status === "closed" ? "" : nowMin < ref ? `début prévu à ${refTxt}` : on ? `écoulé ${dur(nowMin - ref)} · depuis ${refTxt}` : `journée commencée à ${refTxt}`;
+    const sub = session.status === "closed" ? "" : ref === null ? `début prévu à ${plannedTxt()}`
+      : on ? `écoulé ${dur(Math.max(0, nowMin - ref))} · depuis ${hmMin(ref)}` : `journée commencée à ${hmMin(ref)}`;
     const html = `<span class="clk-lbl">${state}<span class="clk-sub">${sub ? fr(sub) : "&nbsp;"}</span></span><b class="t">${hm2(Math.floor(nowMin / 60), nowMin % 60)}</b>`
       + `<button type="button" class="clk-reset" data-clk-reset title="Remettre le minuteur à zéro : le temps écoulé repart de maintenant" aria-label="Remettre le minuteur à zéro">↺</button>`;
     if (el.innerHTML !== html) el.innerHTML = html;

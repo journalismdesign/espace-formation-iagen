@@ -50,7 +50,7 @@ export async function viewAdmin(root, _p, { api, go, me }) {
         <td class="client-cell">${(() => { const c = clientOf(s); return c.logo ? `<img src="${esc(c.logo)}" alt="${esc(c.name)}" title="${esc(c.name)}" class="client-logo">` : c.name ? `<span>${T(c.name)}</span>` : `<span class="muted">—</span>`; })()}</td>
         <td class="small">${admin ? `<select class="assign" data-assign="${s.id}" aria-label="Intervenant·e de la session">${trOptions(s.trainer_id)}</select>` : T(trainerName(s.trainer_id) || "—")}</td>
         <td><span class="state ${s.status}">${STATUS[s.status]}</span></td>
-        <td class="small mono">${s.date || "—"}</td>
+        <td class="small mono date-cell">${s.date || "—"}</td>
         <td class="mono">${esc(s.code)}</td>
         <td>${counts[s.id] || 0}</td>
         <td class="actions"><button class="iconbtn" data-qr="${s.id}" title="QR code" aria-label="QR code">▦</button>${admin ? `<button class="iconbtn" data-dup="${s.id}" title="Dupliquer" aria-label="Dupliquer la session">⧉</button><button class="iconbtn danger" data-del="${s.id}" title="Supprimer" aria-label="Supprimer">✕</button>` : ""}</td>
