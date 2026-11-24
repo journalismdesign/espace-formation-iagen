@@ -9,7 +9,6 @@ import { ACT_TYPES, currentAct, respKey, renderResults, defaultActivities, count
 import { screenHtml, nextPage, stepLive, pageKey } from "../lib/screen.js";
 import { openSheet } from "../lib/content.js";
 import { joinUrl, joinUrlLabel, qr, showQr, parseEmails, openDuplicate } from "./admin.js";
-import { STATUS } from "./home.js";
 import { logoPair } from "./settings.js";
 import { STEPS, SENSIB, VERIF } from "./cadrageModel.js";
 import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml, EM2_DEFAULT, evaluationQr, EVAL_TITLE, EVAL_TEXT } from "../lib/brand.js";
@@ -74,7 +73,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     <div class="pagehead"><div>
       <h1 style="margin:0">${T(session.title)}</h1>
       <p class="muted" style="margin:4px 0">${T(session.formation)} · ${T(datesFr(session))} · code <b class="mono">${esc(session.code)}</b></p>
-      <div class="chips"><span class="state ${session.status}" id="stateP">${STATUS[session.status]}</span><span class="pill" id="rtP"><span class="dot rt"></span>Temps réel</span></div>
+      <div class="clock" id="clock" aria-live="off"></div>
     </div>
     <div class="head-actions"><a class="btn ghost sm" href="#/s/${sid}" title="Voir l'espace tel que le voient les stagiaires">Voir côté stagiaire</a>
       ${session.status === "draft" ? `<button class="btn sm" data-status="live">Ouvrir la salle</button>` : session.status === "live" ? `<button class="btn sm ghost" data-status="draft">Fermer la salle</button>` : `<button class="btn sm ghost" data-status="live">Rouvrir</button>`}</div></div>
@@ -88,6 +87,23 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
 
   const box = $("#phase", root);
   const cleanups = [];
+
+  // En-tête : état de la salle, heure et temps écoulé depuis la première ouverture de la salle du jour.
+  // Même dessin que le minuteur de pratique des stagiaires : pavé sombre, libellé à gauche, heure en chasse fixe.
+  const tick = () => {
+    const el = $("#clock", root); if (!el) return;
+    const hmOf = (d) => d.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).replace(":", " h ");
+    const dur = (ms) => { const m = Math.max(0, Math.floor(ms / 60000)); return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m} min`; };
+    const now = new Date(), on = session.status === "live";
+    const st = session.live?.started?.day === parisDay() ? new Date(session.live.started.at) : null;
+    // Pastille d'état toujours au même gabarit (rond + libellé) et seconde ligne toujours présente : le pavé ne change pas de hauteur
+    const state = on ? `<span class="state live">En direct</span>` : `<span class="state off">${session.status === "closed" ? "Session terminée" : "Salle fermée"}</span>`;
+    const sub = session.status === "closed" ? "" : !st ? (on ? "" : "pas encore ouverte aujourd'hui") : on ? `écoulé ${dur(now - st)} · depuis ${hmOf(st)}` : `journée commencée à ${hmOf(st)}`;
+    const html = `<span class="clk-lbl">${state}<span class="clk-sub">${sub ? fr(sub) : "&nbsp;"}</span></span><b class="t">${hmOf(now)}</b>`;
+    if (el.innerHTML !== html) el.innerHTML = html;
+  };
+  tick(); const clockT = setInterval(tick, 5000); cleanups.push(() => clearInterval(clockT));
+
   if (phase === "reglages") await phaseReglages();
   else if (phase === "avant") await phaseAvant();
   else if (phase === "jour") await phaseJour();
@@ -393,7 +409,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       <div class="grid jour2">
         <div>
           <div class="card">
-            <div class="pilot-head"><h3>Pilotage</h3><div class="clock" id="clock" aria-live="off"></div></div>
+            <h3>Pilotage</h3>
             <label class="online-toggle${session.online ? " on" : ""}" id="onlineLbl"><input type="checkbox" id="onlineMode"${session.online ? " checked" : ""}><span><b>Formation en ligne</b><span class="small">${T("Les stagiaires voient dans leur espace ce que montre l'écran projeté : pages du support, présentations, séquences, émargement.")}</span></span></label>
             <p class="small muted" id="hint" style="margin-top:0"></p>
             <div id="emRemind"></div>
@@ -421,21 +437,6 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: true, compact: true }));
     $("#openScr", box).onclick = () => window.open(`#/ecran/${sid}`, "ecran-" + sid, "popup=yes,width=1280,height=760");
     $("#pjQ", box).onclick = () => show("qr"); // sur l'écran projeté (salle ouverte ou non)
-    const tick = () => {
-      const el = $("#clock", box); if (!el) return;
-      const now = new Date(), hm = now.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).replace(":", " h ");
-      const st = session.live?.started?.day === parisDay() ? new Date(session.live.started.at) : null;
-      const hmOf = (d) => d.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).replace(":", " h ");
-      const dur = (ms) => { const m = Math.max(0, Math.floor(ms / 60000)); return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m} min`; };
-      // Même dessin que le minuteur de pratique des stagiaires : pavé sombre, libellé à gauche, heure en chasse fixe
-      const on = session.status === "live";
-      const state = on ? `<span class="state live">En direct</span>` : `<span class="clk-state">Salle fermée</span>`;
-      const sub = !st ? "" : on ? `écoulé ${dur(now - st)} · depuis ${hmOf(st)}` : `journée commencée à ${hmOf(st)}`;
-      const html = `<span class="clk-lbl">${state}${sub ? `<span>${fr(sub)}</span>` : ""}</span><b class="t">${hm}</b>`;
-      if (el.innerHTML !== html) el.innerHTML = html;
-      el.classList.toggle("on", session.status === "live");
-    };
-    tick(); const clockT = setInterval(tick, 5000); cleanups.push(() => clearInterval(clockT));
     $("#onlineMode", box).onchange = async (e) => {
       const on = e.target.checked;
       const s2 = await guard(() => api.updateSession(sid, { online: on }), on ? "Mode en ligne : les stagiaires voient l'écran dans leur espace." : "Mode en ligne désactivé.");
@@ -492,6 +493,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     const draw = async () => {
       session = (await api.getSession(sid)) || session;
       const act = currentAct(session), live = session.live || {};
+      tick(); // horloge de l'en-tête : suit tout de suite l'ouverture ou la fermeture de la salle
       $("#hint", box).textContent = session.status === "live" ? "La salle est ouverte. Chaque clic change l'écran projeté et ce que voient les stagiaires dans leur espace." : "La salle est fermée : les écrans d'ouverture et de clôture se projettent sans l'ouvrir, les stagiaires ne les verront qu'à l'ouverture de la salle. Lancer une séquence ou une activité ouvre la salle.";
       const V = session.status === "live" || OPENING_VIEWS.has(live.view) ? live.view : null;
       $("#opening", box).innerHTML = [["title", "Slide de titre", "Titre, logos, dates, QR"], ["emargement", "Émargement", session.emargement_url || session.emargement_qr ? "QR de l'organisme" : "À configurer"], ["trainer", "Formateur", session.trainer_id ? "Fiche de l'intervenant" : "À choisir"], ["support", "Support", "Annonce du téléchargement"], ["evaluation", "Évaluation", session.evaluation_url || session.evaluation_qr ? "QR et lien du formulaire" : "À configurer"], ["", "Écran d'attente", "Rien de projeté"]]
@@ -529,10 +531,10 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const pages = cur ? parsePages(cur.pages) : [];
       const goPage = (p) => setLive({ ...keep(), module: cur.id, view: "slide", slide: p, started_at: new Date().toISOString() });
       $$("[data-page]", box).forEach((b) => (b.onclick = () => goPage(+b.dataset.page)));
+      // ← → : même règle que les flèches du clavier (au bout de la séquence, on passe à la voisine)
       $$("[data-sl]", box).forEach((b) => (b.onclick = () => {
-        const i = V === "slide" ? pages.indexOf(live.slide) : -1;
-        const j = b.dataset.sl === "next" ? Math.min(pages.length - 1, i + 1) : Math.max(0, i - 1);
-        goPage(pages[j]);
+        const nl = stepLive(session, b.dataset.sl === "next" ? 1 : -1);
+        if (nl) setLive(nl); else if (V !== "slide" && pages.length) goPage(pages[0]);
       }));
       // Présentations supplémentaires (Google Slides ou PDF Drive)
       const decks = session.decks || [];
@@ -569,8 +571,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       morph($("#preview", box), screenHtml({ ...sd, session, qrUrl, joinLabel: joinUrlLabel(session.code) }, true)); // sans clignotement
       // Aperçu de la page suivante (pour le formateur seulement)
       const nx = nextPage(session);
-      $("#nextBox", box).hidden = !nx?.src;
-      if (nx?.src) { $("#nextLbl", box).textContent = fr(nx.label); morph($("#nextPrev", box), `<div class="deck-slide frame compact"><iframe src="${esc(nx.src)}" title="Page suivante" tabindex="-1"></iframe></div>`); }
+      $("#nextBox", box).hidden = !nx;
+      if (nx) { $("#nextLbl", box).textContent = fr(nx.label); morph($("#nextPrev", box), nx.src ? `<div class="deck-slide frame compact"><iframe src="${esc(nx.src)}" title="Page suivante" tabindex="-1"></iframe></div>` : ""); }
       const roster = await api.roster(sid);
       $("#pTitle", box).textContent = `Participant·es (${roster.length})`;
       $("#plist", box).innerHTML = roster.map((r) => `<div class="prow"><span>${T(r.full_name || r.email)}</span>${r.project_status === "validated" ? `<span class="tag ok">✓ Cadrage</span>` : r.project_id ? `<span class="tag">${r.project_steps}/${STEPS.length}</span>` : `<span class="tag muted">—</span>`}</div>`).join("") || `<p class="small muted">Personne pour l'instant. Projetez le QR code.</p>`;

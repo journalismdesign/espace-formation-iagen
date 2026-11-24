@@ -648,7 +648,6 @@ input[type=url],input[type=email],input[type=date],input[type=time],input[type=n
 :root{--live:#E0262B}
 @keyframes livepulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.25;transform:scale(.8)}}
 .dot.on{background:var(--live);animation:livepulse 1.2s ease-in-out infinite}
-.dot.rt{background:var(--ok)}
 .side-live.on{border-color:var(--live);color:var(--live);background:#FDECEC}
 .state.live{background:var(--live);color:#fff;display:inline-flex;align-items:center;gap:6px}
 .state.live::before{content:"";width:7px;height:7px;border-radius:50%;background:#fff;animation:livepulse 1.2s ease-in-out infinite}
@@ -893,15 +892,16 @@ select:disabled{background-image:none;padding-right:12px !important}
 .deck-slide.frame>iframe[data-preload]{position:absolute;inset:0;opacity:0;pointer-events:none;z-index:0}
 .deck-slide.frame>iframe:not([data-preload]){position:relative;z-index:1}
 
-/* Pilotage : horloge et temps écoulé depuis la première ouverture de la salle du jour */
-.pilot-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
-.pilot-head h3{margin:0}
+/* En-tête de session : état de la salle, heure, temps écoulé depuis la première ouverture de la salle du jour */
 /* même dessin que le minuteur de pratique des stagiaires (#timerBox) */
-.clock{display:flex;align-items:center;gap:12px;background:var(--navy);color:#fff;border-radius:12px;padding:8px 14px;font-variant-numeric:tabular-nums}
+.clock{display:inline-flex;align-items:center;gap:12px;margin-top:6px;background:var(--navy);color:#fff;border-radius:12px;padding:8px 14px;font-variant-numeric:tabular-nums}
 .clock .t{font-family:"IBM Plex Mono",monospace;font-size:22px;font-weight:500;line-height:1;white-space:nowrap}
-.clock .clk-lbl{display:flex;flex-direction:column;align-items:flex-end;gap:3px;font-size:12px;line-height:1.25;color:rgba(255,255,255,.75);text-align:right}
-.clock .clk-state{color:#fff;font-weight:600}
-.clock .state{font-size:11px;padding:2px 7px}
+.clock .clk-lbl{display:flex;flex-direction:column;align-items:flex-start;gap:3px;font-size:12px;line-height:1.25;color:rgba(255,255,255,.75);text-align:left}
+.clock .clk-sub{white-space:nowrap}
+/* « Salle fermée » au même gabarit que « En direct » : même pastille, rond creux au lieu du rond rouge qui clignote */
+.clock .state{font-size:11px;padding:2px 7px;line-height:1.25;display:inline-flex;align-items:center;gap:6px;border:0} /* sans le cadre de la règle générique .live */
+.clock .state.off{background:rgba(255,255,255,.14);color:#fff}
+.clock .state.off::before{content:"";width:7px;height:7px;border-radius:50%;box-sizing:border-box;border:1.5px solid rgba(255,255,255,.7)}
 /* Aperçu de la page suivante, sous l'écran projeté */
 .next-box{margin-top:12px}
 .next-box .preview{width:55%;margin-top:6px}

@@ -73,19 +73,36 @@ export function trainerSlideHtml(session, t, cls = "", right = "") {
 }
 
 // d = { session, rows, participants, qrUrl, projects, branding, emQr, support, trainer }
-/* Avancer ou reculer d'une page (flèches du clavier, télécommande) : nouvel état « live » ou null.
-   Page du support : pages de la séquence (ou ±1 hors liste) ; séquence → sa première page ;
+// Séquence voisine dans le déroulé, sans changer de journée
+function neighbourModule(session, mod, dir) {
+  const mods = modulesFor(session), n = mods[mods.findIndex((m) => m.id === mod.id) + dir];
+  return n && (n.day || 1) === (mod.day || 1) ? n : null;
+}
+// Entrer dans une séquence au clavier : sa première page (sa dernière en reculant), ou son écran si elle n'a pas de pages.
+// Son outil d'exercice est débloqué, comme quand on la lance depuis le pilotage.
+function enterModule(session, live, m, dir, now) {
+  const pages = session.slides_url ? parsePages(m.pages) : [];
+  const tools = m.outil ? [...new Set([...(live.tools || []), m.outil])] : live.tools;
+  const base = { ...live, module: m.id, started_at: now, ...(tools ? { tools } : {}) };
+  return pages.length ? { ...base, view: "slide", slide: dir > 0 ? pages[0] : pages[pages.length - 1] } : { ...base, view: "module" };
+}
+
+/* Avancer ou reculer d'une page (flèches du clavier, télécommande, boutons ← →) : nouvel état « live » ou null.
+   Page du support : pages de la séquence (ou ±1 hors liste) ; arrivé au bout, on passe à la séquence
+   voisine de la même journée (première page, ou dernière en reculant) ; séquence → sa première page ;
    présentation Google Slides : page ±1. */
 export function stepLive(session, dir) {
   const live = session.live || {}, now = new Date().toISOString();
   const mod = live.module ? modulesFor(session).find((m) => m.id === live.module) : null;
-  const pages = mod ? parsePages(mod.pages) : [];
-  if ((live.view === "slide" || live.view === "module") && pages.length && session.slides_url) {
-    const i = live.view === "slide" ? pages.indexOf(live.slide) : -1;
-    if (i < 0 && live.view === "slide") { const p = Math.max(1, (live.slide || 1) + dir); return { ...live, view: "slide", slide: p, started_at: now }; }
-    const j = Math.min(pages.length - 1, Math.max(0, i + dir));
-    if (live.view === "slide" && j === i) return null;
-    return { ...live, view: "slide", slide: pages[j], started_at: now };
+  const pages = mod && session.slides_url ? parsePages(mod.pages) : [];
+  // page projetée hors de la liste de la séquence : on avance page par page
+  if (live.view === "slide" && pages.length && !pages.includes(live.slide)) return { ...live, slide: Math.max(1, (live.slide || 1) + dir), started_at: now };
+  if (mod && (live.view === "module" || (live.view === "slide" && pages.length))) {
+    const j = live.view === "slide" ? pages.indexOf(live.slide) + dir : -1;
+    if (j >= 0 && j < pages.length) return { ...live, view: "slide", slide: pages[j], started_at: now };
+    if (live.view === "module" && dir > 0 && pages.length) return { ...live, view: "slide", slide: pages[0], started_at: now };
+    const n = neighbourModule(session, mod, dir);
+    return n ? enterModule(session, live, n, dir, now) : null;
   }
   if (live.view === "slide" && session.slides_url) return { ...live, slide: Math.max(1, (live.slide || 1) + dir), started_at: now };
   if (live.view === "deck") {
@@ -103,21 +120,18 @@ export function pageKey(e) {
   return 0;
 }
 
-/* Page suivante de ce qui est projeté : { src, label } ou null.
-   Page du support → page suivante de la séquence (ou +1) ; séquence avec pages → sa première page ;
-   présentation Google Slides → page +1. */
+/* Ce qu'afficherait la flèche droite : { src, label } ou null (src vide pour l'écran d'une séquence sans pages).
+   Même règle que stepLive, séquence suivante comprise. */
 export function nextPage(session) {
-  const live = session.live || {};
-  const mod = live.module ? modulesFor(session).find((m) => m.id === live.module) : null;
-  const pages = mod ? parsePages(mod.pages) : [];
-  if (live.view === "slide") {
-    const cur = live.slide || 1, n = pages.includes(cur) ? pages[pages.indexOf(cur) + 1] : cur + 1;
-    return n ? { src: slideEmbedUrl(session.slides_url, n), label: `Page ${n} du support` } : null;
-  }
-  if (live.view === "module" && pages.length && session.slides_url) return { src: slideEmbedUrl(session.slides_url, pages[0]), label: `Page ${pages[0]} du support` };
-  if (live.view === "deck") {
-    const d = (session.decks || []).find((x) => x.id === live.deck);
-    if (d && deckKind(d.url) === "slides") { const n = (live.page || 1) + 1; return { src: deckEmbedUrl(d.url, n), label: `${d.title} · page ${n}` }; }
+  const live = session.live || {}, nl = stepLive(session, 1);
+  if (!nl) return null;
+  const m = nl.module !== live.module ? modulesFor(session).find((x) => x.id === nl.module) : null;
+  const seq = m ? `Séquence suivante : ${m.titre}` : "";
+  if (nl.view === "slide") return { src: slideEmbedUrl(session.slides_url, nl.slide), label: [seq, `page ${nl.slide} du support`].filter(Boolean).join(" · ").replace(/^p/, "P") };
+  if (nl.view === "module") return { src: null, label: seq || "Écran de la séquence" };
+  if (nl.view === "deck") {
+    const d = (session.decks || []).find((x) => x.id === nl.deck);
+    if (d) return { src: deckEmbedUrl(d.url, nl.page), label: `${d.title} · page ${nl.page}` };
   }
   return null;
 }
@@ -148,9 +162,9 @@ export function screenHtml(d, compact = false) {
     const cur = live.slide || 1;
     const src = slideEmbedUrl(session.slides_url, cur);
     // Page suivante préchargée, invisible : quand le formateur avance, elle s'affiche sans attendre Google
-    const pages = mod ? parsePages(mod.pages) : [];
-    const nxt = pages.includes(cur) ? pages[pages.indexOf(cur) + 1] || null : cur + 1;
-    const pre = nxt ? slideEmbedUrl(session.slides_url, nxt) : null;
+    // (y compris la première page de la séquence suivante)
+    const nl = stepLive({ ...session, live }, 1);
+    const pre = nl?.view === "slide" ? slideEmbedUrl(session.slides_url, nl.slide) : null;
     return `<div class="deck-slide frame ${cls}">${src ? `<iframe src="${esc(src)}" title="Support, page ${cur}" allowfullscreen></iframe>${pre ? `<iframe src="${esc(pre)}" title="Page suivante (préchargée)" data-preload aria-hidden="true" tabindex="-1"></iframe>` : ""}` : dark(session, `<div class="ds-kick">Support</div><div class="ds-title">Aucune présentation associée</div><div class="ds-sub">Ajoutez le lien Google Slides dans l'onglet Réglages.</div>`, right)}</div>`;
   }
 
