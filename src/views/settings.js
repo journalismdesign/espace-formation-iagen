@@ -25,12 +25,22 @@ export function logoPair(id, dark, light, fallback = "") {
   return `<div class="logo-pair">${slot("dark", dark, "Version sombre · fonds clairs", "on-light")}${slot("light", light, "Version claire · fonds marine", "on-dark")}</div>`;
 }
 
-export async function viewSettings(root, _p, { api, go }) {
+/* Onglets de la page (#/admin/reglages/<onglet>) : chacun montre sa partie. Toutes les parties restent dans la
+   page (masquées) pour que les liaisons fonctionnent ; enregistrer recharge le même onglet. */
+const STABS = [["organisme", "Organisme"], ["habillages", "Habillages"], ["entreprises", "Entreprises clientes"], ["mail", "E-mail stagiaires"]];
+const LOGO_HELP = "Chaque logo existe en deux versions : la version sombre s'affiche sur les fonds clairs (espace stagiaire, bandeau de l'écran), la version claire sur les fonds marine (slides de titre, entrée des stagiaires). PNG à fond transparent ou SVG, 300 Ko au plus. Si une seule version est déposée, elle sert partout.";
+
+export async function viewSettings(root, [tab = "organisme"], { api, go }) {
+  if (!STABS.some(([k]) => k === tab)) tab = "organisme";
   const [brands, settings, skins] = await Promise.all([api.listBrands(), api.getSettings(), api.listSkins().catch(() => [])]);
   const def = settings.default_skin || "";
+  const part = (k) => `data-stab="${k}"${k === tab ? "" : " hidden"}`;
   root.innerHTML = `
     <p><a href="#/admin">← Sessions</a></p>
-    <div class="pagehead"><div><div class="kicker-d">Back-office</div><h1>Réglages généraux</h1><p class="muted">${T("Chaque logo existe en deux versions : la version sombre s'affiche sur les fonds clairs (espace stagiaire, bandeau de l'écran), la version claire sur les fonds marine (slides de titre, entrée des stagiaires). PNG à fond transparent ou SVG, 300 Ko au plus. Si une seule version est déposée, elle sert partout.")}</p></div></div>
+    <div class="pagehead"><div><div class="kicker-d">Back-office</div><h1>Réglages généraux</h1></div></div>
+    <div class="phases">${STABS.map(([k, l]) => `<a href="#/admin/reglages/${k}"${k === tab ? ' aria-current="page"' : ""}>${l}</a>`).join("")}</div>
+    ${tab !== "mail" ? `<p class="muted settings-help">${T(LOGO_HELP)}</p>` : ""}
+    <section ${part("habillages")}>
     <div class="card" id="skinsCard"><h3>Habillages · centres de formation</h3>
       <p class="small muted" style="margin-top:0">${T("L'habillage donne à l'espace stagiaire, aux slides d'entrée et à l'écran projeté les couleurs du centre pour lequel vous intervenez : une couleur d'accent et un logo sur une base neutre. Il se choisit pour chaque session (Réglages de la session) ; celui marqué « par défaut » s'applique aux sessions qui n'en ont pas.")}</p>
       <label class="skin-row samsa-row"><input type="radio" name="defskin" value=""${!def ? " checked" : ""}><div><b>Samsa · palette d'origine</b><div class="small muted">Marine et bleu du support, logo Samsa.</div></div><span class="small muted skin-def">${!def ? "Par défaut" : "Définir par défaut"}</span></label>
@@ -57,14 +67,22 @@ export async function viewSettings(root, _p, { api, go }) {
         <p class="small muted">${T("Les couleurs et logos officiels de chaque centre sont à reprendre de leur charte : rien n'est préréglé.")}</p>
       </form>
     </div>
-    <div class="card" style="margin-top:14px"><h3>Organisme de formation</h3>
+    </section>
+    <section ${part("organisme")}>
+    <div class="card"><h3>Organisme de formation</h3>
       <div class="grid g2" style="align-items:end">
         <div><label class="f" for="oN">Nom</label><input type="text" id="oN" maxlength="80" value="${esc(settings.org_name || "")}"><button class="btn sm" id="oSave" style="margin-top:10px">Enregistrer le nom</button>
           <p class="small muted">${T("Logo des blocs « organisme » (slides de titre, émargement). Sans logo déposé, celui de l'habillage, ou à défaut Samsa, est utilisé. Le bandeau affiche toujours le logo de l'habillage.")}</p></div>
         ${logoPair("org", settings.org_logo, settings.org_logo_light, samsaHtml(false))}
       </div>
     </div>
-    <form class="card" id="mailF" style="margin-top:14px"><h3>E-mail du code d'accès · stagiaires</h3>
+    <form class="card" id="tcF" style="margin-top:14px"><h3>Code d'accès formateur</h3>
+      <p class="small muted" style="margin-top:0">${T("Demandé avant la page de connexion formateur. Il est vérifié par le serveur et stocké sous forme d'empreinte : personne ne peut le relire, notez-le.")}</p>
+      <div class="askrow" style="max-width:480px"><input type="password" id="tcN" minlength="6" required autocomplete="new-password" placeholder="Nouveau code (6 caractères au moins)"><button class="btn sm" type="submit">Changer le code</button></div>
+    </form>
+    </section>
+    <section ${part("mail")}>
+    <form class="card" id="mailF"><h3>E-mail du code d'accès · stagiaires</h3>
       <p class="small muted" style="margin-top:0">${T("Envoyé quand un·e stagiaire saisit son prénom et son e-mail. L'adresse d'expédition reste celle validée dans Brevo (secret MAIL_FROM de la fonction access).")}</p>
       <div class="grid g2">
         <div>
@@ -77,14 +95,13 @@ export async function viewSettings(root, _p, { api, go }) {
         <div><label class="f">Aperçu</label><div class="mail-prev" id="mPrev"></div></div>
       </div>
     </form>
-    <form class="card" id="tcF" style="margin-top:14px"><h3>Code d'accès formateur</h3>
-      <p class="small muted" style="margin-top:0">${T("Demandé avant la page de connexion formateur. Il est vérifié par le serveur et stocké sous forme d'empreinte : personne ne peut le relire, notez-le.")}</p>
-      <div class="askrow" style="max-width:480px"><input type="password" id="tcN" minlength="6" required autocomplete="new-password" placeholder="Nouveau code (6 caractères au moins)"><button class="btn sm" type="submit">Changer le code</button></div>
-    </form>
-    <div class="card" style="margin-top:14px"><h3>Entreprises clientes</h3>
+    </section>
+    <section ${part("entreprises")}>
+    <div class="card"><h3>Entreprises clientes</h3>
       ${brands.map((b) => `<div class="brand-row"><div class="brand-name"><b>${T(b.name)}</b><button class="iconbtn danger" data-del="${b.id}" aria-label="Supprimer ${esc(b.name)}">✕</button></div>${logoPair(b.id, b.logo, b.logo_light)}</div>`).join("")}
       <form id="bF" class="askrow" style="margin-top:12px;max-width:480px"><input type="text" id="bN" maxlength="80" placeholder="Nouvelle entreprise" required><button class="btn sm" type="submit">Ajouter</button></form>
-    </div>`;
+    </div>
+    </section>`;
   const reload = () => go(location.hash);
   $("#tcF", root).onsubmit = async (e) => { e.preventDefault(); if (await guard(() => api.setTrainerCode($("#tcN", root).value), "Code formateur changé.") !== undefined) $("#tcN", root).value = ""; };
   const save = async (id, kind, url) => {

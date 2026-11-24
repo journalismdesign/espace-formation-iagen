@@ -182,7 +182,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
           <label class="f" for="gF">Intitulé de la formation</label><input type="text" id="gF" maxlength="140" value="${esc(session.formation)}">
           <label class="f" for="gSk">Habillage (centre de formation)</label>
           <select id="gSk"${admin ? "" : " disabled"}><option value="">Par défaut · ${esc(skinData.skins.find((k) => k.id === skinData.def)?.name || "Samsa")}</option>${skinData.skins.map((k) => `<option value="${k.id}"${session.skin_id === k.id ? " selected" : ""}>${esc(k.name)}</option>`).join("")}</select>
-          <p class="small muted" style="margin-top:4px">${T("Couleur d'accent et logo du centre, appliqués à l'espace stagiaire, aux slides d'entrée et à l'écran. ")}${admin ? `<a href="#/admin/reglages">Gérer les habillages</a>` : "Choisi par l'administration."}</p>
+          <p class="small muted" style="margin-top:4px">${T("Couleur d'accent et logo du centre, appliqués à l'espace stagiaire, aux slides d'entrée et à l'écran. ")}${admin ? `<a href="#/admin/reglages/habillages">Gérer les habillages</a>` : "Choisi par l'administration."}</p>
           <label class="f">Format</label>
           <div class="chips" id="gFmt">${[["1", "Une journée"], ["2", "Deux journées"]].map(([v, l]) => `<label class="radio"><input type="radio" name="fmt" value="${v}"${session.format === v ? " checked" : ""}${session.programme?.modules?.length ? " disabled" : ""}> ${l}</label>`).join("")}</div>
           <p class="small muted">${T("Le format détermine le déroulé visible côté stagiaire : en une journée, seul le programme d'une journée est accessible.")}</p>
@@ -216,7 +216,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <label class="f">Logo de l'entreprise</label>
             <div id="gLpair">${logoPair("sess", clientLogo, clientLogoLight)}</div>
           </div>
-          <p class="small muted">${T("Les entreprises récurrentes et leurs logos se gèrent dans ")}<a href="#/admin/reglages">Réglages généraux</a>.</p>
+          <p class="small muted">${T("Les entreprises récurrentes et leurs logos se gèrent dans ")}<a href="#/admin/reglages/entreprises">Réglages généraux</a>.</p>
         </div>
       </div>
       <div>

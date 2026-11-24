@@ -38,7 +38,7 @@ const ROUTES = [
   [/^#\/profil$/, viewProfile],
   [/^#\/s\/([\w-]+)(?:\/([\w-]+))?(?:\/([\w-]+))?$/, viewSession],
   [/^#\/admin$/, viewAdmin, { trainer: true }],
-  [/^#\/admin\/reglages$/, viewSettings, { trainer: true, admin: true }],
+  [/^#\/admin\/reglages(?:\/(\w+))?$/, viewSettings, { trainer: true, admin: true }],
   [/^#\/admin\/formateurs(?:\/([\w-]+))?$/, viewTrainers, { trainer: true, admin: true }],
   [/^#\/admin\/equipe$/, viewStaff, { trainer: true, admin: true }],
   [/^#\/admin\/s\/([\w-]+)(?:\/(\w+))?$/, viewAdminSession, { trainer: true }],

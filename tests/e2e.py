@@ -66,7 +66,7 @@ async def main():
         await tr.goto(URL + f"#/admin/s/{sid}/avant"); await tr.wait_for_selector("#invF")
         assert (await tr.inner_text("#jl")).strip().endswith("/DEMO42"), "lien court attendu"
         await tr.fill("#invT", "alice@demo.fr"); await tr.click("#invF button"); await tr.wait_for_timeout(300)
-        await tr.goto(URL + "#/admin/reglages"); await tr.wait_for_selector("#bF")
+        await tr.goto(URL + "#/admin/reglages/entreprises"); await tr.wait_for_selector("#bF")
         # Logos de test (fictifs) : version sombre puis version claire pour la 3e entreprise (Libération)
         fx = OUT / "fixtures"
         await tr.locator("input[data-kind='dark']").nth(3).set_input_files(str(fx / "logo-sombre.png")); await tr.wait_for_timeout(600)
@@ -299,7 +299,7 @@ async def main():
         await tr.goto(URL + "#/admin/formateurs"); assert await tr.locator(".trainer-card").count() == 2
 
         # Habillages : ajout d'un centre, couleur d'accent, application à la session
-        await tr.goto(URL + "#/admin/reglages"); await tr.wait_for_selector("#skinsCard")
+        await tr.goto(URL + "#/admin/reglages/habillages"); await tr.wait_for_selector("#skinsCard")
         await tr.click("[data-sugg='INA']"); await tr.wait_for_selector(".skin-row[data-skin]")
         row = tr.locator(".skin-row[data-skin]").first
         await row.locator("[data-hex='accent']").fill("#c2185b"); await row.locator("[data-f='footer']").fill("Formation continue")
