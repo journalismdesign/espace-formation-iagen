@@ -33,28 +33,7 @@ export function emargementOpen(session, d = new Date()) {
   const n = parisNow(d), toM = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
   return emargementSlots(session).find((x) => !x.kind && x.date === n.date && n.min >= toM(x.t) && n.min < toM(x.t) + 30) || null;
 }
-/* Déroulé importé (conducteur Markdown, ou écrit directement par l'API) : les champs « techniques » sont insérés
-   sans échappement dans les gabarits (identifiants, classes, horaires, nombres). On les ramène ici à des valeurs
-   sûres, une fois pour toutes les vues ; les textes libres (titres, objectifs…) restent échappés par T(). */
-const MOD_TYPES = ["comprendre", "pratique", "discussion", "pause"];
-const HHMM = /^\d{1,2}:\d{2}$/;
-const safeCache = new WeakMap();
-function safeModules(list) {
-  if (safeCache.has(list)) return safeCache.get(list);
-  const out = list.map((m, i) => ({
-    ...m,
-    id: /^[\w-]{1,80}$/.test(String(m.id)) ? String(m.id) : `m${i + 1}`,
-    type: MOD_TYPES.includes(m.type) ? m.type : "comprendre",
-    t: Array.isArray(m.t) && m.t.length === 2 && m.t.every((x) => HHMM.test(String(x))) ? m.t.map(String) : ["09:00", "09:00"],
-    day: m.day == null ? m.day : +m.day === 2 ? 2 : 1,
-    tf: m.tf ? +m.tf || null : m.tf,
-    titre: String(m.titre ?? ""),
-    exo: m.exo ? { ...m.exo, duree: Math.max(0, Math.round(+m.exo.duree || 0)), steps: Array.isArray(m.exo.steps) ? m.exo.steps : [] } : m.exo,
-  }));
-  safeCache.set(list, out);
-  return out;
-}
-export const modulesFor = (x) => (x && typeof x === "object" ? (x.programme?.modules?.length ? safeModules(x.programme.modules) : x.format === "2" ? D2 : D1) : x === "2" ? D2 : D1);
+export const modulesFor = (x) => (x && typeof x === "object" ? (x.programme?.modules?.length ? x.programme.modules : x.format === "2" ? D2 : D1) : x === "2" ? D2 : D1);
 // Nombre de journées et titres des journées
 export const daysOf = (x) => {
   const mods = modulesFor(x), n = Math.max(1, ...mods.map((m) => m.day || 1));
@@ -191,7 +170,7 @@ function modHtml(m, progress, nm, rel = null) {
   const isNow = rel === null ? nm >= mins(m.t[0]) && nm < mins(m.t[1]) : rel === 0;
   const passed = rel !== null && rel < 0; // séquence dépassée par le formateur : validée d'office
   const tag = rel === null || rel === 0 ? "" : rel > 0 ? `<span class="pill">À venir</span>` : `<span class="pill passed">✓ Validé</span>`;
-  if (m.type === "pause") return `<div class="mod" data-type="pause"><div class="time"><b>${hfr(m.t[0])}</b></div><div class="body"><div class="mhead"><div class="meta"><span class="pill pause">${T(m.titre)}</span><span class="small muted">${fmtMin(dur)}</span></div></div></div></div>`;
+  if (m.type === "pause") return `<div class="mod" data-type="pause"><div class="time"><b>${hfr(m.t[0])}</b></div><div class="body"><div class="mhead"><div class="meta"><span class="pill pause">${m.titre}</span><span class="small muted">${fmtMin(dur)}</span></div></div></div></div>`;
   const done = !!progress.done?.[m.id] || passed;
   return `<div class="mod${done ? " done" : ""}${passed ? " passed" : ""}${isNow ? " now" : ""}${rel !== null && rel > 0 ? " later" : ""}" data-type="${m.type}" data-id="${m.id}">
     <div class="time"><b>${hfr(m.t[0])}</b>${hfr(m.t[1])}</div>

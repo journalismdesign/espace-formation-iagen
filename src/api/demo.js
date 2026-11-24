@@ -2,15 +2,13 @@
    stocké dans le navigateur (localStorage). Chaque onglet a son propre
    compte (sessionStorage) : ouvrez un onglet formateur et un onglet
    stagiaire pour tester le direct. Aucune donnée ne quitte la machine. */
-import { checkFirstName } from "../lib/accessRules.js";
 
 const KEY = "iagen-demo-db-v9";
 const USER_KEY = "iagen-demo-user";
 const bc = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("iagen-demo") : null;
 const uid = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
-// Code de session : 8 caractères sans ambiguïté, comme gen_session_code() en base
-const code6 = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), (v) => "ABCDEFGHJKMNPQRSTUVWXYZ23456789"[v % 31]).join("");
+const code6 = () => Math.random().toString(16).slice(2, 8).toUpperCase().padEnd(6, "0");
 export const DEMO_TRAINER = "formateur@demo.fr";
 export const DEMO_TRAINER_CODE = "SAMSA-DEMO"; // code formateur du mode démonstration
 
@@ -20,7 +18,7 @@ function load() {
 }
 export const SESSION_DEFAULTS = { date2: null, start_time: "09:30", end_time: "17:30", brand_id: null, client_logo: null, client_logo_light: null,
   slides_url: "https://docs.google.com/presentation/d/1G-exjcmMujp3XtEAOMCyzR9Plk3OzgS1qnVdTI0rJkg/edit", emargement_url: "", emargement_qr: null, emargement_label: null, support_unlocked: false, decks: [], trainer_id: null, emargement2_enabled: true, emargement2_text: null,
-  evaluation_url: null, evaluation_qr: null, evaluation_title: null, evaluation_text: null, access_mode: "ouvert" };
+  evaluation_url: null, evaluation_qr: null, evaluation_title: null, evaluation_text: null };
 
 function seed(defaultActivities) {
   const sid = uid();
@@ -107,14 +105,8 @@ export function createDemoApi({ defaultActivities }) {
       email = email.trim().toLowerCase();
       const x = db.sessions.find((y) => y.id === sid);
       if (!x || x.status === "closed") throw new Error("Session inconnue ou close.");
-      const fn = checkFirstName(first); if (fn.error) throw new Error(fn.error.charAt(0).toUpperCase() + fn.error.slice(1) + ".");
-      first = fn.value;
+      if (!first.trim()) throw new Error("Indiquez votre prénom.");
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Adresse e-mail invalide.");
-      // Mêmes règles que la fonction access : pas d'adresse de l'équipe, session « sur invitation » respectée
-      if (roleOf(email)) throw new Error("Cette adresse appartient à l'équipe : connectez-vous par l'espace formateur.");
-      if (x.access_mode === "invites" && !db.invites.some((i) => i.session_id === sid && i.email === email)
-        && !db.members.some((m) => m.session_id === sid && db.profiles.find((p) => p.id === m.user_id)?.email === email))
-        throw new Error("Cette session est réservée aux personnes invitées : vérifiez l'adresse indiquée à votre formateur·ice.");
       let p = db.profiles.find((y) => y.email === email);
       if (!p) { p = { id: uid(), email, full_name: first.trim(), role: roleOf(email) || "trainee", metier: null, niveau: null, outils: [], created_at: now() }; db.profiles.push(p); }
       else if (!p.full_name) p.full_name = first.trim();
@@ -290,9 +282,6 @@ export function createDemoApi({ defaultActivities }) {
       const u = need();
       const s = db.sessions.find((x) => x.code === code.trim().toUpperCase() && x.status !== "closed");
       if (!s) throw new Error("Code inconnu ou session close.");
-      // Session « sur invitation » : réservée aux adresses invitées (comme join_session en base)
-      if (s.access_mode === "invites" && !db.members.some((m) => m.session_id === s.id && m.user_id === u.id) && !db.invites.some((i) => i.session_id === s.id && i.email === u.email))
-        throw new Error("Code inconnu, session close ou réservée aux personnes invitées.");
       if (!db.members.some((m) => m.session_id === s.id && m.user_id === u.id)) { db.members.push({ session_id: s.id, user_id: u.id, joined_at: now(), attended: false, progress: {} }); commit(); }
       return s.id;
     },

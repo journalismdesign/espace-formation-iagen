@@ -5,7 +5,7 @@
    bandeau bleu en pied avec le logo Samsa et « JOURNALISME & IA · année ».
    Les tailles sont exprimées en cqw (largeur du conteneur) : la même
    maquette sert à l'écran plein et à l'aperçu du back-office. */
-import { T, esc, safeImg } from "./dom.js";
+import { T, esc } from "./dom.js";
 import { QUIZ } from "../data.js";
 import { currentAct, quizQ, countOf } from "./activities.js";
 import { datesFr, hhmm, titleDate, samsaHtml, pickLogo, emargementLabels, MAIL_ICON, evaluationInfo } from "./brand.js";
@@ -204,7 +204,7 @@ export function screenHtml(d, compact = false) {
     return light(session, `<div class="ds-kick barred">Informations générales</div><div class="ds-title">${L.second && L.client ? "Deux étapes pour émarger" : "Émargement"}</div>`,
       `<div class="ds-em">
         <div class="ds-em-col"><div class="ds-em-h">Pour <u>${T(L.org)}</u></div><div class="ds-em-t">Signez la feuille de présence grâce à ce QR code</div>
-          ${emQr ? `<div class="ds-qrbox"><img src="${safeImg(emQr)}" alt="QR code d'émargement"></div>` : `<div class="ds-wait">QR code à configurer (onglet Réglages).</div>`}</div>
+          ${emQr ? `<div class="ds-qrbox"><img src="${emQr}" alt="QR code d'émargement"></div>` : `<div class="ds-wait">QR code à configurer (onglet Réglages).</div>`}</div>
         ${L.second && L.client ? `<div class="ds-em-col"><div class="ds-em-h">Pour ${T(L.client)}</div><div class="ds-em-t">${T(L.text)}</div><div class="ds-mail">${MAIL_ICON}</div></div>` : ""}
       </div>`, right, cls);
   }
@@ -216,7 +216,7 @@ export function screenHtml(d, compact = false) {
     const e = evaluationInfo(session);
     return `<div class="deck-slide light ${cls}"><div class="ds-body ds-eval">
         <div class="ds-eval-txt"><div class="ds-title ds-black">${T(e.title)}</div><div class="ds-em-t">${T(e.text)}</div></div>
-        <div class="ds-eval-qr">${evalQr ? `<div class="ds-qrbox"><img src="${safeImg(evalQr)}" alt="QR code de l'évaluation"></div>` : `<div class="ds-wait">QR code à configurer (onglet Réglages).</div>`}
+        <div class="ds-eval-qr">${evalQr ? `<div class="ds-qrbox"><img src="${evalQr}" alt="QR code de l'évaluation"></div>` : `<div class="ds-wait">QR code à configurer (onglet Réglages).</div>`}
           ${e.url ? `<div class="ds-eval-url">${esc(e.url)}</div>` : ""}</div>
       </div>${foot(session, right)}</div>`;
   }
@@ -237,7 +237,7 @@ export function screenHtml(d, compact = false) {
     let kick = act.titre, q = act.q || act.titre, main;
     if (act.type === "quiz") {
       const Q = quizQ(act, live);
-      kick = `${QUIZ[act.quiz]?.titre || "Quiz"} · question ${(live.qi || 0) + 1} sur ${QUIZ[act.quiz]?.q.length || 0}`;
+      kick = `${QUIZ[act.quiz].titre} · question ${(live.qi || 0) + 1} sur ${QUIZ[act.quiz].q.length}`;
       q = Q?.[0] || "";
       const counts = (Q?.[1] || []).map((_, i) => rows.filter((r) => r.value === i).reduce((a, r) => a + r.n, 0));
       main = Q ? deckBars(Q[1], counts, live.reveal ? Q[2] : -1) + (live.reveal ? `<div class="ds-expl">${T(Q[3])}</div>` : "") : "";

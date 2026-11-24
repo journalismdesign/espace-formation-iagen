@@ -4,7 +4,7 @@
    3. émargement (QR code de l'organisme)
    4. support de formation (téléchargeable une heure avant la fin)
    → tableau de bord de la session. */
-import { $, T, esc, guard, toast, safeUrl } from "../lib/dom.js";
+import { $, T, esc, guard, toast } from "../lib/dom.js";
 import { resolveBranding, logosHtml, datesFr, hhmm, titleDate, emargementQr, samsaHtml, emargementLabels, emargementStepsHtml } from "../lib/brand.js";
 import { skinFooter } from "../lib/skin.js";
 
@@ -120,6 +120,6 @@ const slide = (inner, kind = "") => `<div class="slide-page ${kind}"><div class=
 export function supportBlock(st, onDark = false) {
   const when = st.unlock_at ? new Date(st.unlock_at).toLocaleString("fr-FR", { timeZone: "Europe/Paris", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : null;
   if (!st.configured) return `<p class="${onDark ? "slide-sub" : "muted"}">${T("Le support sera ajouté par le formateur. Vous le retrouverez dans le menu « Support ».")}</p>`;
-  if (st.unlocked && st.url) return `<p class="${onDark ? "slide-sub" : "muted"}">${T("Le support est disponible. Il reste accessible depuis le menu « Support ».")}</p><p><a class="btn ${onDark ? "light big" : ""}" href="${safeUrl(st.url)}" target="_blank" rel="noopener noreferrer" download>Télécharger le support ↓</a></p>`;
+  if (st.unlocked && st.url) return `<p class="${onDark ? "slide-sub" : "muted"}">${T("Le support est disponible. Il reste accessible depuis le menu « Support ».")}</p><p><a class="btn ${onDark ? "light big" : ""}" href="${esc(st.url)}" target="_blank" rel="noopener noreferrer" download>Télécharger le support ↓</a></p>`;
   return `<div class="lockbox${onDark ? " dark" : ""}"><span class="lock" aria-hidden="true">🔒</span><div><b>Téléchargement disponible en fin de formation</b><div>${when ? T(`À partir de ${when}.`) : T("Une heure avant la fin de la formation.")} ${T("Vous le retrouverez dans le menu « Support ».")}</div></div></div>`;
 }

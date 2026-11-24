@@ -5,10 +5,6 @@ export const NB = " ";
 export const fr = (s) => String(s ?? "").replace(/ ([:;?!»%])/g, NB + "$1").replace(/« /g, "«" + NB);
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 export const T = (s) => esc(fr(s));
-// Adresses venues de la base, déjà échappées pour un attribut : liens en http(s) seulement, images en http(s)
-// ou data:image/… en base64. Tout le reste (javascript:, data:text/html…) devient une adresse vide.
-export const safeUrl = (u) => { const s = String(u ?? "").trim(); return /^https?:\/\//i.test(s) ? esc(s) : ""; };
-export const safeImg = (u) => { const s = String(u ?? "").trim(); return /^(https?:\/\/|data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,)/i.test(s) ? esc(s) : ""; };
 export const $ = (s, el = document) => el.querySelector(s);
 export const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
