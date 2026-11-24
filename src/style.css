@@ -634,6 +634,11 @@ input[type=url],input[type=email],input[type=date],input[type=time],input[type=n
 .fsbtn{top:10px;bottom:auto}
 /* Logos en deux versions */
 .logo-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* Aperçu de l'e-mail du code d'accès (Réglages généraux) */
+.mail-prev{border:1px solid var(--line);border-radius:var(--r);background:#fff;overflow:hidden}
+.mail-prev .mp-head{padding:10px 14px;border-bottom:1px solid var(--line);background:var(--light);font-size:13px;display:grid;gap:3px}
+.mail-prev .mp-body{padding:4px 16px 8px;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+#mBody{min-height:200px;font-family:inherit}
 .logo-slot{border:1px solid var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px}
 .logo-slot.on-light{background:#fff}
 .logo-slot.on-dark{background:var(--navy);color:#fff;border-color:var(--navy)}

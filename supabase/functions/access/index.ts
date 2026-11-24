@@ -37,16 +37,39 @@ async function hash(sid: string, email: string, code: string) {
   const data = new TextEncoder().encode(`${Deno.env.get("CODE_PEPPER") ?? ""}|${sid}|${email}|${code.toUpperCase()}`);
   return [...new Uint8Array(await crypto.subtle.digest("SHA-256", data))].map((x) => x.toString(16).padStart(2, "0")).join("");
 }
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 
-async function sendMail(to: string, name: string, subject: string, html: string, text: string) {
+// Modèle de l'e-mail du code : texte réglable dans le back-office (Réglages généraux → app_settings
+// mail_from_name, mail_subject, mail_body). Bloc recopié de src/lib/codeMail.js, à garder identique
+// (tests/mail.test.mjs le vérifie).
+// >>> modèle du mail du code d'accès
+export const MAIL_DEFAULTS = {
+  from_name: "Formation IA générative",
+  subject: "Votre code d'accès : {code}",
+  body: "Bonjour {prenom},\n\nVoici votre code d'accès personnel à la formation « {formation} » :\n\n{code}\n\nIl est valable jusqu'au {validite}, sur tous vos appareils, puis il sera détruit. Ne le transmettez pas.",
+};
+const escMail = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+// t = { subject, body } (vides = texte par défaut) ; v = { prenom, formation, code, validite }
+export function renderCodeMail(t, v) {
+  const fill = (s, f) => s.replace(/\{(prenom|formation|code|validite)\}/g, (_m, k) => f(k));
+  let body = String(t.body || "").trim() || MAIL_DEFAULTS.body;
+  if (!body.includes("{code}")) body += "\n\n{code}"; // le code doit toujours arriver
+  const subject = fill(String(t.subject || "").trim() || MAIL_DEFAULTS.subject, (k) => v[k]);
+  const text = fill(body, (k) => v[k]);
+  const html = body.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => (p === "{code}"
+    ? `<p style="font-size:28px;font-weight:800;letter-spacing:4px;font-family:monospace">${escMail(v.code)}</p>`
+    : `<p>${fill(escMail(p), (k) => (k === "code" ? `<b style="font-family:monospace;letter-spacing:2px">${escMail(v.code)}</b>` : escMail(v[k]))).replace(/\n/g, "<br>")}</p>`)).join("\n");
+  return { subject, text, html };
+}
+// <<< modèle du mail du code d'accès
+
+async function sendMail(to: string, name: string, subject: string, html: string, text: string, fromName?: string) {
   const key = Deno.env.get("BREVO_API_KEY");
   if (!key) throw new Error("envoi d'e-mail non configuré (BREVO_API_KEY)");
   const r = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: { "api-key": key, "content-type": "application/json", accept: "application/json" },
     body: JSON.stringify({
-      sender: { email: Deno.env.get("MAIL_FROM"), name: Deno.env.get("MAIL_FROM_NAME") ?? "Formation IA générative" },
+      sender: { email: Deno.env.get("MAIL_FROM"), name: fromName || Deno.env.get("MAIL_FROM_NAME") || MAIL_DEFAULTS.from_name },
       to: [{ email: to, name }], subject, htmlContent: html, textContent: text,
     }),
   });
@@ -105,12 +128,12 @@ Deno.serve(async (req) => {
       expires_at: exp, attempts: 0, sent_at: new Date().toISOString(),
     });
     const until = new Date(exp).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "full", timeStyle: "short" });
+    // Texte réglé dans le back-office (Réglages généraux), sinon texte par défaut
+    const { data: rows } = await admin.from("app_settings").select("key, value").in("key", ["mail_from_name", "mail_subject", "mail_body"]);
+    const t: Record<string, string> = Object.fromEntries((rows ?? []).map((r: { key: string; value: string | null }) => [r.key, r.value ?? ""]));
+    const m = renderCodeMail({ subject: t.mail_subject, body: t.mail_body }, { prenom: first, formation: s.title, code, validite: until });
     try {
-      await sendMail(email, first, `Votre code d'accès : ${code}`,
-        `<p>Bonjour ${esc(first)},</p><p>Voici votre code d'accès personnel à la formation « ${esc(s.title)} » :</p>
-         <p style="font-size:28px;font-weight:800;letter-spacing:4px;font-family:monospace">${code}</p>
-         <p>Il est valable jusqu'au ${esc(until)}, sur tous vos appareils, puis il sera détruit. Ne le transmettez pas.</p>`,
-        `Bonjour ${first},\n\nVotre code d'accès à « ${s.title} » : ${code}\nValable jusqu'au ${until}, puis détruit. Ne le transmettez pas.`);
+      await sendMail(email, first, m.subject, m.html, m.text, (t.mail_from_name || "").trim() || undefined);
     } catch (e) {
       return json({ error: (e as Error).message }, 502);
     }

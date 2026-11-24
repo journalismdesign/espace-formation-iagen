@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:sql": "node tests/sql.test.mjs && node tests/sql-rerun.test.mjs && node tests/conducteur.test.mjs",
+    "test:sql": "node tests/sql.test.mjs && node tests/sql-rerun.test.mjs && node tests/conducteur.test.mjs && node tests/mail.test.mjs",
     "test:e2e": "python3 tests/e2e.py"
   },
   "dependencies": {

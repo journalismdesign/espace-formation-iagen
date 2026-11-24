@@ -5,6 +5,7 @@
 import { $, $$, T, esc, guard } from "../lib/dom.js";
 import { fileToDataUrl, samsaHtml } from "../lib/brand.js";
 import { applySkin, invalidateSkins, isHex, mix } from "../lib/skin.js";
+import { MAIL_DEFAULTS, MAIL_FIELDS, renderCodeMail } from "../lib/codeMail.js";
 
 const SUGGESTED = ["INA", "Journalism.design", "ESJ Lille", "CFJ", "Samsa"];
 // Aperçu miniature d'un habillage : bandeau, bouton, pastille
@@ -63,6 +64,19 @@ export async function viewSettings(root, _p, { api, go }) {
         ${logoPair("org", settings.org_logo, settings.org_logo_light, samsaHtml(false))}
       </div>
     </div>
+    <form class="card" id="mailF" style="margin-top:14px"><h3>E-mail du code d'accès · stagiaires</h3>
+      <p class="small muted" style="margin-top:0">${T("Envoyé quand un·e stagiaire saisit son prénom et son e-mail. L'adresse d'expédition reste celle validée dans Brevo (secret MAIL_FROM de la fonction access).")}</p>
+      <div class="grid g2">
+        <div>
+          <label class="f" for="mFrom">Nom de l'expéditeur</label><input type="text" id="mFrom" maxlength="70" value="${esc(settings.mail_from_name || MAIL_DEFAULTS.from_name)}">
+          <label class="f" for="mSubj">Objet</label><input type="text" id="mSubj" maxlength="140" value="${esc(settings.mail_subject || MAIL_DEFAULTS.subject)}">
+          <label class="f" for="mBody">Message</label><textarea id="mBody" rows="10">${esc(settings.mail_body || MAIL_DEFAULTS.body)}</textarea>
+          <p class="small muted">${T("Champs remplacés à l'envoi : ")}${MAIL_FIELDS.map((f) => `<code>{${f}}</code>`).join(" ")}. ${T("Une ligne vide sépare les paragraphes. {code} seul sur sa ligne s'affiche en grand ; s'il manque, le code est ajouté à la fin.")}</p>
+          <div style="display:flex;gap:8px;align-items:center"><button class="btn sm" type="submit">Enregistrer</button><button class="btn sm ghost" type="button" id="mReset">Rétablir le texte par défaut</button></div>
+        </div>
+        <div><label class="f">Aperçu</label><div class="mail-prev" id="mPrev"></div></div>
+      </div>
+    </form>
     <form class="card" id="tcF" style="margin-top:14px"><h3>Code d'accès formateur</h3>
       <p class="small muted" style="margin-top:0">${T("Demandé avant la page de connexion formateur. Il est vérifié par le serveur et stocké sous forme d'empreinte : personne ne peut le relire, notez-le.")}</p>
       <div class="askrow" style="max-width:480px"><input type="password" id="tcN" minlength="6" required autocomplete="new-password" placeholder="Nouveau code (6 caractères au moins)"><button class="btn sm" type="submit">Changer le code</button></div>
@@ -86,6 +100,27 @@ export async function viewSettings(root, _p, { api, go }) {
   }));
   $$("[data-rm]", root).forEach((btn) => (btn.onclick = async () => { await save(btn.dataset.rm, btn.dataset.kind, null); reload(); }));
   $("#oSave", root).onclick = () => guard(() => api.saveSetting("org_name", $("#oN", root).value.trim()), "Enregistré.");
+
+  /* E-mail du code d'accès : aperçu avec des valeurs d'exemple, même rendu que la fonction access */
+  const sample = { prenom: "Camille", formation: "Prendre en main les IA génératives", code: "K7P2QX",
+    validite: new Date(Date.now() + 864e5).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "full", timeStyle: "short" }) };
+  const mailVals = () => ({ from: $("#mFrom", root).value.trim(), subject: $("#mSubj", root).value, body: $("#mBody", root).value });
+  const drawMail = () => {
+    const v = mailVals(), m = renderCodeMail(v, sample);
+    $("#mPrev", root).innerHTML = `<div class="mp-head"><div><span class="muted">De :</span> ${esc(v.from || MAIL_DEFAULTS.from_name)}</div><div><span class="muted">Objet :</span> <b>${esc(m.subject)}</b></div></div><div class="mp-body">${m.html}</div>`;
+  };
+  drawMail();
+  ["mFrom", "mSubj", "mBody"].forEach((id) => ($("#" + id, root).oninput = drawMail));
+  $("#mReset", root).onclick = () => { $("#mFrom", root).value = MAIL_DEFAULTS.from_name; $("#mSubj", root).value = MAIL_DEFAULTS.subject; $("#mBody", root).value = MAIL_DEFAULTS.body; drawMail(); };
+  $("#mailF", root).onsubmit = async (e) => {
+    e.preventDefault();
+    const v = mailVals(), keep = (val, def) => { const x = val.trim(); return x && x !== def ? x : null; }; // texte par défaut = rien d'enregistré
+    await guard(async () => {
+      await api.saveSetting("mail_from_name", keep(v.from, MAIL_DEFAULTS.from_name));
+      await api.saveSetting("mail_subject", keep(v.subject, MAIL_DEFAULTS.subject));
+      await api.saveSetting("mail_body", keep(v.body.replace(/\r\n/g, "\n"), MAIL_DEFAULTS.body));
+    }, "E-mail du code enregistré : il s'applique aux prochains envois.");
+  };
   $$("[data-del]", root).forEach((btn) => (btn.onclick = async () => { if (confirm("Supprimer cette entreprise ? Les sessions qui l'utilisent n'auront plus de logo.")) { await guard(() => api.deleteBrand(btn.dataset.del)); reload(); } }));
   $("#bF", root).onsubmit = async (e) => { e.preventDefault(); await guard(() => api.saveBrand({ name: $("#bN", root).value.trim() })); reload(); };
 
