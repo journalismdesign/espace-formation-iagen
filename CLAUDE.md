@@ -62,6 +62,7 @@ Plateforme de formation de Gerald Holubowicz (journalism.design). Elle comprend 
 - `npm run build && npx vite preview --port 4173`, puis `python3 tests/e2e.py` : parcours complet en démo. La variable `CHROME` permet de choisir le navigateur.
 
 ## Points ouverts
+- Reprise de la séance claude.ai du 24 novembre 2026 : `docs/PASSATION.md` (ce qui a été fait, état Supabase, pistes non traitées).
 - Logos clients : à déposer à partir des fichiers officiels (ne pas les redessiner).
 - La session navigateur d'un·e stagiaire survit à l'expiration de son code. Pour couper l'accès après la formation, il faudrait réduire la durée des jetons ou révoquer les sessions à la clôture.
 - `legacy/` contient la version claude.ai monofichier, pour mémoire.
