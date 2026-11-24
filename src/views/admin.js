@@ -53,7 +53,7 @@ export async function viewAdmin(root, _p, { api, go, me }) {
         <td class="small mono">${s.date || "—"}</td>
         <td class="mono">${esc(s.code)}</td>
         <td>${counts[s.id] || 0}</td>
-        <td class="actions"><button class="iconbtn" data-qr="${s.id}" title="QR code" aria-label="QR code">▦</button>${admin ? `<button class="iconbtn danger" data-del="${s.id}" title="Supprimer" aria-label="Supprimer">✕</button>` : ""}</td>
+        <td class="actions"><button class="iconbtn" data-qr="${s.id}" title="QR code" aria-label="QR code">▦</button>${admin ? `<button class="iconbtn" data-dup="${s.id}" title="Dupliquer" aria-label="Dupliquer la session">⧉</button><button class="iconbtn danger" data-del="${s.id}" title="Supprimer" aria-label="Supprimer">✕</button>` : ""}</td>
       </tr>`).join("")}</tbody></table>` : `<p class="empty">${admin ? "Aucune session. Créez la première." : T("Aucune session ne vous est attribuée pour l'instant.")}</p>`}
     </div>`;
 
@@ -82,6 +82,7 @@ export async function viewAdmin(root, _p, { api, go, me }) {
     await guard(() => api.deleteSession(s.id), "Session supprimée.");
     go("#/admin");
   }));
+  $$("[data-dup]", root).forEach((b) => (b.onclick = () => openDuplicate(api, sessions.find((x) => x.id === b.dataset.dup), go)));
   $$("[data-qr]", root).forEach((b) => (b.onclick = async () => {
     const s = sessions.find((x) => x.id === b.dataset.qr);
     showQr(s, await qr(joinUrl(s.code), 640));
@@ -104,4 +105,43 @@ export function showQr(s, dataUrl) {
   const close = () => { d.remove(); document.removeEventListener("keydown", esc_); };
   const esc_ = (e) => e.key === "Escape" && close();
   $("button", d).onclick = close; document.addEventListener("keydown", esc_);
+}
+
+/* Duplication d'une session (admin) : intitulé et dates de la nouvelle formation,
+   options pour reprendre les mêmes stagiaires et les valeurs des codes d'accès.
+   La copie part en brouillon ; on ouvre ses réglages pour l'ajuster. */
+export function openDuplicate(api, s, go) {
+  if (!s) return;
+  const two = s.format === "2";
+  const d = document.createElement("div");
+  d.className = "modal-back";
+  d.innerHTML = `<form class="card modal" role="dialog" aria-modal="true" aria-labelledby="dupH">
+      <h3 id="dupH">Dupliquer « ${T(s.title)} »</h3>
+      <p class="small muted" style="margin-top:0">${T("Sont repris : réglages, déroulé et activités, conducteur importé, habillage, intervenant·e, présentations, émargement, évaluation, support, mode en ligne et ressources. Ne sont jamais repris : participant·es, réponses, cadrages et discussion. La copie part en brouillon avec un nouveau code.")}</p>
+      <label class="f" for="dT">Intitulé</label><input type="text" id="dT" required maxlength="140" value="${esc(s.title + " (copie)")}">
+      <div class="grid g2">
+        <div><label class="f" for="dD">${two ? "Jour 1" : "Date"}</label><input type="date" id="dD"></div>
+        ${two ? `<div><label class="f" for="dD2">Jour 2</label><input type="date" id="dD2"></div>` : ""}
+      </div>
+      <label class="f inline"><input type="checkbox" id="dInv"> ${T("Reprendre les stagiaires (invitations et participant·es de la session d'origine)")}</label>
+      <label class="f inline"><input type="checkbox" id="dSec"> ${T("Recopier les valeurs des codes et accès des exercices (sinon, seuls leurs intitulés)")}</label>
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn" type="submit">Dupliquer</button><button class="btn ghost" type="button" id="dX">Annuler</button></div>
+    </form>`;
+  document.body.appendChild(d);
+  const close = () => { d.remove(); document.removeEventListener("keydown", onKey); };
+  const onKey = (e) => e.key === "Escape" && close();
+  document.addEventListener("keydown", onKey);
+  d.onclick = (e) => { if (e.target === d) close(); }; // accolades : renvoyer false annulerait le clic sur « Dupliquer »
+  $("#dX", d).onclick = close;
+  $("#dT", d).select();
+  $("form", d).onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = $("button[type=submit]", d); btn.disabled = true;
+    const id = await guard(() => api.duplicateSession(s.id, {
+      title: $("#dT", d).value.trim(), date: $("#dD", d).value || null, date2: two ? $("#dD2", d).value || null : null,
+      invites: $("#dInv", d).checked, secretValues: $("#dSec", d).checked,
+    }), "Session dupliquée : vérifiez ses réglages.");
+    btn.disabled = false;
+    if (id) { close(); go(`#/admin/s/${id}/reglages`); }
+  };
 }

@@ -252,6 +252,9 @@ async def main():
         await shot(st, "18-stagiaire-apres-cloture")
         await tr.goto(URL + f"#/admin/s/{sid}/apres"); await tr.wait_for_selector("#chatAdm .chat-bubble", timeout=6000)
         await tr.goto(URL + f"#/admin/s/{sid}/jour"); await tr.wait_for_selector("#closeDay"); await tr.uncheck("#closeDay"); await tr.wait_for_timeout(600)
+        # Équipe : tout effacer dans la discussion
+        await tr.click("#chatAdm .chat-clear"); await tr.wait_for_selector("#chatAdm .chat-hint", timeout=6000)
+        assert await tr.locator("#chatAdm .chat-bubble").count() == 0, "discussion effacée"
 
         # Fiches formateurs : création avec aperçu
         await tr.goto(URL + "#/admin/formateurs"); await tr.wait_for_selector(".trainer-card")
@@ -293,6 +296,14 @@ async def main():
         await tr.wait_for_selector(".phases"); await tr.goto(URL + "#/admin"); await tr.wait_for_selector("table")
         rows = await tr.locator("tbody tr").count()
         assert rows == 2, f"2 sessions attendues, {rows} trouvées"
+        # Duplication depuis la liste : intitulé et dates, copie en brouillon avec réglages et déroulé repris
+        await tr.click("tbody tr:has-text('Test · deux jours') [data-dup]"); await tr.wait_for_selector(".modal #dD2")
+        await tr.fill("#dT", "Test · deux jours · mars"); await tr.fill("#dD", "2027-03-04"); await tr.fill("#dD2", "2027-03-05")
+        await shot(tr, "28-dupliquer"); await tr.click(".modal button[type=submit]")
+        await tr.wait_for_url("**/reglages")
+        await tr.wait_for_selector("h1:has-text('Test · deux jours · mars')", timeout=6000)
+        await tr.goto(URL + "#/admin"); await tr.wait_for_selector("table")
+        assert await tr.locator("tbody tr").count() == 3, "copie ajoutée à la liste"
 
         # Rôles : l'admin ajoute une formatrice, lui crée une fiche et lui attribue une session ; elle ne voit que celle-ci
         await tr.goto(URL + "#/admin/equipe"); await tr.wait_for_selector("#addF")

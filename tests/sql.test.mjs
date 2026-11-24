@@ -19,7 +19,7 @@ grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid(), auth.jwt() to anon, authenticated;
 -- Pas de droits par défaut : comme les projets Supabase récents, les migrations doivent tout accorder elles-mêmes
 `);
-for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql", "20261122080000_premiere_connexion.sql", "20261122090000_droits_explicites.sql", "20261122100000_conducteur_habillages.sql", "20261123000000_roles_admin.sql", "20261123010000_reponses.sql", "20261124000000_discussion.sql", "20261124010000_en_ligne.sql"]) {
+for (const f of ["20261121000000_init.sql", "20261122000000_v3_acces_pilotage.sql", "20261122010000_logos_clair_sombre.sql", "20261122020000_emargement_libelle.sql", "20261122030000_presentations.sql", "20261122040000_emargement_second.sql", "20261122050000_evaluation.sql", "20261122060000_code_formateur.sql", "20261122070000_formateurs.sql", "20261122080000_premiere_connexion.sql", "20261122090000_droits_explicites.sql", "20261122100000_conducteur_habillages.sql", "20261123000000_roles_admin.sql", "20261123010000_reponses.sql", "20261124000000_discussion.sql", "20261124010000_en_ligne.sql", "20261124020000_duplication.sql"]) {
   try { await db.exec(readFileSync(new URL("../supabase/migrations/" + f, import.meta.url), "utf8")); }
   catch (e) { console.error("Migration", f, ":", e.message, e.where || ""); process.exit(1); }
 }
@@ -80,6 +80,15 @@ const pid = (await db.query(`select id from projects`)).rows[0].id;
 await db.query(`select public.comment_project('${pid}','Parfait, cadre bien les sources.')`);
 const dup = await db.query(`select public.duplicate_session('${sid}') id`);
 ok((await db.query(`select count(*)::int n from resources where session_id='${dup.rows[0].id}'`)).rows[0].n === 1, "duplication avec ressources");
+await db.exec(`insert into session_secrets (session_id, label, value) values ('${sid}', 'Compte Gemini', 'mdp-123')`);
+const dup2 = (await db.query(`select public.duplicate_session('${sid}', 'Libération · mars', '2027-03-04', null, true, true) id`)).rows[0].id;
+const d2 = (await db.query(`select title, date::text d, status, code <> '${code}' newcode from sessions where id='${dup2}'`)).rows[0];
+ok(d2.title === "Libération · mars" && d2.d === "2027-03-04" && d2.status === "draft" && d2.newcode, "duplication : intitulé, date, brouillon, nouveau code");
+const inv2 = (await db.query(`select email from session_invites where session_id='${dup2}' order by email`)).rows.map((r) => r.email).join(",");
+ok(inv2 === "alice@exemple.fr,bob@exemple.fr", "duplication : stagiaires repris en invitations (" + inv2 + ")");
+ok((await db.query(`select value from session_secrets where session_id='${dup2}'`)).rows[0].value === "mdp-123", "duplication : valeurs des codes recopiées sur demande");
+ok((await db.query(`select count(*)::int n from session_members where session_id='${dup2}'`)).rows[0].n === 0, "duplication : aucun·e participant·e, aucune réponse");
+ok((await db.query(`select value from session_secrets where session_id='${dup.rows[0].id}'`)).rows.every((r) => r.value === ""), "duplication par défaut : codes vidés");
 
 // v3 : support, logos, codes, page publique
 await db.exec(`reset role; update sessions set date = current_date + 1, end_time = '23:59', format = '1' where id = '${sid}';
@@ -123,6 +132,12 @@ ok((await db.query(`select count(*)::int n from resources`)).rows[0].n === 1, "s
 await fails(`insert into posts (thread_id, session_id, body) values ('${tid}', '${sid}', 'encore là')`, "session close : le stagiaire n'écrit plus");
 await as(T, "formateur@exemple.fr");
 ok((await db.query(`select count(*)::int n from posts where session_id='${sid}'`)).rows[0].n === 2, "session close : l'équipe relit la discussion");
+await as(B, "bob@exemple.fr");
+await db.exec(`delete from threads where session_id = '${sid}'`);
+await as(T, "formateur@exemple.fr");
+ok((await db.query(`select count(*)::int n from threads where session_id='${sid}'`)).rows[0].n === 1, "un stagiaire n'efface pas la discussion");
+await db.exec(`delete from threads where session_id = '${sid}'`);
+ok((await db.query(`select count(*)::int n from posts where session_id='${sid}'`)).rows[0].n === 0, "l'équipe efface toute la discussion (messages compris)");
 await db.exec(`reset role;`);
 ok((await db.query(`select count(*)::int n from access_codes where session_id='${sid}'`)).rows[0].n === 0, "codes détruits à la clôture");
 ok((await db.query(`select count(*)::int n from public.session_public('${code}')`)).rows[0].n === 0, "session close invisible publiquement");

@@ -38,7 +38,7 @@ export function mountChat(el, { api, sid, me, staff = false, compact = false }) 
       <div class="chat-convs" role="list"></div>
     </div>
     <div class="chat-pane">
-      <div class="chat-head"><button class="chat-back" type="button" aria-label="Retour aux conversations">‹</button><div class="chat-title"></div></div>
+      <div class="chat-head"><button class="chat-back" type="button" aria-label="Retour aux conversations">‹</button><div class="chat-title"></div>${staff ? `<button class="chat-clear" type="button" title="Supprimer tous les messages de la session">Tout effacer</button>` : ""}</div>
       <div class="chat-msgs" aria-live="polite"></div>
       <form class="chat-compose">
         <textarea rows="1" maxlength="4000" placeholder="Votre message" aria-label="Votre message"></textarea>
@@ -134,6 +134,13 @@ export function mountChat(el, { api, sid, me, staff = false, compact = false }) 
     if (t) { $(".chat-newf", el).hidden = true; $(".chat-newf input", el).value = ""; await loadThreads(); open(t.id); }
   };
   $(".chat-back", el).onclick = () => setMobile(true);
+  // Équipe : effacer toute la discussion de la session (toutes les conversations et tous les messages)
+  if (staff) $(".chat-clear", el).onclick = async () => {
+    const n = threads.reduce((a, t) => a + (t.count || 0), 0);
+    if (!threads.length) return;
+    if (!confirm(`Supprimer définitivement toute la discussion de la session (${threads.length} conversation${threads.length > 1 ? "s" : ""}, ${n} message${n > 1 ? "s" : ""}) ? Cette action est irréversible.`)) return;
+    if (await guard(() => api.clearDiscussion(sid).then(() => true), "Discussion effacée.")) { cur = null; posts = []; await loadThreads(); drawList(); drawMsgs(); }
+  };
 
   // Temps réel : nouveaux messages et conversations
   const onChange = debounce(async (e) => {

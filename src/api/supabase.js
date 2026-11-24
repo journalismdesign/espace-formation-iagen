@@ -127,7 +127,10 @@ export function createSupabaseApi(url, anonKey) {
     async createSession(s) { return ok(await sb.from("sessions").insert(s).select().single()); },
     async updateSession(id, patch) { return ok(await sb.from("sessions").update(patch).eq("id", id).select().single()); },
     async deleteSession(id) { ok(await sb.from("sessions").delete().eq("id", id)); },
-    async duplicateSession(id) { return ok(await sb.rpc("duplicate_session", { p_session: id })); },
+    // opts : { title, date, date2, invites (mêmes stagiaires), secretValues (valeurs des codes d'accès) }
+    async duplicateSession(id, o = {}) {
+      return ok(await sb.rpc("duplicate_session", { p_session: id, p_title: o.title || null, p_date: o.date || null, p_date2: o.date2 || null, p_invites: !!o.invites, p_secret_values: !!o.secretValues }));
+    },
     async joinSession(code) { return ok(await sb.rpc("join_session", { p_code: code })); },
     async memberCounts() {
       const rows = ok(await sb.from("session_members").select("session_id"));
@@ -200,6 +203,8 @@ export function createSupabaseApi(url, anonKey) {
     async listPosts(tid) { return ok(await sb.from("posts").select("*").eq("thread_id", tid).order("created_at")); },
     async addPost(tid, sid, body) { return ok(await sb.from("posts").insert({ thread_id: tid, session_id: sid, body }).select().single()); },
     async deleteThread(id) { ok(await sb.from("threads").delete().eq("id", id)); },
+    // Efface toute la discussion d'une session (équipe) : les messages partent avec leurs conversations (on delete cascade)
+    async clearDiscussion(sid) { ok(await sb.from("threads").delete().eq("session_id", sid)); },
     async deletePost(id) { ok(await sb.from("posts").delete().eq("id", id)); },
 
     /* ---------- Temps réel ---------- */

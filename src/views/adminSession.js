@@ -8,7 +8,7 @@ import { QUIZ } from "../data.js";
 import { ACT_TYPES, currentAct, respKey, renderResults, defaultActivities, countOf } from "../lib/activities.js";
 import { screenHtml } from "../lib/screen.js";
 import { openSheet } from "../lib/content.js";
-import { joinUrl, joinUrlLabel, qr, showQr, parseEmails } from "./admin.js";
+import { joinUrl, joinUrlLabel, qr, showQr, parseEmails, openDuplicate } from "./admin.js";
 import { STATUS } from "./home.js";
 import { logoPair } from "./settings.js";
 import { STEPS, SENSIB, VERIF } from "./cadrageModel.js";
@@ -74,9 +74,11 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       <div class="chips"><span class="state ${session.status}" id="stateP">${STATUS[session.status]}</span><span class="pill" id="rtP"><span class="dot rt"></span>Temps réel</span></div>
     </div>
     <div class="head-actions"><a class="btn ghost sm" href="#/s/${sid}" title="Voir l'espace tel que le voient les stagiaires">Voir côté stagiaire</a>
+      ${isAdmin(ctx.me) ? `<button class="btn ghost sm" id="dupBtn" title="Créer une nouvelle formation à partir de celle-ci">Dupliquer</button>` : ""}
       ${session.status === "draft" ? `<button class="btn sm" data-status="live">Ouvrir la salle</button>` : session.status === "live" ? `<button class="btn sm ghost" data-status="draft">Fermer la salle</button>` : `<button class="btn sm ghost" data-status="live">Rouvrir</button>`}</div></div>
     <div class="phases">${PHASES.map(([k, l]) => `<a href="#/admin/s/${sid}/${k}"${k === phase ? ' aria-current="page"' : ""}>${phaseLabel(k, l, session)}</a>`).join("")}</div>
     <div id="phase"></div>`;
+  if ($("#dupBtn", root)) $("#dupBtn", root).onclick = () => openDuplicate(api, session, ctx.go);
   $$("[data-status]", root).forEach((b) => (b.onclick = async () => {
     const st = b.dataset.status;
     await guard(() => api.updateSession(sid, { status: st, ...(st !== "live" ? { live: {} } : {}) }), st === "live" ? "Salle ouverte : les stagiaires peuvent répondre." : "Salle fermée.");
@@ -166,7 +168,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
           <label class="f" style="margin-top:14px">Autres présentations à projeter</label>
           <p class="small muted" style="margin-top:0">${T("Google Slides ou PDF déposé sur Drive (lien « Partager »). Le PDF s'affiche dans la visionneuse Drive : on change de page directement sur l'écran projeté.")}</p>
           <div id="deckList"></div>
-          <div class="askrow" style="margin-top:6px"><input type="text" id="dkT" maxlength="80" placeholder="Titre (ex. Étude de cas Ouest-France)"><input type="url" id="dkU" placeholder="https://drive.google.com/file/d/…"><button type="button" class="btn sm" id="dkAdd">Ajouter</button></div>
+          <div class="askrow" style="margin-top:6px"><input type="text" id="dkT" maxlength="80" placeholder="Titre (ex. Étude de cas Ouest-France)"><input type="url" id="dkU" placeholder="Lien Google Slides ou fichier Drive"><button type="button" class="btn sm" id="dkAdd">Ajouter</button></div>
         
         </details>
         <details class="card acc-set" name="regacc" data-acc="ev"><summary><h3>Évaluation de fin de stage</h3></summary>
@@ -193,8 +195,15 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     };
     drawDecks();
     $("#dkAdd", box).onclick = () => {
-      const url = $("#dkU", box).value.trim(), title = $("#dkT", box).value.trim() || "Présentation";
-      if (!deckKind(url)) return toast("Lien non reconnu : collez un lien Google Slides ou un lien de fichier Drive.", "ko");
+      // Tolérant : lien collé dans le champ du titre, espaces ou caractères invisibles autour du lien
+      const clean = (v) => v.replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+      let url = clean($("#dkU", box).value), title = clean($("#dkT", box).value);
+      const inTitle = title.match(/https?:\/\/\S+/);
+      if (!deckKind(url) && inTitle) { url = inTitle[0]; title = title.replace(inTitle[0], "").trim(); }
+      else { const m = url.match(/https?:\/\/\S+/); if (m) url = m[0]; }
+      title = title || "Présentation";
+      if (!url) return toast("Collez le lien de la présentation dans le second champ (le premier sert au titre).", "ko");
+      if (!deckKind(url)) return toast("Lien non reconnu : collez un lien Google Slides (docs.google.com/presentation/…) ou un lien de fichier Drive (drive.google.com/file/…).", "ko");
       decks.push({ id: "d" + Date.now().toString(36), title, url }); $("#dkU", box).value = ""; $("#dkT", box).value = ""; drawDecks();
       toast("Ajoutée : pensez à enregistrer les réglages.");
     };
@@ -615,7 +624,7 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
       </div>`;
     const reload = () => go(location.hash);
     $$("[data-att]", box).forEach((c) => (c.onchange = () => guard(() => api.setAttended(sid, c.dataset.att, c.checked))));
-    if ($("#dup", box)) $("#dup", box).onclick = async () => { const id = await guard(() => api.duplicateSession(sid), "Session dupliquée."); if (id) go(`#/admin/s/${id}`); };
+    if ($("#dup", box)) $("#dup", box).onclick = () => openDuplicate(api, session, go);
     cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: true, compact: true }));
     $("#csv", box).onclick = () => {
       const quizzes = Object.keys(QUIZ);

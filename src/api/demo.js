@@ -262,16 +262,20 @@ export function createDemoApi({ defaultActivities }) {
       ["members", "invites", "resources", "secrets", "projects", "responses", "threads", "posts"].forEach((t) => (db[t] = db[t].filter((r) => r.session_id !== id)));
       commit();
     },
-    async duplicateSession(id) {
+    // Même périmètre que duplicate_session : tout sauf participant·es, réponses, cadrages, discussion et direct
+    async duplicateSession(id, o = {}) {
       needAdmin();
-      const s = db.sessions.find((x) => x.id === id);
-      const n = await api.createSession({ title: s.title + " (copie)", formation: s.formation, client: s.client, format: s.format, activities: s.activities,
-        brand_id: s.brand_id, client_logo: s.client_logo, client_logo_light: s.client_logo_light, slides_url: s.slides_url, start_time: s.start_time, end_time: s.end_time, emargement_url: s.emargement_url, emargement_qr: s.emargement_qr,
-        emargement_label: s.emargement_label, emargement2_enabled: s.emargement2_enabled, emargement2_text: s.emargement2_text, decks: s.decks,
-        trainer_id: s.trainer_id, evaluation_url: s.evaluation_url, evaluation_qr: s.evaluation_qr, evaluation_title: s.evaluation_title, evaluation_text: s.evaluation_text });
+      const s = db.sessions.find((x) => x.id === id); if (!s) throw new Error("Session introuvable.");
+      const { id: _i, code: _c, status: _s, live: _l, created_at: _d, title, date, date2, ...rest } = s;
+      const n = await api.createSession({ ...rest, title: (o.title || "").trim() || title + " (copie)", date: o.date || null, date2: s.format === "2" ? o.date2 || null : null, support_unlocked: false });
       if (db.support[id]) db.support[n.id] = db.support[id];
       db.resources.filter((r) => r.session_id === id).forEach((r) => db.resources.push({ ...r, id: uid(), session_id: n.id }));
-      db.secrets.filter((r) => r.session_id === id).forEach((r) => db.secrets.push({ ...r, id: uid(), session_id: n.id, value: "" }));
+      db.secrets.filter((r) => r.session_id === id).forEach((r) => db.secrets.push({ ...r, id: uid(), session_id: n.id, value: o.secretValues ? r.value : "" }));
+      if (o.invites) {
+        const emails = new Set(db.invites.filter((i) => i.session_id === id).map((i) => i.email));
+        db.members.filter((m) => m.session_id === id).forEach((m) => { const p = prof(m.user_id); if (p?.email) emails.add(p.email.toLowerCase()); });
+        emails.forEach((email) => db.invites.push({ session_id: n.id, email, created_at: now() }));
+      }
       commit(); return n.id;
     },
     async joinSession(code) {
@@ -358,6 +362,10 @@ export function createDemoApi({ defaultActivities }) {
       db.posts.push(p); commit(); return p;
     },
     async deleteThread(id) { db.threads = db.threads.filter((t) => t.id !== id); db.posts = db.posts.filter((p) => p.thread_id !== id); commit(); },
+    async clearDiscussion(sid) {
+      needTrainer(); if (!manages(sid)) throw new Error("Session non attribuée.");
+      db.threads = db.threads.filter((t) => t.session_id !== sid); db.posts = db.posts.filter((p) => p.session_id !== sid); commit();
+    },
     async deletePost(id) { db.posts = db.posts.filter((p) => p.id !== id); commit(); },
 
     watch(_sid, cb) { const f = () => cb({ table: "*" }); listeners.add(f); return () => listeners.delete(f); },
