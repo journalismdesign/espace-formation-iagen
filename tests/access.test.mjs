@@ -1,7 +1,7 @@
 // Règles de la demande de code (fonction Edge « access ») : même bloc dans src/lib/accessRules.js et
 // dans supabase/functions/access/index.ts, puis comportement des validations.
 import { readFileSync } from "node:fs";
-import { checkFirstName, clientIp, bearer, ACCESS_LIMITS } from "../src/lib/accessRules.js";
+import { checkFirstName, clientIp, bearer, ACCESS_LIMITS, DIRECT_PASS_HOURS } from "../src/lib/accessRules.js";
 
 let fails = 0;
 const ok = (c, msg) => { console.log((c ? "ok · " : "ÉCHEC · ") + msg); if (!c) fails++; };
@@ -23,6 +23,10 @@ ok(ACCESS_LIMITS.mails[0] < 300, "plafond quotidien d'e-mails sous le quota grat
 ok(bearer("Bearer abc.def.ghi") === "abc.def.ghi" && bearer("bearer  xyz ") === "xyz", "jeton lu dans l'en-tête Authorization");
 ok(bearer(null) === "" && bearer("Basic abc") === "" && bearer("Bearer") === "" && bearer("Bearer a b") === "", "en-tête absent ou mal formé : aucun jeton");
 ok(ACCESS_LIMITS.issue[0] > 0 && ACCESS_LIMITS.issue[1] > 0, "codes remis par l'équipe : plafond par compte défini");
+ok(DIRECT_PASS_HOURS > 0 && DIRECT_PASS_HOURS <= 48, "accès direct : délai court (au plus 48 heures)");
+ok(ACCESS_LIMITS.ip[0] >= 30, "une salle entière derrière le même wifi peut demander ses codes en dix minutes");
+const fnSrc = readFileSync(new URL("../supabase/functions/access/index.ts", import.meta.url), "utf8");
+ok(/\.from\("access_passes"\)\.delete\(\)/.test(fnSrc), "accès direct consommé à la première entrée (supprimé, pas seulement lu)");
 
 if (fails) { console.error(`\n${fails} test(s) des règles d'accès en échec.`); process.exit(1); }
 console.log("\nTous les tests des règles d'accès passent.");

@@ -21,6 +21,13 @@ export function createSupabaseApi(url, anonKey) {
     }
     return data;
   };
+  // Jeton à usage unique de la fonction access → session Supabase dans ce navigateur
+  const openWith = async (token_hash) => {
+    let r = await sb.auth.verifyOtp({ token_hash, type: "email" });
+    if (r.error) r = await sb.auth.verifyOtp({ token_hash, type: "magiclink" });
+    if (r.error) throw new Error("Ouverture de session impossible : " + r.error.message);
+    profileCache = null;
+  };
 
   const api = {
     mode: "supabase",
@@ -29,18 +36,25 @@ export function createSupabaseApi(url, anonKey) {
     async sessionPublic(code) { return ok(await sb.rpc("session_public", { p_code: code }))?.[0] || null; },
     // Réveille la fonction Edge « access » (démarrage à froid) pendant que le stagiaire saisit son nom
     warmAccess() { fetch(`${url}/functions/v1/access`, { method: "OPTIONS" }).catch(() => {}); },
-    async requestAccess(sid, first_name, email) { return invoke("access", { action: "request", session_id: sid, first_name, email }); },
+    // Accès direct accordé par l'équipe : la fonction renvoie aussitôt un jeton de connexion ({ direct: true }), sans e-mail
+    async requestAccess(sid, first_name, email) {
+      const r = await invoke("access", { action: "request", session_id: sid, first_name, email });
+      if (r?.token_hash) { await openWith(r.token_hash); return { direct: true }; }
+      return r;
+    },
     // Code remis à la main par l'équipe (adresse qui ne reçoit pas l'e-mail) : aucun envoi, le code revient en clair
     async issueAccess(sid, first_name, email) {
       try { return await invoke("access", { action: "issue", session_id: sid, first_name, email }); }
       catch (e) { if (/action inconnue/i.test(e.message)) throw new Error("Générateur pas encore activé : la fonction access doit être redéployée sur Supabase."); throw e; }
     },
+    // Accès direct : compte créé et inscrit, entrée sans code une seule fois (action « grant »)
+    async grantAccess(sid, first_name, email) {
+      try { return await invoke("access", { action: "grant", session_id: sid, first_name, email }); }
+      catch (e) { if (/action inconnue/i.test(e.message)) throw new Error("Accès direct pas encore activé : la fonction access doit être redéployée sur Supabase."); throw e; }
+    },
     async verifyAccess(sid, email, code) {
       const { token_hash } = await invoke("access", { action: "verify", session_id: sid, email, code });
-      let r = await sb.auth.verifyOtp({ token_hash, type: "email" });
-      if (r.error) r = await sb.auth.verifyOtp({ token_hash, type: "magiclink" });
-      if (r.error) throw new Error("Ouverture de session impossible : " + r.error.message);
-      profileCache = null;
+      await openWith(token_hash);
       return true;
     },
 

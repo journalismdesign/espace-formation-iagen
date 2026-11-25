@@ -139,7 +139,17 @@ label.f{display:block;font-weight:600;font-size:13px;margin:10px 0 4px;color:var
 .sheet .x{position:sticky;top:0;float:right;border:0;background:var(--light);border-radius:50%;width:34px;height:34px;cursor:pointer;font-size:18px}
 .sheet h2{font-size:22px;margin-top:6px}
 .sheet .sec{margin:16px 0}
-/* Code sans e-mail (panneau du pilotage) */
+/* Ajouter un·e stagiaire (panneau du pilotage) : accès direct ou code à transmettre */
+.acc-mode{border:0;padding:0;margin:12px 0 16px;display:grid;gap:8px}
+.acc-mode legend{padding:0;margin-bottom:6px}
+.acc-mode label{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--light);cursor:pointer}
+.acc-mode label:hover{border-color:var(--blue)}
+.acc-mode label:has(input:checked){border-color:var(--blue);background:var(--tint)}
+.acc-mode input{width:auto;margin:4px 0 0}
+.acc-mode b{display:block;color:var(--ink)}
+.acc-mode .small{display:block;line-height:1.4}
+.granted{margin:14px 0 12px;padding:10px 14px;background:var(--oktint);border-left:4px solid var(--ok);border-radius:6px;color:var(--ok);font-weight:600}
+.granted .small{font-weight:400;color:var(--dark)}
 .issued-code{display:inline-block;margin:14px 0 12px;padding:12px 18px;background:var(--tint);color:var(--ink);font-size:44px;font-weight:800;letter-spacing:8px;line-height:1;user-select:all}
 .issued-acts{display:flex;gap:8px;flex-wrap:wrap}
 .sheet .sec h4{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}

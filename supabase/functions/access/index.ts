@@ -17,11 +17,17 @@
 //      manages() de la base, évaluée avec le jeton de l'appelant), aucun e-mail,
 //      renvoie le code en clair une seule fois pour qu'il soit transmis de vive
 //      voix. Il remplace le code précédent de cette adresse.
+//  grant   { session_id, first_name, email }  + en-tête Authorization de l'équipe
+//    → accès direct, mêmes droits que issue : crée le compte, l'inscrit à la
+//      session et enregistre un accès à usage unique (access_passes, valable
+//      DIRECT_PASS_HOURS heures). À sa prochaine demande (request), la personne
+//      entre sans e-mail ni code : request renvoie alors { token_hash, direct }.
 //
 // Secrets obligatoires : BREVO_API_KEY, MAIL_FROM (ex. formation@journalism.design),
 //   CODE_PEPPER (chaîne aléatoire longue), ALLOWED_ORIGIN (ex. https://formation.journalism.design).
 // Facultatif : MAIL_FROM_NAME (le nom réglé dans le back-office l'emporte).
-// Nécessite la migration 20261124040000_durcissement.sql (throttle_hit, try_access_code, access_mode).
+// Nécessite les migrations 20261124040000_durcissement.sql (throttle_hit, try_access_code, access_mode)
+//   et 20261125000000_acces_direct.sql (access_passes ; sans elle, seul grant échoue).
 // Déploiement : supabase functions deploy access --no-verify-jwt
 // =====================================================================
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -99,8 +105,11 @@ async function sendMail(to: string, name: string, subject: string, html: string,
 // Règles de la demande : bloc recopié de src/lib/accessRules.js, à garder identique (tests/access.test.mjs).
 // >>> règles de la demande de code
 // Limites anti-abus : [nombre d'appels, fenêtre en secondes]
-// issue : codes remis à la main par l'équipe (sans e-mail), par compte
-export const ACCESS_LIMITS = { ip: [10, 600], session: [60, 3600], mails: [250, 86400], verifyIp: [40, 600], issue: [60, 3600] };
+// ip : toute une salle sort souvent par la même adresse (wifi de l'entreprise), d'où 40 demandes par 10 minutes
+// issue : codes et accès directs remis à la main par l'équipe (sans e-mail), par compte
+export const ACCESS_LIMITS = { ip: [40, 600], session: [60, 3600], mails: [250, 86400], verifyIp: [40, 600], issue: [60, 3600] };
+// Accès direct accordé par l'équipe : une seule entrée, dans ce délai en heures (et avant la fin de la formation)
+export const DIRECT_PASS_HOURS = 24;
 // Prénom saisi par le ou la stagiaire, repris dans l'e-mail : lettres seulement, pour qu'on ne puisse pas y glisser un lien
 export function checkFirstName(v) {
   const s = String(v ?? "").trim().replace(/\s+/g, " ");
@@ -148,10 +157,58 @@ Deno.serve(async (req) => {
   if (staff || (prof && prof.role !== "trainee"))
     return json({ error: "cette adresse appartient à l'équipe : connectez-vous par l'espace formateur" }, 403);
 
+  // Compte de la personne (créé s'il manque, prénom complété s'il était vide), rattaché à la session
+  const enroll = async (first: string) => {
+    let uid = prof?.id as string | undefined;
+    if (!uid) {
+      const { data: created, error } = await admin.auth.admin.createUser({ email, email_confirm: true, user_metadata: { full_name: first } });
+      if (error || !created?.user) return null;
+      uid = created.user.id;
+    } else if (!prof!.full_name && first) {
+      await admin.from("profiles").update({ full_name: first }).eq("id", uid);
+    }
+    await admin.from("session_members").upsert({ session_id: sid, user_id: uid }, { onConflict: "session_id,user_id", ignoreDuplicates: true });
+    return uid;
+  };
+  // Jeton à usage unique, que le navigateur échange contre une session Supabase (verifyOtp)
+  const loginToken = async () => {
+    const { data: link, error } = await admin.auth.admin.generateLink({ type: "magiclink", email });
+    return error ? null : (link?.properties?.hashed_token ?? null);
+  };
+  // Appel de l'équipe (issue, grant) : jeton de l'appelant, puis règle manages() de la base évaluée avec ce jeton
+  const teamCaller = async (): Promise<{ id?: string; res?: Response }> => {
+    const jwt = bearer(req.headers.get("authorization"));
+    const { data: who } = jwt ? await admin.auth.getUser(jwt) : { data: null };
+    const caller = who?.user;
+    if (!caller) return { res: json({ error: "connectez-vous à l'espace formateur" }, 401) };
+    const asCaller = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } }, auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: can } = await asCaller.rpc("manages", { sid });
+    if (can !== true) return { res: json({ error: "réservé à l'équipe qui pilote cette session" }, 403) };
+    if (!(await hit("issue:" + caller.id, ACCESS_LIMITS.issue))) return { res: json({ error: TOO_MANY }, 429) };
+    return { id: caller.id };
+  };
+
   if (action === "request") {
     const fn = checkFirstName(body?.first_name);
     if (fn.error) return json({ error: fn.error }, 400);
     const first = fn.value as string;
+
+    // Accès direct accordé par l'équipe (grant) : consommé ici, une seule fois, sans e-mail ni code.
+    // Sans la migration de l'accès direct, la requête échoue et la demande suit son cours normal.
+    const { data: pass } = await admin.from("access_passes").delete().eq("session_id", sid).eq("email", email)
+      .gt("expires_at", new Date().toISOString()).select("first_name, expires_at, created_by, created_at").maybeSingle();
+    if (pass) {
+      const uid = await enroll(first);
+      const token = uid ? await loginToken() : null;
+      if (!token) {
+        await admin.from("access_passes").upsert({ session_id: sid, email, ...pass }); // remis en place pour un nouvel essai
+        return json({ error: "ouverture de session impossible : réessayez" }, 500);
+      }
+      console.log("entrée directe", sid); // ni adresse ni jeton dans les journaux
+      return json({ token_hash: token, direct: true });
+    }
 
     // Session « sur invitation » : adresse invitée, ou personne déjà inscrite
     if (s.access_mode === "invites") {
@@ -189,16 +246,8 @@ Deno.serve(async (req) => {
   }
 
   if (action === "issue") {
-    const jwt = bearer(req.headers.get("authorization"));
-    const { data: who } = jwt ? await admin.auth.getUser(jwt) : { data: null };
-    const caller = who?.user;
-    if (!caller) return json({ error: "connectez-vous à l'espace formateur" }, 401);
-    const asCaller = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: `Bearer ${jwt}` } }, auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data: can } = await asCaller.rpc("manages", { sid });
-    if (can !== true) return json({ error: "réservé à l'équipe qui pilote cette session" }, 403);
-    if (!(await hit("issue:" + caller.id, ACCESS_LIMITS.issue))) return json({ error: TOO_MANY }, 429);
+    const team = await teamCaller();
+    if (team.res) return team.res;
     const fn = checkFirstName(body?.first_name);
     if (fn.error) return json({ error: fn.error.replace("votre", "son") }, 400);
 
@@ -209,8 +258,32 @@ Deno.serve(async (req) => {
       expires_at: exp, attempts: 0, sent_at: new Date().toISOString(),
     });
     if (upErr) return json({ error: "code non enregistré : réessayez" }, 500);
-    console.log("code remis par l'équipe", caller.id, sid); // ni adresse ni code dans les journaux
+    console.log("code remis par l'équipe", team.id, sid); // ni adresse ni code dans les journaux
     return json({ code, expires_at: exp });
+  }
+
+  if (action === "grant") {
+    const team = await teamCaller();
+    if (team.res) return team.res;
+    const fn = checkFirstName(body?.first_name);
+    if (fn.error) return json({ error: fn.error.replace("votre", "son") }, 400);
+
+    const { data: exp } = await admin.rpc("access_expiry", { p_session: sid });
+    const until = Math.min(new Date(exp).getTime(), Date.now() + DIRECT_PASS_HOURS * 3600 * 1000);
+    if (until < Date.now() + 10 * 60 * 1000)
+      return json({ error: "la formation se termine dans moins de dix minutes : vérifiez ses dates dans les réglages" }, 400);
+    // Enregistré en premier : sans la migration de l'accès direct, rien d'autre n'est fait
+    const { error: upErr } = await admin.from("access_passes").upsert({
+      session_id: sid, email, first_name: fn.value, expires_at: new Date(until).toISOString(),
+      created_by: team.id, created_at: new Date().toISOString(),
+    });
+    if (upErr) return json({ error: /access_passes/.test(upErr.message)
+      ? "accès direct pas encore activé : la migration 20261125000000_acces_direct.sql doit être exécutée sur Supabase"
+      : "accès non enregistré : réessayez" }, 500);
+    // Compte créé et inscrit tout de suite : la personne apparaît parmi les participant·es avant même d'entrer
+    const uid = await enroll(fn.value as string);
+    console.log("accès direct accordé par l'équipe", team.id, sid);
+    return json({ granted: true, expires_at: new Date(until).toISOString(), enrolled: !!uid });
   }
 
   if (action === "verify") {
@@ -222,21 +295,12 @@ Deno.serve(async (req) => {
     if (r.startsWith("bad:")) return json({ error: `code incorrect (${r.slice(4)} essai(s) restant(s))` }, 401);
 
     // Premier code juste : compte créé seulement maintenant, prénom repris du code
-    let uid = prof?.id as string | undefined;
-    if (!uid) {
-      const { data: row } = await admin.from("access_codes").select("first_name").eq("session_id", sid).eq("email", email).maybeSingle();
-      const { data: created, error } = await admin.auth.admin.createUser({ email, email_confirm: true, user_metadata: { full_name: row?.first_name ?? "" } });
-      if (error) return json({ error: "création du compte impossible" }, 500);
-      uid = created.user!.id;
-    } else if (!prof!.full_name) {
-      const { data: row } = await admin.from("access_codes").select("first_name").eq("session_id", sid).eq("email", email).maybeSingle();
-      if (row?.first_name) await admin.from("profiles").update({ full_name: row.first_name }).eq("id", uid);
-    }
-    await admin.from("session_members").upsert({ session_id: sid, user_id: uid }, { onConflict: "session_id,user_id", ignoreDuplicates: true });
+    const { data: row } = await admin.from("access_codes").select("first_name").eq("session_id", sid).eq("email", email).maybeSingle();
+    if (!(await enroll(row?.first_name ?? ""))) return json({ error: "création du compte impossible" }, 500);
     // Le code reste valable jusqu'à la fin de la formation (autre appareil, navigateur vidé)
-    const { data: link, error } = await admin.auth.admin.generateLink({ type: "magiclink", email });
-    if (error || !link?.properties?.hashed_token) return json({ error: "ouverture de session impossible" }, 500);
-    return json({ token_hash: link.properties.hashed_token });
+    const token = await loginToken();
+    if (!token) return json({ error: "ouverture de session impossible" }, 500);
+    return json({ token_hash: token });
   }
 
   return json({ error: "action inconnue" }, 400);

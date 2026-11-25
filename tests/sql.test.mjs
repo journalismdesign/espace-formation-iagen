@@ -99,12 +99,17 @@ await db.exec(`delete from sessions where id = '${dup3}'`);
 // v3 : support, logos, codes, page publique
 await db.exec(`reset role; update sessions set date = current_date + 1, end_time = '23:59', format = '1' where id = '${sid}';
   insert into session_support values ('${sid}', 'https://drive.google.com/support.pdf');
-  insert into access_codes (session_id, email, code_hash, expires_at) values ('${sid}', 'bob@exemple.fr', 'x', now() + interval '1 day');`);
+  insert into access_codes (session_id, email, code_hash, expires_at) values ('${sid}', 'bob@exemple.fr', 'x', now() + interval '1 day');
+  insert into access_passes (session_id, email, expires_at) values ('${sid}', 'bob@exemple.fr', now() + interval '1 day'), ('${sid}', 'vieux@exemple.fr', now() - interval '1 hour');
+  select public.purge_access_codes();`);
+ok((await db.query(`select string_agg(email, ',' order by email) e from access_passes`)).rows[0].e === "bob@exemple.fr", "purge : accès direct périmé effacé, l'autre gardé");
 await as(B, "bob@exemple.fr");
 let st = (await db.query(`select * from public.support_status('${sid}')`)).rows[0];
 ok(st.unlocked === false && st.url === null && st.configured === true, "support verrouillé : lien masqué au stagiaire");
 ok((await db.query(`select count(*)::int n from session_support`)).rows[0].n === 0, "le stagiaire ne lit pas la table du support");
 await fails(`select * from access_codes`, "les codes d'accès sont illisibles côté client");
+await fails(`select * from access_passes`, "les accès directs sont illisibles côté client");
+await fails(`insert into access_passes (session_id, email, expires_at) values ('${sid}', 'pirate@exemple.fr', now() + interval '1 day')`, "un client ne s'accorde pas d'accès direct");
 ok((await db.query(`select count(*)::int n from brands`)).rows[0].n === 3, "trois logos préenregistrés lisibles");
 await db.exec(`update brands set name = 'pirate' || name`);
 ok((await db.query(`select count(*)::int n from brands where name like 'pirate%'`)).rows[0].n === 0, "le stagiaire ne modifie pas les logos");
@@ -150,6 +155,7 @@ await db.exec(`delete from threads where session_id = '${sid}'`);
 ok((await db.query(`select count(*)::int n from posts where session_id='${sid}'`)).rows[0].n === 0, "l'équipe efface toute la discussion (messages compris)");
 await db.exec(`reset role;`);
 ok((await db.query(`select count(*)::int n from access_codes where session_id='${sid}'`)).rows[0].n === 0, "codes détruits à la clôture");
+ok((await db.query(`select count(*)::int n from access_passes where session_id='${sid}'`)).rows[0].n === 0, "accès directs détruits à la clôture");
 ok((await db.query(`select count(*)::int n from public.session_public('${code}')`)).rows[0].n === 0, "session close invisible publiquement");
 
 // Profils intervenant·es

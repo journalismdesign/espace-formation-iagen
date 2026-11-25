@@ -3,6 +3,8 @@
    compte (sessionStorage) : ouvrez un onglet formateur et un onglet
    stagiaire pour tester le direct. Aucune donnée ne quitte la machine. */
 
+import { DIRECT_PASS_HOURS } from "../lib/accessRules.js";
+
 const KEY = "iagen-demo-db-v9";
 const USER_KEY = "iagen-demo-user";
 const bc = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("iagen-demo") : null;
@@ -87,6 +89,26 @@ export function createDemoApi({ defaultActivities }) {
   const nameOf = (id) => { const p = prof(id); return p ? (p.full_name || p.email.split("@")[0]) : "?"; };
 
   const lastDay = (x) => (x.format === "2" && x.date2) || x.date;
+  const accessExpiry = (x) => new Date((lastDay(x) || new Date().toISOString().slice(0, 10)) + "T23:59:00").toISOString();
+  // Code ou accès remis par l'équipe : qui pilote la session, jamais pour une adresse de l'équipe
+  const needTeamFor = (sid, email) => {
+    needTrainer(); if (!manages(sid)) throw new Error("Réservé à l'équipe qui pilote cette session.");
+    const e = String(email || "").trim().toLowerCase();
+    if (roleOf(e) || ["trainer", "admin"].includes(db.profiles.find((y) => y.email === e)?.role)) throw new Error("Cette adresse appartient à l'équipe : connectez-vous par l'espace formateur.");
+  };
+  // Compte de la personne (créé s'il manque), inscrit à la session. who : « votre » (stagiaire) ou « son » (équipe)
+  const enrollDemo = (sid, first, email, who) => {
+    email = String(email || "").trim().toLowerCase(); first = String(first || "").trim();
+    const x = db.sessions.find((y) => y.id === sid);
+    if (!x || x.status === "closed") throw new Error("Session inconnue ou close.");
+    if (!first) throw new Error(`Indiquez ${who} prénom.`);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Adresse e-mail invalide.");
+    let p = db.profiles.find((y) => y.email === email);
+    if (!p) { p = { id: uid(), email, full_name: first, role: roleOf(email) || "trainee", metier: null, niveau: null, outils: [], created_at: now() }; db.profiles.push(p); }
+    else if (!p.full_name) p.full_name = first;
+    if (!db.members.some((m) => m.session_id === sid && m.user_id === p.id)) db.members.push({ session_id: sid, user_id: p.id, joined_at: now(), attended: false, progress: {} });
+    return { x, p };
+  };
   const pub = (x) => {
     const b = db.brands.find((y) => y.id === x.brand_id);
     return { id: x.id, title: x.title, formation: x.formation, client: x.client || b?.name || "", date: x.date, date2: x.format === "2" ? x.date2 : null,
@@ -102,18 +124,18 @@ export function createDemoApi({ defaultActivities }) {
     // Accès par code : en démonstration, le code s'affiche à l'écran au lieu d'être envoyé
     async sessionPublic(code) { const x = db.sessions.find((y) => y.code === String(code).trim().toUpperCase() && y.status !== "closed"); return x ? pub(x) : null; },
     async requestAccess(sid, first, email) {
-      email = email.trim().toLowerCase();
-      const x = db.sessions.find((y) => y.id === sid);
-      if (!x || x.status === "closed") throw new Error("Session inconnue ou close.");
-      if (!first.trim()) throw new Error("Indiquez votre prénom.");
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Adresse e-mail invalide.");
-      let p = db.profiles.find((y) => y.email === email);
-      if (!p) { p = { id: uid(), email, full_name: first.trim(), role: roleOf(email) || "trainee", metier: null, niveau: null, outils: [], created_at: now() }; db.profiles.push(p); }
-      else if (!p.full_name) p.full_name = first.trim();
-      if (!db.members.some((m) => m.session_id === sid && m.user_id === p.id)) db.members.push({ session_id: sid, user_id: p.id, joined_at: now(), attended: false, progress: {} });
+      const { x, p } = enrollDemo(sid, first, email, "votre");
+      email = p.email;
+      // Accès direct accordé par l'équipe : consommé ici, une seule fois, sans code (comme la fonction access)
+      const pass = (db.passes || []).find((y) => y.session_id === sid && y.email === email && new Date(y.expires_at) > new Date());
+      if (pass) {
+        db.passes = db.passes.filter((y) => y !== pass); commit();
+        setUser({ id: p.id, email }); authCb(user());
+        return { direct: true };
+      }
       const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
       const code = Array.from(crypto.getRandomValues(new Uint8Array(6)), (v) => A[v % A.length]).join("");
-      const exp = new Date((lastDay(x) || new Date().toISOString().slice(0, 10)) + "T23:59:00").toISOString();
+      const exp = accessExpiry(x);
       db.codes = db.codes.filter((c) => !(c.session_id === sid && c.email === email));
       db.codes.push({ session_id: sid, email, code, expires_at: exp, attempts: 0 });
       commit();
@@ -121,11 +143,25 @@ export function createDemoApi({ defaultActivities }) {
     },
     // Code remis à la main par l'équipe, sans e-mail (même effet que la fonction access, action « issue »)
     async issueAccess(sid, first, email) {
-      needTrainer(); if (!manages(sid)) throw new Error("Réservé à l'équipe qui pilote cette session.");
-      email = email.trim().toLowerCase();
-      if (roleOf(email) || ["trainer", "admin"].includes(db.profiles.find((y) => y.email === email)?.role)) throw new Error("Cette adresse appartient à l'équipe : connectez-vous par l'espace formateur.");
-      const r = await api.requestAccess(sid, first, email);
-      return { code: r.demoCode, expires_at: r.expires_at };
+      needTeamFor(sid, email);
+      const { x, p } = enrollDemo(sid, first, email, "son");
+      const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+      const code = Array.from(crypto.getRandomValues(new Uint8Array(6)), (v) => A[v % A.length]).join("");
+      const exp = accessExpiry(x);
+      db.codes = db.codes.filter((c) => !(c.session_id === sid && c.email === p.email));
+      db.codes.push({ session_id: sid, email: p.email, code, expires_at: exp, attempts: 0 });
+      commit();
+      return { code, expires_at: exp };
+    },
+    // Accès direct (action « grant ») : compte créé et inscrit tout de suite, entrée sans code une seule fois
+    async grantAccess(sid, first, email) {
+      needTeamFor(sid, email);
+      const { x, p } = enrollDemo(sid, first, email, "son");
+      const exp = new Date(Math.min(new Date(accessExpiry(x)).getTime(), Date.now() + DIRECT_PASS_HOURS * 3600 * 1000)).toISOString();
+      db.passes = (db.passes || []).filter((y) => !(y.session_id === sid && y.email === p.email));
+      db.passes.push({ session_id: sid, email: p.email, first_name: first.trim(), expires_at: exp });
+      commit();
+      return { granted: true, expires_at: exp, enrolled: true };
     },
     async verifyAccess(sid, email, code) {
       email = email.trim().toLowerCase();
@@ -261,7 +297,10 @@ export function createDemoApi({ defaultActivities }) {
       const s = db.sessions.find((x) => x.id === id);
       if (!isAdmin() && ((patch.trainer_id !== undefined && patch.trainer_id !== s.trainer_id) || (patch.skin_id !== undefined && patch.skin_id !== s.skin_id))) throw new Error("Seule l'administration attribue une session et choisit son habillage.");
       Object.assign(s, patch);
-      if (s.status === "closed") db.codes = db.codes.filter((c) => c.session_id !== id); // codes détruits à la clôture
+      if (s.status === "closed") { // codes et accès directs détruits à la clôture
+        db.codes = db.codes.filter((c) => c.session_id !== id);
+        db.passes = (db.passes || []).filter((c) => c.session_id !== id);
+      }
       commit(); return s;
     },
     async deleteSession(id) {

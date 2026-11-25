@@ -1,6 +1,7 @@
 /* Parcours d'entrée du stagiaire, en slides plein écran :
    1. titre de la formation (logos, dates)
    2. connexion : prénom + e-mail → code personnel reçu par e-mail
+      (ou entrée immédiate si l'équipe a accordé un accès direct à cette adresse)
    3. émargement (QR code de l'organisme)
    4. support de formation (téléchargeable une heure avant la fin)
    → tableau de bord de la session. */
@@ -54,7 +55,11 @@ export async function viewEntry(root, [code], ctx) {
         first = $("#fn").value.trim(); email = $("#em").value.trim().toLowerCase();
         const btn = $("#reqF button"); btn.disabled = true; btn.textContent = "Envoi…";
         const r = await guard(() => api.requestAccess(pub.id, first, email));
-        if (r) { demoCode = r.demoCode || null; step = "code"; draw(); } else { btn.disabled = false; btn.textContent = "Recevoir mon code"; }
+        if (r?.direct) { // accès direct accordé par l'équipe : connecté·e sans code
+          await ctx.refreshMe?.();
+          const m = await api.myMembership(pub.id).catch(() => null);
+          step = m?.progress?.intro ? "done" : "emargement"; draw();
+        } else if (r) { demoCode = r.demoCode || null; step = "code"; draw(); } else { btn.disabled = false; btn.textContent = "Recevoir mon code"; }
       };
       $("#haveCode").onclick = () => { step = "code"; draw(); };
     } else if (step === "code") {
