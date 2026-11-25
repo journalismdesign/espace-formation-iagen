@@ -40,7 +40,7 @@ const ROUTES = [
   [/^#\/admin$/, viewAdmin, { trainer: true }],
   [/^#\/admin\/reglages(?:\/(\w+))?$/, viewSettings, { trainer: true, admin: true }],
   [/^#\/admin\/formateurs(?:\/([\w-]+))?$/, viewTrainers, { trainer: true, admin: true }],
-  [/^#\/admin\/equipe$/, viewStaff, { trainer: true, admin: true }],
+  [/^#\/admin\/equipe(?:\/(comptes|fiches))?(?:\/([\w-]+))?$/, viewStaff, { trainer: true, admin: true }],
   [/^#\/admin\/s\/([\w-]+)(?:\/(\w+))?$/, viewAdminSession, { trainer: true }],
   [/^#\/ecran\/([\w-]+)$/, viewScreen, { trainer: true, bare: true }],
   [/^#?\/?$/, viewHome],

@@ -204,7 +204,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         </div>
         <div class="card" style="margin-top:14px"><h3>Intervenant·e</h3>
           <select id="gTr"${admin ? "" : " disabled"}><option value="">— Choisir une fiche —</option>${trainers.map((t) => `<option value="${t.id}"${session.trainer_id === t.id ? " selected" : ""}>${T(t.name)}</option>`).join("")}</select>
-          <p class="small muted">${T("Présenté·e sur la slide « Formateur ». La fiche choisie donne aussi accès à la session au compte qui porte son adresse de connexion. ")}${admin ? `<a href="#/admin/formateurs">Gérer les fiches formateurs</a>` : T("Attribution faite par l'administration.")}</p>
+          <p class="small muted">${T("Présenté·e sur la slide « Formateur ». La fiche choisie donne aussi accès à la session au compte qui porte son adresse de connexion. ")}${admin ? `<a href="#/admin/equipe/fiches">Gérer les fiches intervenant·es</a>` : T("Attribution faite par l'administration.")}</p>
         </div>
         <div class="card" style="margin-top:14px"><h3>Entreprise cliente</h3>
           <div class="brand-pick" id="gBrand">

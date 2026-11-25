@@ -746,10 +746,18 @@ details.acc-set:first-of-type{margin-top:0}
 .ds-tagline{font-size:2.55cqw;font-weight:800;text-transform:uppercase;color:#000;line-height:1.15;margin-top:2.6cqw}
 .ds-tagline .hl{color:var(--dblue)}
 .ds-tagline-sub{font-size:1.5cqw;text-transform:uppercase;color:#6E5FA3;align-self:flex-end}
-/* Page formateurs */
+/* Équipe et accès · fiches intervenant·es */
 .trainer-card{display:flex;gap:12px;align-items:center;text-decoration:none;color:inherit}
 .trainer-card img,.tc-ph{width:64px;height:64px;object-fit:cover;flex:none;background:var(--tint);display:grid;place-items:center;font-weight:800;color:var(--ink)}
 .trainer-card b{color:var(--ink)}
+.trainer-card>div{min-width:0}
+.trainer-card .tc-access{margin-top:4px;overflow-wrap:anywhere}
+.tc-access{color:var(--muted)}
+.tc-access.ok{color:var(--ok)}
+.tc-access.ko{color:var(--ko)}
+.tab-flag{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;margin-left:6px;border-radius:9px;background:var(--ko);color:#fff;font-size:11px;font-weight:700;vertical-align:1px}
+.eq-head{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
+.eq-head .btn{flex:none}
 .row3{display:grid;grid-template-columns:1fr 1fr 1.2fr 34px;gap:6px;margin-bottom:6px}
 .row3.two{grid-template-columns:1fr 1.4fr 34px}
 .danger-btn{color:var(--ko);border-color:var(--ko)}
