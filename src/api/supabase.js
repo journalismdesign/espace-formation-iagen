@@ -30,6 +30,11 @@ export function createSupabaseApi(url, anonKey) {
     // Réveille la fonction Edge « access » (démarrage à froid) pendant que le stagiaire saisit son nom
     warmAccess() { fetch(`${url}/functions/v1/access`, { method: "OPTIONS" }).catch(() => {}); },
     async requestAccess(sid, first_name, email) { return invoke("access", { action: "request", session_id: sid, first_name, email }); },
+    // Code remis à la main par l'équipe (adresse qui ne reçoit pas l'e-mail) : aucun envoi, le code revient en clair
+    async issueAccess(sid, first_name, email) {
+      try { return await invoke("access", { action: "issue", session_id: sid, first_name, email }); }
+      catch (e) { if (/action inconnue/i.test(e.message)) throw new Error("Générateur pas encore activé : la fonction access doit être redéployée sur Supabase."); throw e; }
+    },
     async verifyAccess(sid, email, code) {
       const { token_hash } = await invoke("access", { action: "verify", session_id: sid, email, code });
       let r = await sb.auth.verifyOtp({ token_hash, type: "email" });

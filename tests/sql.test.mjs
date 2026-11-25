@@ -229,6 +229,9 @@ await fails(`select public.session_roster('${sid}')`, "pas de tableau des partic
 await fails(`select public.list_staff()`, "pas d'accès à la liste de l'équipe");
 await fails(`insert into brands (name) values ('Pirate')`, "pas de réglages communs");
 ok((await db.query(`select count(*)::int n from public.session_roster('${s2}')`)).rows[0].n === 0, "tableau de sa propre session");
+// Code sans e-mail (fonction access, action issue) : autorisé par manages(), appelé avec le jeton de la personne connectée
+ok((await db.query(`select public.manages('${s2}') m`)).rows[0].m === true, "code sans e-mail : la formatrice peut en générer pour sa session");
+ok((await db.query(`select public.manages('${sid}') m`)).rows[0].m === false, "code sans e-mail : pas pour une session qui ne lui est pas attribuée");
 await as(T, "formateur@exemple.fr");
 await fails(`select public.remove_staff('formateur@exemple.fr')`, "l'admin ne se retire pas lui-même");
 await db.exec(`select public.save_staff('fanny@exemple.fr', true)`);
@@ -303,6 +306,7 @@ ok((await db.query(`select count(*)::int n from session_secrets where session_id
 await fails(`select login_email from trainers`, "un stagiaire ne lit pas les adresses de connexion de l'équipe");
 ok((await db.query(`select count(*)::int n from trainers`)).rows[0].n >= 1, "il lit toujours les fiches des intervenant·es");
 ok((await db.query(`select count(*)::int n from public.trainer_logins()`)).rows[0].n === 0, "trainer_logins vide pour un stagiaire");
+ok((await db.query(`select public.manages('${sid}') m`)).rows[0].m === false, "code sans e-mail : refusé à un stagiaire");
 await as(T, "formateur@exemple.fr");
 ok((await db.query(`select count(*)::int n from public.trainer_logins() where login_email is not null`)).rows[0].n >= 1, "l'équipe lit les adresses de connexion");
 // Contraintes et duplication

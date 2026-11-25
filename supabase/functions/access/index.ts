@@ -12,6 +12,11 @@
 //    → essai compté de façon atomique (try_access_code, 8 essais au plus),
 //      crée le compte au premier code juste, rattache à la session, puis ouvre
 //      une session Supabase via un jeton à usage unique (verifyOtp côté navigateur).
+//  issue   { session_id, first_name, email }  + en-tête Authorization de l'équipe
+//    → pour qui ne reçoit pas l'e-mail : réservé à qui pilote la session (règle
+//      manages() de la base, évaluée avec le jeton de l'appelant), aucun e-mail,
+//      renvoie le code en clair une seule fois pour qu'il soit transmis de vive
+//      voix. Il remplace le code précédent de cette adresse.
 //
 // Secrets obligatoires : BREVO_API_KEY, MAIL_FROM (ex. formation@journalism.design),
 //   CODE_PEPPER (chaîne aléatoire longue), ALLOWED_ORIGIN (ex. https://formation.journalism.design).
@@ -94,7 +99,8 @@ async function sendMail(to: string, name: string, subject: string, html: string,
 // Règles de la demande : bloc recopié de src/lib/accessRules.js, à garder identique (tests/access.test.mjs).
 // >>> règles de la demande de code
 // Limites anti-abus : [nombre d'appels, fenêtre en secondes]
-export const ACCESS_LIMITS = { ip: [10, 600], session: [60, 3600], mails: [250, 86400], verifyIp: [40, 600] };
+// issue : codes remis à la main par l'équipe (sans e-mail), par compte
+export const ACCESS_LIMITS = { ip: [10, 600], session: [60, 3600], mails: [250, 86400], verifyIp: [40, 600], issue: [60, 3600] };
 // Prénom saisi par le ou la stagiaire, repris dans l'e-mail : lettres seulement, pour qu'on ne puisse pas y glisser un lien
 export function checkFirstName(v) {
   const s = String(v ?? "").trim().replace(/\s+/g, " ");
@@ -107,6 +113,11 @@ export function checkFirstName(v) {
 // Première adresse de l'en-tête x-forwarded-for (posé par la plateforme Supabase)
 export function clientIp(header) {
   return String(header ?? "").split(",")[0].trim() || "inconnue";
+}
+// Jeton de l'en-tête Authorization (« Bearer … ») ; chaîne vide s'il manque
+export function bearer(header) {
+  const m = /^Bearer\s+(\S+)$/i.exec(String(header ?? "").trim());
+  return m ? m[1] : "";
 }
 // <<< règles de la demande de code
 
@@ -175,6 +186,31 @@ Deno.serve(async (req) => {
       expires_at: exp, attempts: 0, sent_at: new Date().toISOString(),
     });
     return json({ sent: true, expires_at: exp });
+  }
+
+  if (action === "issue") {
+    const jwt = bearer(req.headers.get("authorization"));
+    const { data: who } = jwt ? await admin.auth.getUser(jwt) : { data: null };
+    const caller = who?.user;
+    if (!caller) return json({ error: "connectez-vous à l'espace formateur" }, 401);
+    const asCaller = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } }, auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: can } = await asCaller.rpc("manages", { sid });
+    if (can !== true) return json({ error: "réservé à l'équipe qui pilote cette session" }, 403);
+    if (!(await hit("issue:" + caller.id, ACCESS_LIMITS.issue))) return json({ error: TOO_MANY }, 429);
+    const fn = checkFirstName(body?.first_name);
+    if (fn.error) return json({ error: fn.error.replace("votre", "son") }, 400);
+
+    const code = newCode();
+    const { data: exp } = await admin.rpc("access_expiry", { p_session: sid });
+    const { error: upErr } = await admin.from("access_codes").upsert({
+      session_id: sid, email, first_name: fn.value, code_hash: await hash(sid, email, code),
+      expires_at: exp, attempts: 0, sent_at: new Date().toISOString(),
+    });
+    if (upErr) return json({ error: "code non enregistré : réessayez" }, 500);
+    console.log("code remis par l'équipe", caller.id, sid); // ni adresse ni code dans les journaux
+    return json({ code, expires_at: exp });
   }
 
   if (action === "verify") {

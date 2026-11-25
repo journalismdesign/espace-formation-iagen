@@ -4,7 +4,8 @@
 
 // >>> règles de la demande de code
 // Limites anti-abus : [nombre d'appels, fenêtre en secondes]
-export const ACCESS_LIMITS = { ip: [10, 600], session: [60, 3600], mails: [250, 86400], verifyIp: [40, 600] };
+// issue : codes remis à la main par l'équipe (sans e-mail), par compte
+export const ACCESS_LIMITS = { ip: [10, 600], session: [60, 3600], mails: [250, 86400], verifyIp: [40, 600], issue: [60, 3600] };
 // Prénom saisi par le ou la stagiaire, repris dans l'e-mail : lettres seulement, pour qu'on ne puisse pas y glisser un lien
 export function checkFirstName(v) {
   const s = String(v ?? "").trim().replace(/\s+/g, " ");
@@ -17,5 +18,10 @@ export function checkFirstName(v) {
 // Première adresse de l'en-tête x-forwarded-for (posé par la plateforme Supabase)
 export function clientIp(header) {
   return String(header ?? "").split(",")[0].trim() || "inconnue";
+}
+// Jeton de l'en-tête Authorization (« Bearer … ») ; chaîne vide s'il manque
+export function bearer(header) {
+  const m = /^Bearer\s+(\S+)$/i.exec(String(header ?? "").trim());
+  return m ? m[1] : "";
 }
 // <<< règles de la demande de code

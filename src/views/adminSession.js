@@ -62,6 +62,53 @@ export async function loadScreenData(api, session, { trainee = false } = {}) {
   };
 }
 
+/* Code sans e-mail : pour une personne qui ne reçoit pas le code (filtre, faute de frappe dans une adresse
+   qu'elle ne peut pas corriger, boîte inaccessible en salle). Rien n'est envoyé : le code s'affiche ici, dans le
+   panneau du pilotage (pas sur l'écran projeté), et se transmet de vive voix ou par message. Il remplace le code
+   précédent de cette adresse ; la personne entre par « J'ai déjà un code » avec la même adresse. */
+function openIssueSheet(api, session) {
+  const until = (exp) => new Date(exp).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "full", timeStyle: "short" });
+  const form = (first = "", email = "") => {
+    openSheet(`<span class="pill">Accès stagiaire</span><h2>Code sans e-mail</h2>
+      <p class="small muted">${T("Pour une personne qui ne reçoit pas son code : aucun e-mail ne part, vous lui transmettez le code de vive voix ou par message.")}</p>
+      <form id="icF">
+        <label class="f" for="icFn">Prénom</label><input type="text" id="icFn" required maxlength="40" autocomplete="off" value="${esc(first)}">
+        <label class="f" for="icEm">Adresse e-mail</label><input type="email" id="icEm" required maxlength="200" autocomplete="off" value="${esc(email)}" placeholder="celle qu'elle saisira à l'entrée">
+        <p class="small muted" style="margin:6px 0 14px">${T("Le nouveau code remplace celui envoyé par e-mail, s'il arrive plus tard.")}</p>
+        <button class="btn" type="submit">Générer le code</button>
+      </form>`);
+    $("#icFn").focus();
+    $("#icF").onsubmit = async (e) => {
+      e.preventDefault();
+      const fn = $("#icFn").value.trim(), em = $("#icEm").value.trim().toLowerCase();
+      const btn = $("#icF button"); btn.disabled = true; btn.textContent = "Génération…";
+      const r = await guard(() => api.issueAccess(session.id, fn, em));
+      if (r?.code) show(fn, em, r); else { btn.disabled = false; btn.textContent = "Générer le code"; }
+    };
+  };
+  const show = (fn, em, r) => {
+    const link = joinUrl(session.code), date = until(r.expires_at);
+    const msg = fr(`Bonjour ${fn}, voici votre code d'accès à la formation « ${session.title} » : ${r.code}\nSur ${link}, touchez « J'ai déjà un code », puis saisissez votre adresse ${em} et ce code. Il est valable jusqu'au ${date}.`);
+    openSheet(`<span class="pill">Accès stagiaire</span><h2>Code de ${T(fn)}</h2>
+      <p class="small muted" style="margin:0">${esc(em)}</p>
+      <div class="issued-code mono" id="icCode" aria-label="Code d'accès">${esc(r.code)}</div>
+      <div class="issued-acts"><button class="btn sm" id="icCopy">Copier le code</button><button class="btn sm ghost" id="icMsg">Copier un message prêt à envoyer</button></div>
+      <p class="small">${T(`Valable jusqu'au ${date}, sur tous ses appareils.`)}</p>
+      <h4 style="margin:16px 0 6px">À lui dire</h4>
+      <ol class="small" style="padding-left:18px;line-height:1.6;margin:0">
+        <li>${T(`Ouvrir la page d'entrée : QR code de la salle ou ${joinUrlLabel(session.code)}.`)}</li>
+        <li>${T("Toucher « J'ai déjà un code ».")}</li>
+        <li>${T(`Saisir l'adresse ${em} et le code.`)}</li>
+      </ol>
+      <p class="small muted">${T("Si la personne attend déjà son code à l'écran, elle le saisit directement.")}</p>
+      <button class="linkbtn small" id="icAgain" style="margin-top:10px">Générer un code pour une autre personne</button>`);
+    $("#icCopy").onclick = (e) => copyText(r.code, e.currentTarget);
+    $("#icMsg").onclick = (e) => copyText(msg, e.currentTarget);
+    $("#icAgain").onclick = () => form();
+  };
+  form();
+}
+
 export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
   const admin = isAdmin(ctx.me); // l'attribution, l'habillage et la duplication restent à l'administration
   const { api, go } = ctx;
@@ -76,7 +123,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       <h1 style="margin:0">${T(session.title)}</h1>
       <p class="muted" style="margin:4px 0">${T(session.formation)} · ${T(datesFr(session))} · code <b class="mono">${esc(session.code)}</b></p>
     </div>
-    <div class="head-actions"><a class="btn ghost sm" href="#/s/${sid}" title="Voir l'espace tel que le voient les stagiaires">Voir côté stagiaire</a>
+    <div class="head-actions">${session.status !== "closed" ? `<button class="btn ghost sm" id="issueBtn" title="Générer un code d'accès pour une personne qui ne reçoit pas l'e-mail">Code sans e-mail</button>` : ""}<a class="btn ghost sm" href="#/s/${sid}" title="Voir l'espace tel que le voient les stagiaires">Voir côté stagiaire</a>
       ${session.status === "draft" ? `<button class="btn sm" data-status="live">Ouvrir la salle</button>` : session.status === "live" ? `<button class="btn sm ghost" data-status="draft">Fermer la salle</button>` : `<button class="btn sm ghost" data-status="live">Rouvrir</button>`}</div></div>
     <div class="phases">${PHASES.map(([k, l]) => `<a href="#/admin/s/${sid}/${k}"${k === phase ? ' aria-current="page"' : ""}>${phaseLabel(k, l, session)}</a>`).join("")}</div>
     ${phase === "jour" ? `<div class="head-live"><div class="clock" id="clock" aria-live="off"></div>
@@ -88,6 +135,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     await guard(() => api.updateSession(sid, { status: st, live: st === "live" ? { ...(session.live || {}), ...(!session.live?.view && !session.live?.act ? { view: "title", started_at: new Date().toISOString() } : {}), started: stamp(session.live) } : (session.live?.started ? { started: session.live.started } : {}) }), st === "live" ? "Salle ouverte : les stagiaires peuvent répondre." : "Salle fermée.");
     go(location.hash);
   }));
+  $("#issueBtn", root)?.addEventListener("click", () => openIssueSheet(api, session));
 
   const box = $("#phase", root);
   const cleanups = [];

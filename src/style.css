@@ -139,6 +139,9 @@ label.f{display:block;font-weight:600;font-size:13px;margin:10px 0 4px;color:var
 .sheet .x{position:sticky;top:0;float:right;border:0;background:var(--light);border-radius:50%;width:34px;height:34px;cursor:pointer;font-size:18px}
 .sheet h2{font-size:22px;margin-top:6px}
 .sheet .sec{margin:16px 0}
+/* Code sans e-mail (panneau du pilotage) */
+.issued-code{display:inline-block;margin:14px 0 12px;padding:12px 18px;background:var(--tint);color:var(--ink);font-size:44px;font-weight:800;letter-spacing:8px;line-height:1;user-select:all}
+.issued-acts{display:flex;gap:8px;flex-wrap:wrap}
 .sheet .sec h4{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
 .warn{background:var(--kotint);border-left:4px solid var(--ko);padding:10px 12px;border-radius:6px}
 /* ---------- Outils ---------- */

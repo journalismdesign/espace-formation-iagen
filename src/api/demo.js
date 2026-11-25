@@ -119,6 +119,14 @@ export function createDemoApi({ defaultActivities }) {
       commit();
       return { sent: true, expires_at: exp, demoCode: code };
     },
+    // Code remis à la main par l'équipe, sans e-mail (même effet que la fonction access, action « issue »)
+    async issueAccess(sid, first, email) {
+      needTrainer(); if (!manages(sid)) throw new Error("Réservé à l'équipe qui pilote cette session.");
+      email = email.trim().toLowerCase();
+      if (roleOf(email) || ["trainer", "admin"].includes(db.profiles.find((y) => y.email === email)?.role)) throw new Error("Cette adresse appartient à l'équipe : connectez-vous par l'espace formateur.");
+      const r = await api.requestAccess(sid, first, email);
+      return { code: r.demoCode, expires_at: r.expires_at };
+    },
     async verifyAccess(sid, email, code) {
       email = email.trim().toLowerCase();
       const c = db.codes.find((y) => y.session_id === sid && y.email === email);
