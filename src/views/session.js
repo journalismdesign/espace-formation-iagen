@@ -2,7 +2,7 @@
    Onglets : direct (le jour J), cadrage, ressources, fiches, outils,
    discussion. */
 import { isStaff } from "../lib/roles.js";
-import { $, $$, T, esc, fr, NB, matches, dateFr, guard, toast, bindCopy, copyText, download, debounce } from "../lib/dom.js";
+import { $, $$, T, esc, fr, NB, matches, dateFr, guard, toast, bindCopy, copyText, download, debounce, safeUrl } from "../lib/dom.js";
 import { FICHES, GLOSS, PROMPTS, CASES } from "../data.js";
 import { renderParcours, parcoursPct, ficheById, ficheHtml, bindRefs, openPrompt, toolsHtml, bindTools, corpusMarkdown, unlockedTools, TOOL_IDS, hasCadrage } from "../lib/content.js";
 import { currentAct, renderInput, renderResults, respKey } from "../lib/activities.js";
@@ -255,8 +255,8 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
         else if (L.view === "trainer") {
           const t = session.trainer_id ? (await api.listTrainers().catch(() => [])).find((x) => x.id === session.trainer_id) : null;
           h = t ? `<div class="tr-card">${t.photo ? `<img src="${esc(t.photo)}" alt="">` : ""}<div><div class="small muted">L'intervenant</div><h3 style="margin:2px 0 6px">${T(t.name)}</h3>
-            <ul class="small" style="margin:0;padding-left:18px">${(t.roles || []).map((r) => `<li>${T(r.label)} ${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${T(r.value)}</a>` : T(r.value || "")}</li>`).join("")}</ul>
-            <p class="small" style="margin:8px 0 0">${t.email ? `<a href="mailto:${esc(t.email)}">${esc(t.email)}</a>` : ""}${t.website ? ` · <a href="${esc(t.website)}" target="_blank" rel="noopener noreferrer">${esc(t.website.replace(/^https?:\/\//, ""))}</a>` : ""}${(t.socials || []).map((x) => ` · ${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.label)}</a>` : esc(x.label)}`).join("")}</p></div></div>` : `<h3>L'intervenant</h3>`;
+            <ul class="small" style="margin:0;padding-left:18px">${(t.roles || []).map((r) => `<li>${T(r.label)} ${r.url ? `<a href="${safeUrl(r.url)}" target="_blank" rel="noopener noreferrer">${T(r.value)}</a>` : T(r.value || "")}</li>`).join("")}</ul>
+            <p class="small" style="margin:8px 0 0">${t.email ? `<a href="mailto:${esc(t.email)}">${esc(t.email)}</a>` : ""}${t.website ? ` · <a href="${safeUrl(t.website)}" target="_blank" rel="noopener noreferrer">${esc(t.website.replace(/^https?:\/\//, ""))}</a>` : ""}${(t.socials || []).map((x) => ` · ${x.url ? `<a href="${safeUrl(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.label)}</a>` : esc(x.label)}`).join("")}</p></div></div>` : `<h3>L'intervenant</h3>`;
         }
         else if (L.view === "evaluation") h = `<h3>Évaluation de fin de stage</h3>${evaluationHtml(session, await evaluationQr(session)) || `<p class="muted">Le formateur vous indique comment évaluer la formation.</p>`}`;
         else if (L.view === "deck") { const d = (session.decks || []).find((x) => x.id === L.deck); h = `<h3>${T(d?.title || "Présentation")}</h3><p class="muted">Le formateur projette une présentation.</p>`; }
@@ -298,7 +298,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
       ${secrets.length ? `<div class="card" style="margin-bottom:14px"><h3>Codes et accès des exercices</h3>
         <p class="small muted" style="margin-top:0">${T("Utilisez-les uniquement pendant les exercices. Ne les collez jamais dans un prompt ni dans un document partagé.")}</p>
         <div class="grid g2">${secrets.map((s) => `<div class="secret"><b>${T(s.label)}</b>${s.value ? `<div class="mono small" id="sec-${s.id}">${esc(s.value)}</div><button class="btn sm ghost" data-copy="sec-${s.id}">Copier</button>` : `<div class="small muted">Pas encore disponible.</div>`}</div>`).join("")}</div></div>` : ""}
-      ${resources.length ? `<div class="card" style="margin-bottom:14px"><h3>Liens de la session</h3>${resources.map((r) => `<div class="res"><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${T(r.title)} ↗</a></div>`).join("")}</div>` : ""}
+      ${resources.length ? `<div class="card" style="margin-bottom:14px"><h3>Liens de la session</h3>${resources.map((r) => `<div class="res"><a href="${safeUrl(r.url)}" target="_blank" rel="noopener noreferrer">${T(r.title)} ↗</a></div>`).join("")}</div>` : ""}
       <div class="card boxed"><div class="kicker-d">Boîte à outils du jour</div><h2 style="margin:4px 0 12px">Prompts, exercices et exemples</h2>
         ${PROMPTS.map((p) => `<details class="acc"><summary><b>${T(p.titre)}</b> <span class="pill">${T(p.tag)}</span> <span class="small muted">p.${NB}${p.page}</span></summary>
           <p class="small muted">${T("Copiez ce prompt dans l'assistant de votre choix, puis remplacez les passages entre crochets.")}</p>

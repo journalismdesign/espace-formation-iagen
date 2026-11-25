@@ -78,7 +78,7 @@ export function renderInput(box, act, live, mine, onAnswer) {
     q = act.q; opts = (live.options || act.options || []).map((o) => o.titre + (o.auteur ? ` · ${o.auteur}` : ""));
     if (!opts.length) { box.innerHTML = `<h3>${T(q)}</h3><p class="empty">Aucun projet validé pour l'instant.</p>`; return; }
   } else { q = act.q; opts = act.o || []; }
-  const head = act.type === "quiz" ? `<div class="small muted">${T(QUIZ[act.quiz].titre)} · question ${(live.qi || 0) + 1} sur ${QUIZ[act.quiz].q.length}</div>` : "";
+  const head = act.type === "quiz" ? `<div class="small muted">${T(QUIZ[act.quiz]?.titre || "Quiz")} · question ${(live.qi || 0) + 1} sur ${QUIZ[act.quiz]?.q.length || 0}</div>` : "";
   box.innerHTML = `${head}<h3>${T(q)}</h3>${opts.map((o, i) => {
     let cls = mine === i ? " sel" : "";
     if (reveal) cls = i === good ? " ok" : mine === i ? " ko" : "";

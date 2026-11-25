@@ -2,7 +2,7 @@
    dates affichées, import d'images en data URL. */
 import QRCode from "qrcode";
 import { currentSkin, skinDark } from "./skin.js";
-import { T, esc, dateFr } from "./dom.js";
+import { T, esc, dateFr, safeUrl, safeImg } from "./dom.js";
 import samsaLogo from "../assets/samsa-logo.png";
 
 // Logo Samsa (organisme de formation), blanc : tel quel sur fond bleu,
@@ -129,7 +129,7 @@ export const MAIL_ICON = `<svg viewBox="0 0 120 76" aria-hidden="true"><rect x="
 export function emargementStepsHtml(session, qr, labels, onDark = false) {
   return `<div class="em-steps${onDark ? " dark" : ""}">
     <div class="em-step"><div class="em-h">Pour <u>${T(labels.org)}</u></div><p>Signez la feuille de présence grâce à ce QR code.</p>
-      ${qr ? `<div class="em-qr"><img src="${qr}" alt="QR code d'émargement"></div>${session.emargement_url ? `<a class="btn sm${onDark ? " light" : ""}" href="${esc(session.emargement_url)}" target="_blank" rel="noopener noreferrer">Ouvrir le lien ↗</a>` : ""}` : `<p class="small">QR code à venir.</p>`}</div>
+      ${qr ? `<div class="em-qr"><img src="${safeImg(qr)}" alt="QR code d'émargement"></div>${session.emargement_url ? `<a class="btn sm${onDark ? " light" : ""}" href="${safeUrl(session.emargement_url)}" target="_blank" rel="noopener noreferrer">Ouvrir le lien ↗</a>` : ""}` : `<p class="small">QR code à venir.</p>`}</div>
     ${labels.second && labels.client ? `<div class="em-step"><div class="em-h">Pour ${T(labels.client)}</div><p>${T(labels.text)}</p><div class="em-mail">${MAIL_ICON}</div></div>` : ""}
   </div>`;
 }
@@ -150,6 +150,6 @@ export function evaluationHtml(session, qr, onDark = false) {
   const e = evaluationInfo(session);
   if (!e.configured) return "";
   return `<div class="eval-block${onDark ? " dark" : ""}"><div class="eval-txt"><div class="em-h">${T(e.title)}</div><p>${T(e.text)}</p>
-    ${e.url ? `<a class="btn${onDark ? " light" : ""}" href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">Remplir l'évaluation ↗</a>` : ""}</div>
-    ${qr ? `<div class="em-qr"><img src="${qr}" alt="QR code de l'évaluation"></div>` : ""}</div>`;
+    ${e.url ? `<a class="btn${onDark ? " light" : ""}" href="${safeUrl(e.url)}" target="_blank" rel="noopener noreferrer">Remplir l'évaluation ↗</a>` : ""}</div>
+    ${qr ? `<div class="em-qr"><img src="${safeImg(qr)}" alt="QR code de l'évaluation"></div>` : ""}</div>`;
 }
