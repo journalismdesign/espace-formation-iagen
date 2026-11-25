@@ -1003,6 +1003,10 @@ select:disabled{background-image:none;padding-right:12px !important}
 .ok-btn{background:var(--ok);border-color:var(--ok);color:#fff}
 
 /* Slide « Rejoindre » (vue qr et écran d'attente) : grand QR, adresse courte et étapes */
+/* Pause : gif en pixel art (512 × 512), affiché entier car la vapeur monte jusqu'en haut de l'image, sans lissage */
+.ds-pause{width:22cqw;height:22cqw;image-rendering:pixelated;display:block;margin:0 auto .4cqw}
+.pause-card{display:flex;align-items:center;gap:14px}
+.pause-card img{width:96px;height:96px;image-rendering:pixelated;flex:none}
 .ds-joinbig{position:absolute;inset:0;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4cqw;padding:0 5cqw 4cqw}
 .ds-joinbig-txt .ds-title{font-size:4.2cqw;margin:.6cqw 0 1cqw}
 .ds-steps{margin:2.2cqw 0 0;padding-left:2.4cqw;font-size:1.75cqw;line-height:1.5;color:#fff}

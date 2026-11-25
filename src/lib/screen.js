@@ -12,6 +12,7 @@ import { datesFr, hhmm, titleDate, samsaHtml, pickLogo, emargementLabels, MAIL_I
 import { modulesFor, typeLabel } from "./content.js";
 import { slideEmbedUrl, deckEmbedUrl, deckKind, parsePages } from "../deck.js";
 import { skinFooter } from "./skin.js";
+import pauseGif from "../assets/pause.gif";
 
 const LETTERS = "ABCDEFGHIJKL";
 const year = (s) => (s.date ? s.date.slice(0, 4) : String(new Date().getFullYear()));
@@ -155,7 +156,7 @@ export function screenHtml(d, compact = false) {
   const isLive = session.status === "live";
   const act = isLive ? currentAct(session) : null;
   // salle fermée : seuls les écrans d'ouverture et de clôture se projettent (les stagiaires, eux, ne les voient pas)
-  const view = isLive || ["title", "trainer", "emargement", "support", "evaluation", "qr"].includes(live.view) ? live.view : null;
+  const view = isLive || ["title", "trainer", "emargement", "support", "evaluation", "qr", "pause"].includes(live.view) ? live.view : null;
   const mod = live.module ? modulesFor(session).find((m) => m.id === live.module) : null;
   const right = forTrainee ? "" : `Code ${esc(session.code)} · ${participants} participant${participants > 1 ? "s" : ""}`;
 
@@ -253,7 +254,7 @@ export function screenHtml(d, compact = false) {
       n || act.type === "cloud" ? main : `<div class="ds-wait">En attente des premières réponses…</div>${main}`, right, cls);
   }
 
-  // Accueil en salle : grand QR code, lien court et étapes de connexion (vue « qr » et écran d'attente)
+  // Accueil en salle : grand QR code, lien court et étapes de connexion (vue « qr », et rien de projeté avant la première ouverture du jour)
   // L'adresse tient sur une ligne : au-delà de 36 caractères, la police rétrécit (chasse fixe : 0,6 em par caractère)
   const addr = joinLabel || session.code || "";
   const addrSize = Math.min(2.4, 52 / (Math.max(addr.length, 1) * 0.6)).toFixed(2);
@@ -262,10 +263,17 @@ export function screenHtml(d, compact = false) {
         <ol class="ds-steps"><li>${T("Scannez le QR code, ou tapez l'adresse :")}<b class="mono ds-addr" style="font-size:${addrSize}cqw">${esc(addr)}</b></li><li>${T("Indiquez votre prénom et votre e-mail")}</li><li>${T("Saisissez le code reçu par e-mail")}</li></ol></div>
       ${qrUrl ? `<div class="ds-joinbig-qr"><img src="${qrUrl}" alt="QR code pour rejoindre"><b class="mono">${esc(session.code)}</b></div>` : ""}
     </div>`, right, cls);
-  if (view === "qr") return joinSlide("Rejoindre l'espace de formation", "Connectez-vous", session.title);
+  if (view === "qr") return joinSlide("Rejoindre l'espace de formation", "La formation va commencer", session.title);
 
-  // Rien de lancé : écran d'attente
-  if (session.status !== "closed" && qrUrl) return joinSlide("En attente", "La formation va commencer", session.title);
+  // Pause (bouton « Pause » du pilotage) : la tasse de café animée, et le QR en coin pour un·e retardataire
+  const pauseSlide = () => dark(session, `<div class="ds-center"><img class="ds-pause" src="${pauseGif}" alt=""><div class="ds-title xxl">Pause</div><div class="ds-sub">${T(session.title)}</div></div>${joinBox(session, qrUrl)}`, right, cls);
+  if (view === "pause") return pauseSlide();
+
+  // Rien de projeté : salle déjà ouverte aujourd'hui puis refermée (pause, déjeuner), écran de pause ;
+  // sinon, avant la première ouverture du jour, la slide « Rejoindre » (comme le QR projeté)
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
+  if (session.status !== "closed" && live.started?.day === today) return pauseSlide();
+  if (session.status !== "closed" && qrUrl) return joinSlide("Rejoindre l'espace de formation", "La formation va commencer", session.title);
   const next = session.activities?.[0];
   return dark(session, `<div class="ds-left">
       <div class="ds-kick">${session.status === "closed" ? "Fin de la formation" : "En attente"}</div>

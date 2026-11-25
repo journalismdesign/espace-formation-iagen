@@ -13,6 +13,7 @@ import { resolveBranding, logosHtml, datesFr, emargementQr, emargementLabels, em
 import { supportBlock } from "./entry.js";
 import { mountChat } from "../lib/chat.js";
 import { screenHtml } from "../lib/screen.js";
+import pauseGif from "../assets/pause.gif";
 import { morph } from "../lib/morph.js";
 import { loadScreenData } from "./adminSession.js";
 
@@ -260,6 +261,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
         }
         else if (L.view === "evaluation") h = `<h3>Évaluation de fin de stage</h3>${evaluationHtml(session, await evaluationQr(session)) || `<p class="muted">Le formateur vous indique comment évaluer la formation.</p>`}`;
         else if (L.view === "deck") { const d = (session.decks || []).find((x) => x.id === L.deck); h = `<h3>${T(d?.title || "Présentation")}</h3><p class="muted">Le formateur projette une présentation.</p>`; }
+        else if (L.view === "pause") h = `<div class="pause-card"><img src="${pauseGif}" alt=""><div><h3 style="margin:0 0 4px">Pause</h3><p class="muted" style="margin:0">${T("Cette page se mettra à jour à la reprise.")}</p></div></div>`;
         else if (L.view === "slide") h = `<h3>${T(mod?.titre || "Présentation")}</h3><p class="muted">${T(`Le formateur présente la page ${L.slide} du support.`)}</p>`;
         else h = `<h3>${T(mod?.titre || "")}</h3>${mod?.obj ? `<ul class="small">${mod.obj.map((x) => `<li>${T(x)}</li>`).join("")}</ul>` : ""}`;
         card.innerHTML = `<div class="kicker-d"><span class="dot on"></span> En direct</div>${h}`;

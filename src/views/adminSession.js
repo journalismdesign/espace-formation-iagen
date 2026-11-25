@@ -40,7 +40,7 @@ const firstName = (r) => (r.full_name || r.email.split("@")[0]).split(" ")[0];
 
 // Données de l'écran projeté (réponses agrégées, participants, projets)
 // Écrans d'ouverture et de clôture (projetables salle fermée)
-export const OPENING_VIEWS = new Set(["title", "trainer", "emargement", "support", "evaluation", "qr"]);
+export const OPENING_VIEWS = new Set(["title", "trainer", "emargement", "support", "evaluation", "qr", "pause"]);
 
 export async function loadScreenData(api, session, { trainee = false } = {}) {
   const act = currentAct(session);
@@ -555,7 +555,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <h3>Pilotage</h3>
             <p class="small muted" id="hint" style="margin-top:0"></p>
             <div id="emRemind"></div>
-            <div class="kicker-d" style="margin:10px 0 6px">Écrans de la session · ouverture et clôture</div>
+            <div class="kicker-d" style="margin:10px 0 6px">Écrans de la session · ouverture, pause et clôture</div>
             <div class="acts" id="opening"></div>
             <div class="kicker-d" style="margin:16px 0 6px">Déroulé · ce que voient les stagiaires et l'écran</div>
             <div id="modules"></div>
@@ -640,8 +640,9 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       tick(); // horloge de l'en-tête : suit tout de suite l'ouverture ou la fermeture de la salle
       $("#hint", box).textContent = session.status === "live" ? "La salle est ouverte. Chaque clic change l'écran projeté et ce que voient les stagiaires dans leur espace." : "La salle est fermée : les écrans d'ouverture et de clôture se projettent sans l'ouvrir, les stagiaires ne les verront qu'à l'ouverture de la salle. Lancer une séquence ou une activité ouvre la salle.";
       const V = session.status === "live" || OPENING_VIEWS.has(live.view) ? live.view : null;
-      $("#opening", box).innerHTML = [["title", "Slide de titre", "Titre, logos, dates, QR"], ["emargement", "Émargement", session.emargement_url || session.emargement_qr ? "QR de l'organisme" : "À configurer"], ["trainer", "Formateur", session.trainer_id ? "Fiche de l'intervenant" : "À choisir"], ["support", "Support", "Annonce du téléchargement"], ["evaluation", "Évaluation", session.evaluation_url || session.evaluation_qr ? "QR et lien du formulaire" : "À configurer"], ["", "Écran d'attente", "Rien de projeté"]]
-        .map(([v, l, sub]) => `<button class="act${(V || "") === v && !act ? " on" : ""}" data-view="${v}"><span>${v ? "▣" : "□"}</span>${l}<small>${T(sub)}</small></button>`).join("");
+      const autoPause = live.started?.day === parisDay() ? "pause" : ""; // rien de projeté après une ouverture du jour : l'écran montre la pause
+      $("#opening", box).innerHTML = [["title", "Slide de titre", "Titre, logos, dates, QR"], ["emargement", "Émargement", session.emargement_url || session.emargement_qr ? "QR de l'organisme" : "À configurer"], ["trainer", "Formateur", session.trainer_id ? "Fiche de l'intervenant" : "À choisir"], ["support", "Support", "Annonce du téléchargement"], ["evaluation", "Évaluation", session.evaluation_url || session.evaluation_qr ? "QR et lien du formulaire" : "À configurer"], ["pause", "Pause", "Tasse de café animée"]]
+        .map(([v, l, sub]) => `<button class="act${(V || autoPause) === v && !act ? " on" : ""}" data-view="${v}"><span>${v ? "▣" : "□"}</span>${l}<small>${T(sub)}</small></button>`).join("");
       $$("[data-view]", box).forEach((b) => (b.onclick = () => {
         // Écran « Formateur » sans fiche choisie : on prévient au lieu de projeter une slide vide
         if (b.dataset.view === "trainer" && !session.trainer_id) return toast("Aucune fiche intervenant n'est enregistrée pour cette session : choisissez-la dans Réglages → Intervenant·e, puis enregistrez.", "ko");
