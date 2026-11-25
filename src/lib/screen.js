@@ -6,8 +6,8 @@
    Les tailles sont exprimées en cqw (largeur du conteneur) : la même
    maquette sert à l'écran plein et à l'aperçu du back-office. */
 import { T, esc } from "./dom.js";
-import { QUIZ } from "../data.js";
-import { currentAct, quizQ, countOf } from "./activities.js";
+import { currentAct, countOf } from "./activities.js";
+import { quizFor, quizQ } from "./quizzes.js";
 import { datesFr, hhmm, titleDate, samsaHtml, pickLogo, emargementLabels, MAIL_ICON, evaluationInfo } from "./brand.js";
 import { modulesFor, typeLabel } from "./content.js";
 import { slideEmbedUrl, deckEmbedUrl, deckKind, parsePages } from "../deck.js";
@@ -237,11 +237,11 @@ export function screenHtml(d, compact = false) {
     const n = countOf(rows);
     let kick = act.titre, q = act.q || act.titre, main;
     if (act.type === "quiz") {
-      const Q = quizQ(act, live);
-      kick = `${QUIZ[act.quiz].titre} · question ${(live.qi || 0) + 1} sur ${QUIZ[act.quiz].q.length}`;
-      q = Q?.[0] || "";
-      const counts = (Q?.[1] || []).map((_, i) => rows.filter((r) => r.value === i).reduce((a, r) => a + r.n, 0));
-      main = Q ? deckBars(Q[1], counts, live.reveal ? Q[2] : -1) + (live.reveal ? `<div class="ds-expl">${T(Q[3])}</div>` : "") : "";
+      const Q = quizQ(act, live, session), QZ = quizFor(session, act.quiz);
+      kick = QZ ? `${QZ.titre} · question ${(live.qi || 0) + 1} sur ${QZ.questions.length}` : act.titre;
+      q = Q?.q || "";
+      const counts = (Q?.o || []).map((_, i) => rows.filter((r) => r.value === i).reduce((a, r) => a + r.n, 0));
+      main = Q ? deckBars(Q.o, counts, live.reveal ? Q.ok : -1) + (live.reveal && Q.why ? `<div class="ds-expl">${T(Q.why)}</div>` : "") : "";
     } else if (act.type === "cloud") {
       main = deckCloud(rows);
     } else {

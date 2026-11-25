@@ -6,6 +6,7 @@ import { keepDraft } from "../lib/draft.js";
 import { $, $$, T, esc, fr, NB, guard, toast, debounce, dateFr, download, copyText } from "../lib/dom.js";
 import { QUIZ } from "../data.js";
 import { ACT_TYPES, currentAct, respKey, renderResults, defaultActivities, countOf } from "../lib/activities.js";
+import { quizFor, quizKeysOf, snapshotQuizzes, pollActivity } from "../lib/quizzes.js";
 import { screenHtml, nextPage, stepLive, pageKey, modPages, skipSet } from "../lib/screen.js";
 import { openSheet } from "../lib/content.js";
 import { joinUrl, joinUrlLabel, qr, showQr, parseEmails, openDuplicate } from "./admin.js";
@@ -45,7 +46,7 @@ export const OPENING_VIEWS = new Set(["title", "trainer", "emargement", "support
 export async function loadScreenData(api, session, { trainee = false } = {}) {
   const act = currentAct(session);
   const [rows, roster, projects] = await Promise.all([
-    act && session.status === "live" ? api.results(session.id, respKey(act, session.live)) : [],
+    act && session.status === "live" ? api.results(session.id, respKey(act, session.live, session)) : [],
     trainee ? [] : api.roster(session.id).catch(() => []), // le tableau des participants est réservé à l'équipe
     act?.type === "projects" ? api.listProjects(session.id) : [],
   ]);
@@ -429,7 +430,11 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       // Entreprise préenregistrée : ses nom et logos viennent des réglages généraux
       Object.assign(patch, patch.brand_id ? { client: "", client_logo: null, client_logo_light: null } : { client: $("#gC", box).value.trim(), client_logo: clientLogo, client_logo_light: clientLogoLight });
       const fmtChanged = format !== session.format;
-      if (fmtChanged) patch.activities = defaultActivities(format);
+      if (fmtChanged) {
+        const bank = await api.listBank().catch(() => ({ ready: false, items: [] }));
+        patch.activities = defaultActivities(format, bank.items);
+        if (bank.ready) patch.quizzes = snapshotQuizzes(session.quizzes, quizKeysOf(patch.activities, modulesFor({ ...session, format })), bank.items);
+      }
       const saved = await guard(() => api.updateSession(sid, patch));
       if (!saved) return;
       session = saved;
@@ -460,7 +465,12 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const f = e.target.files[0]; e.target.value = "";
       if (!f) return;
       if (f.size > 300000) return toast("Fichier trop lourd pour un conducteur (300 Ko au plus).", "ko");
-      const { programme, warnings, errors } = parseConducteur(await f.text());
+      const bank = await api.listBank().catch(() => ({ ready: false, items: [] }));
+      const known = {
+        quizzes: [...new Set([...bank.items.filter((b) => b.kind === "quiz").map((b) => b.id), ...Object.keys(session.quizzes || {})])],
+        live: [...new Set([...bank.items.filter((b) => b.kind !== "quiz").map((b) => b.id), ...session.activities.filter((a) => a.type === "poll" || a.type === "cloud").map((a) => a.from || a.id)])],
+      };
+      const { programme, warnings, errors } = parseConducteur(await f.text(), known);
       programme.name = f.name;
       const rows = programme.modules.map((m) => `<tr><td class="mono small">${programme.nDays > 1 ? `J${m.day} · ` : ""}${m.t[0]}–${m.t[1]}</td><td><span class="pill ${m.type}">${typeLabel(m.type)}</span></td><td>${T(m.titre)}${m.cas ? `<div class="small muted">${T(m.cas)}</div>` : ""}</td><td class="small muted">${[m.obj && "objectifs", m.pts && "points clés", m.disc && "discussion", m.exo && `exercice ${m.exo.duree} min`, m.quiz && "quiz", m.live && "activité"].filter(Boolean).join(" · ")}</td></tr>`).join("");
       $("#condPrev", box).innerHTML = `<div class="cond-prev">
@@ -477,6 +487,11 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         const format = programme.nDays > 1 ? "2" : "1";
         if (format === "2" && !session.date2) toast("Pensez à indiquer la date du jour 2.", "info");
         const patch = { programme, format };
+        // sondages et nuages cités par « activité: » : ajoutés aux activités de la session s'ils n'y sont pas
+        const missing = [...new Set(programme.modules.map((m) => m.live).filter(Boolean))].filter((k) => !session.activities.some((a) => a.id === k || a.from === k));
+        const add = missing.map((k) => bank.items.find((b) => b.id === k && b.kind !== "quiz")).filter(Boolean).map((it) => pollActivity(it));
+        if (add.length) patch.activities = [...session.activities, ...add];
+        if (bank.ready) patch.quizzes = snapshotQuizzes(session.quizzes, quizKeysOf(patch.activities || session.activities, programme.modules), bank.items);
         if (session.live?.module && !programme.modules.some((m) => m.id === session.live.module)) patch.live = { ...session.live, module: null };
         if (await guard(() => api.updateSession(sid, patch), "Conducteur appliqué : déroulé, parcours stagiaire et pilotage sont à jour.")) go(location.hash);
       };
@@ -699,7 +714,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         const desc = { welcome: "Accueil affiché à l'écran, avec le QR code.", cloud: "Ils envoient leurs mots ; le nuage se forme à l'écran.", poll: "Ils répondent au sondage ; les résultats s'affichent à l'écran.", quiz: "Ils répondent ; affichez la bonne réponse quand tout le monde a voté.", vote: "Ils votent pour un cas d'usage.", projects: "Les cas d'usage validés défilent à l'écran." }[act.type];
         c = `<p class="small" style="margin:0 0 8px">${T(desc)}</p><div class="chips">`;
         if (act.type === "quiz") {
-          const n = QUIZ[act.quiz].q.length, qi = live.qi || 0;
+          const n = quizFor(session, act.quiz)?.questions.length || 0, qi = live.qi || 0;
           c += `<button class="btn sm ghost" data-q="-1" ${qi === 0 ? "disabled" : ""}>← Question précédente</button>
             <button class="btn sm" data-rev ${live.reveal ? "disabled" : ""}>Afficher la réponse</button>
             <button class="btn sm ghost" data-q="1" ${qi >= n - 1 ? "disabled" : ""}>Question suivante →</button>`;
@@ -792,8 +807,8 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
     if ($("#dup", box)) $("#dup", box).onclick = () => openDuplicate(api, session, go);
     cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: true, compact: true }));
     $("#csv", box).onclick = () => {
-      const quizzes = Object.keys(QUIZ);
-      const head = ["Nom", "E-mail", "Présent", "Métier", "Niveau IA", "Cadrage", "Cas d'usage", "Retour formateur", "Déroulé (séquences cochées)", ...quizzes.map((q) => "Quiz " + QUIZ[q].titre)];
+      const quizzes = [...new Set([...quizKeysOf(session.activities, modulesFor(session)), ...Object.keys(session.quizzes || {})])].filter((k) => quizFor(session, k));
+      const head = ["Nom", "E-mail", "Présent", "Métier", "Niveau IA", "Cadrage", "Cas d'usage", "Retour formateur", "Déroulé (séquences cochées)", ...quizzes.map((q) => "Quiz " + quizFor(session, q).titre)];
       const lines = roster.map((r) => {
         const p = projects.find((x) => x.user_id === r.user_id);
         return [r.full_name, r.email, r.attended ? "oui" : "non", r.metier, r.niveau, r.project_status === "validated" ? "validé" : r.project_id ? `${r.project_steps}/${STEPS.length}` : "non commencé",
@@ -814,10 +829,10 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
     for (const act of session.activities) {
       if (["welcome", "projects"].includes(act.type)) continue;
       if (act.type === "quiz") {
-        const qs = QUIZ[act.quiz].q;
-        const rows = await Promise.all(qs.map((_, qi) => api.results(sid, `${act.id}#${qi}`)));
+        const qs = quizFor(session, act.quiz)?.questions || [];
+        const rows = await Promise.all(qs.map((q) => api.results(sid, `${act.id}#${q.id}`)));
         if (!rows.some((r) => r.length)) continue;
-        blocks.push(`<div class="res-block"><b>${T(act.titre)}</b>${qs.map((q, qi) => { const n = countOf(rows[qi]), good = rows[qi].filter((r) => r.value === q[2]).reduce((a, r) => a + r.n, 0); return `<div class="small prow"><span>${qi + 1}. ${T(q[0])}</span><b>${n ? Math.round((good / n) * 100) + NB + "%" : "—"}</b></div>`; }).join("")}<div class="small muted">Taux de bonnes réponses par question</div></div>`);
+        blocks.push(`<div class="res-block"><b>${T(act.titre)}</b>${qs.map((q, qi) => { const n = countOf(rows[qi]), good = rows[qi].filter((r) => r.value === q.ok).reduce((a, r) => a + r.n, 0); return `<div class="small prow"><span>${qi + 1}. ${T(q.q)}</span><b>${n ? Math.round((good / n) * 100) + NB + "%" : "—"}</b></div>`; }).join("")}<div class="small muted">Taux de bonnes réponses par question</div></div>`);
       } else {
         const rows = await api.results(sid, act.id);
         if (!rows.length) continue;

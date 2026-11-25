@@ -321,4 +321,37 @@ await fails(`update sessions set emargement_qr = 'javascript:alert(1)' where id 
 await db.exec(`update sessions set emargement_qr = 'data:image/png;base64,AAAA' where id = '${S3.id}'`);
 const d4 = (await db.query(`select public.duplicate_session('${S3.id}') id`)).rows[0].id;
 ok((await db.query(`select access_mode from sessions where id='${d4}'`)).rows[0].access_mode === "invites", "la duplication reprend le mode d'accès");
+// Bibliothèque « Quiz et sondages » : lue par l'équipe, modifiée par l'administration, fermée aux stagiaires
+await su();
+const F2 = "00000000-0000-0000-0000-0000000000f2";
+await db.exec(`insert into trainer_emails (email, is_admin) values ('form2@exemple.fr', false) on conflict do nothing;
+insert into auth.users (id,email) values ('${F2}','form2@exemple.fr') on conflict do nothing;`);
+ok((await db.query(`select count(*)::int n from quiz_bank`)).rows[0].n === 15, "bibliothèque : 7 quiz et 8 sondages repris de data.js");
+ok((await db.query(`select content->'questions'->0->>'id' i from quiz_bank where id = 'llm'`)).rows[0].i === "0", "bibliothèque : questions reprises avec leur rang comme identifiant");
+ok(!(await db.query(`select has_table_privilege('anon', 'public.quiz_bank', 'select') p`)).rows[0].p, "bibliothèque : rien pour anon");
+await as(B, "bob@exemple.fr");
+ok((await db.query(`select count(*)::int n from quiz_bank`)).rows[0].n === 0, "bibliothèque : un·e stagiaire ne lit rien");
+await fails(`insert into quiz_bank (id, kind, titre, content) values ('pirate', 'cloud', 'Pirate', '{"q":"?"}')`, "bibliothèque : un·e stagiaire n'ajoute rien");
+await as(F2, "form2@exemple.fr");
+ok((await db.query(`select count(*)::int n from quiz_bank`)).rows[0].n === 15, "bibliothèque : un formateur la lit");
+await fails(`insert into quiz_bank (id, kind, titre, content) values ('perso', 'cloud', 'Perso', '{"q":"?"}')`, "bibliothèque : un formateur n'ajoute rien");
+await db.exec(`update quiz_bank set titre = 'Changé' where id = 'llm'`);
+await db.exec(`delete from quiz_bank where id = 'llm'`);
+await as(T, "formateur@exemple.fr");
+ok((await db.query(`select titre from quiz_bank where id = 'llm'`)).rows[0]?.titre === "Comprendre la machine", "bibliothèque : un formateur ne modifie ni ne supprime rien");
+await db.exec(`insert into quiz_bank (id, kind, titre, content) values ('nouveau-ab12', 'quiz', 'Nouveau', '{"questions":[{"id":"q-abc123","q":"?","o":["a","b"],"ok":0,"why":""}]}')`);
+await db.exec(`update quiz_bank set titre = 'Nouveau titre', updated_at = '2000-01-01' where id = 'nouveau-ab12'`);
+const nb = (await db.query(`select titre, updated_by, updated_at > now() - interval '1 minute' recent from quiz_bank where id = 'nouveau-ab12'`)).rows[0];
+ok(nb.titre === "Nouveau titre" && nb.updated_by === T && nb.recent, "bibliothèque : l'admin modifie, date et auteur tenus par le déclencheur");
+await db.exec(`delete from quiz_bank where id = 'nouveau-ab12'`);
+ok((await db.query(`select count(*)::int n from quiz_bank where id = 'nouveau-ab12'`)).rows[0].n === 0, "bibliothèque : l'admin supprime");
+await fails(`insert into quiz_bank (id, kind, titre, content) values ('Mauvais Id', 'cloud', 'X', '{"q":"?"}')`, "bibliothèque : identifiant hors format refusé");
+await fails(`insert into quiz_bank (id, kind, titre, content) values ('genre', 'texte', 'X', '{"q":"?"}')`, "bibliothèque : type inconnu refusé");
+await fails(`insert into quiz_bank (id, kind, titre, content) values ('lourd', 'cloud', 'X', jsonb_build_object('q', repeat(md5(random()::text), 4000)))`, "bibliothèque : contenu de plus de 100 ko refusé");
+// Copie des quiz dans la session
+ok(JSON.stringify((await db.query(`select quizzes from sessions where id='${S3.id}'`)).rows[0].quizzes) === "{}", "session : aucun quiz copié par défaut");
+await fails(`update sessions set quizzes = '[]'::jsonb where id = '${S3.id}'`, "session : quizzes doit être un objet");
+await db.exec(`update sessions set quizzes = '{"llm":{"titre":"Copie","questions":[{"id":"0","q":"?","o":["a","b"],"ok":1,"why":""}],"from":"llm"}}' where id = '${S3.id}'`);
+const d5 = (await db.query(`select public.duplicate_session('${S3.id}') id`)).rows[0].id;
+ok((await db.query(`select quizzes->'llm'->>'titre' t from sessions where id='${d5}'`)).rows[0].t === "Copie", "la duplication reprend les quiz de la session");
 console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests SQL passent.");

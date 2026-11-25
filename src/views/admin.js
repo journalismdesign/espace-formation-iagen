@@ -2,6 +2,8 @@
 import QRCode from "qrcode";
 import { $, $$, T, esc, guard, dateFr } from "../lib/dom.js";
 import { defaultActivities } from "../lib/activities.js";
+import { quizKeysOf, snapshotQuizzes } from "../lib/quizzes.js";
+import { modulesFor } from "../lib/content.js";
 import { STATUS } from "./home.js";
 import { skinDark } from "../lib/skin.js";
 import { isAdmin } from "../lib/roles.js";
@@ -66,9 +68,13 @@ export async function viewAdmin(root, _p, { api, go, me }) {
   if (admin) form.onsubmit = async (e) => {
     e.preventDefault();
     const format = $("#nFmt", root).value;
+    // Activités par défaut et copie des quiz de la bibliothèque (sans la migration : data.js, sans copie)
+    const bank = await api.listBank().catch(() => ({ ready: false, items: [] }));
+    const activities = defaultActivities(format, bank.items);
     const s = await guard(() => api.createSession({
       title: $("#nTitle", root).value.trim(), client: $("#nClient", root).value.trim(),
-      date: $("#nDate", root).value || null, format, activities: defaultActivities(format),
+      date: $("#nDate", root).value || null, format, activities,
+      ...(bank.ready ? { quizzes: snapshotQuizzes({}, quizKeysOf(activities, modulesFor(format)), bank.items) } : {}),
       trainer_id: $("#nTr", root).value || null, skin_id: $("#nSk", root).value || null,
     }), "Session créée.");
     if (!s) return;

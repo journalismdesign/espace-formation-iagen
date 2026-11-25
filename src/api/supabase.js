@@ -2,9 +2,14 @@
    Toutes les règles d'accès sont dans la base (RLS) : ce fichier ne fait
    que traduire les appels de l'interface. */
 import { createClient } from "@supabase/supabase-js";
+import { bankFromData } from "../lib/quizzes.js";
 
 // Colonnes lisibles de trainers (login_email est réservé à l'équipe, lu par trainer_logins())
 const TRAINER_COLS = "id, name, photo, roles, tagline, tagline_sub, email, website, socials, created_at";
+// Bibliothèque « Quiz et sondages » : table absente tant que la migration n'est pas exécutée
+const BANK_COLS = "id, kind, titre, content, updated_at";
+const NO_BANK = /quiz_bank|schema cache|does not exist/i;
+const BANK_MIG = "Bibliothèque pas encore activée : la migration 20261126000000_quiz_sondages.sql doit être exécutée sur Supabase.";
 
 export function createSupabaseApi(url, anonKey) {
   const sb = createClient(url, anonKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce" } });
@@ -109,6 +114,18 @@ export function createSupabaseApi(url, anonKey) {
       return ok(await sb.from("skins").insert(row).select().single());
     },
     async deleteSkin(id) { ok(await sb.from("skins").delete().eq("id", id)); },
+    // Bibliothèque « Quiz et sondages ». Sans la migration : contenu de data.js en lecture seule (ready: false)
+    async listBank() {
+      const { data, error } = await sb.from("quiz_bank").select(BANK_COLS).order("titre");
+      if (error) { if (NO_BANK.test(error.message)) return { ready: false, items: bankFromData() }; throw new Error(error.message); }
+      return { ready: true, items: data || [] };
+    },
+    async saveBankItem(it) {
+      const { data, error } = await sb.from("quiz_bank").upsert({ id: it.id, kind: it.kind, titre: it.titre, content: it.content }).select(BANK_COLS).single();
+      if (error) throw new Error(NO_BANK.test(error.message) ? BANK_MIG : /row-level security/i.test(error.message) ? "Réservé à l'administration." : error.message);
+      return data;
+    },
+    async deleteBankItem(id) { ok(await sb.from("quiz_bank").delete().eq("id", id)); },
     async getSettings() { return Object.fromEntries(ok(await sb.from("app_settings").select("*")).map((r) => [r.key, r.value])); },
     async saveSetting(key, value) { ok(await sb.from("app_settings").upsert({ key, value })); },
 
