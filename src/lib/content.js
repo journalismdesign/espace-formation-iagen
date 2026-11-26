@@ -3,6 +3,7 @@
    stockage (la progression est passée en paramètre). */
 import { FICHES, GLOSS, PROMPTS, CASES, QUIZ, D1, D2, PRESETS, CC, CCL } from "../data.js";
 import { T, esc, fr, $, $$, NB, norm, mins, hfr, fmtMin, bindCopy } from "./dom.js";
+import { applyEnds } from "./programme.js";
 
 export const ficheById = (id) => FICHES.find((f) => f.id === id);
 // Déroulé d'une session : conducteur importé (sessions.programme) s'il existe, sinon déroulé par défaut du format.
@@ -33,7 +34,19 @@ export function emargementOpen(session, d = new Date()) {
   const n = parisNow(d), toM = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
   return emargementSlots(session).find((x) => !x.kind && x.date === n.date && n.min >= toM(x.t) && n.min < toM(x.t) + 30) || null;
 }
-export const modulesFor = (x) => (x && typeof x === "object" ? (x.programme?.modules?.length ? x.programme.modules : x.format === "2" ? D2 : D1) : x === "2" ? D2 : D1);
+// Déroulé de base (sans les heures de fin modifiées) : sert au déplacement des pauses et aux bornes de la fin de journée
+export const baseModules = (x) => (x && typeof x === "object" ? (x.programme?.modules?.length ? x.programme.modules : x.format === "2" ? D2 : D1) : x === "2" ? D2 : D1);
+// Déroulé effectif : heures de fin de journée appliquées (sessions.programme.ends, programme.js). Même tableau tant que rien ne change.
+const fitted = new WeakMap();
+export const modulesFor = (x) => {
+  const base = baseModules(x), ends = x && typeof x === "object" ? x.programme?.ends : null;
+  if (!ends || typeof ends !== "object" || !Object.keys(ends).length) return base;
+  const key = JSON.stringify(ends);
+  let byEnds = fitted.get(base);
+  if (!byEnds) fitted.set(base, (byEnds = new Map()));
+  if (!byEnds.has(key)) byEnds.set(key, applyEnds(base, ends));
+  return byEnds.get(key);
+};
 // Nombre de journées et titres des journées
 export const daysOf = (x) => {
   const mods = modulesFor(x), n = Math.max(1, ...mods.map((m) => m.day || 1));
@@ -120,7 +133,7 @@ export function renderParcours(root, format, progress, onChange, opts = {}) {
         <div class="legend">${[["comprendre", "Comprendre", "var(--comp)"], ["pratique", "Pratique", "var(--prat)"], ["discussion", "Discussion libre", "var(--disc)"]].map(([k, l, c]) => `<span><b style="background:${c}"></b>${l} · ${fmtMin(t[k])}</span>`).join("")}</div>
       </div>
       ${D.n > 1 ? `<div class="days">${Array.from({ length: D.n }, (_, k) => k + 1).map((d) => `<button data-day="${d}" aria-pressed="${d === curDay}">Jour ${d}${D.titles[d] ? ` · ${T(D.titles[d])}` : ""}</button>`).join("")}</div>` : ""}
-      <div class="tl">${withSlots(mods, format, curDay, curMod).map((m) => m.slot ? slotHtml(m, format) : modHtml(m, progress, nm, curIdx < 0 ? null : list.indexOf(m) - curIdx)).join("")}</div>`;
+      <div class="tl">${withSlots(mods, format, curDay, curMod).map((m) => m.slot ? slotHtml(m, format) : modHtml(m, progress, nm, curIdx < 0 ? null : list.indexOf(m) - curIdx)).join("")}${mods.length ? endHtml(mods[mods.length - 1].t[1]) : ""}</div>`;
     $$("[data-day]", root).forEach((b) => (b.onclick = () => { curDay = +b.dataset.day; draw(); }));
     $$(".mod[data-id]", root).forEach((el) => {
       const head = $(".mhead", el), id = el.dataset.id;
@@ -164,6 +177,8 @@ function slotHtml(x, session) {
     <div class="body"><div class="mhead"><span class="check" aria-hidden="true">${x.past ? "✓" : ""}</span><div class="meta"><span class="pill em">Émargement</span><b>${T(x.label)}</b>${tag}</div></div></div></div>`;
 }
 
+// Dernière ligne de chaque journée : l'heure de fin (modifiable par le formateur dans le pilotage)
+const endHtml = (t) => `<div class="mod" data-type="fin"><div class="time"><b>${hfr(t)}</b></div><div class="body"><div class="mhead"><div class="meta"><span class="pill fin">Fin de la journée</span></div></div></div></div>`;
 // rel : position par rapport à la séquence en cours (null si le formateur n'a rien lancé)
 function modHtml(m, progress, nm, rel = null) {
   const dur = mins(m.t[1]) - mins(m.t[0]);

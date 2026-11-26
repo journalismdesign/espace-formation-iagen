@@ -3,6 +3,7 @@
      le déjeuner reste fixe, chaque séquence garde sa durée, les horaires de la demi-journée sont recalculés
      en cascade depuis son début (la fin de la demi-journée ne change pas si le déroulé n'a pas de trou).
    - pauseAlert : pause (de 15 minutes ou déjeuner) qui commence dans les deux minutes, le jour prévu.
+   - applyEnds : heure de fin de journée modifiée, l'après-midi se recale (voir plus bas).
    Module pur (pas de DOM) : importé par les tests. */
 
 export const isLunch = (m) => m?.type === "pause" && /jeuner/i.test(m.titre || "");
@@ -49,6 +50,82 @@ export function shiftPause(modules, pauseId, dir) {
   const others = modules.slice(a, b).filter((m) => m.id !== pauseId);
   const k = i - a + dir; // rang de l'élément devant lequel placer la pause, parmi les autres
   return k >= 1 && k < others.length ? movePause(modules, pauseId, others[k].id) : null;
+}
+
+/* Fin de la journée : heure modifiable pour chaque journée (sessions.programme.ends = { "1": "16:30", "2": "17:00" }).
+   - Le bilan (les séquences qui commencent dans la dernière demi-heure, au moins la dernière : bilan, évaluation de
+     fin de stage) garde sa durée et se termine à la nouvelle heure.
+   - Les séquences de l'après-midi, entre le déjeuner et ce bilan, sont raccourcies ou allongées au prorata de leur
+     durée, par pas de 5 minutes (5 minutes au moins chacune). Les pauses gardent leur durée et leur place.
+   - Le matin ne bouge pas. Une heure hors bornes ou mal écrite est ignorée. */
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const MAX_END = 20 * 60;
+export const dayEnd = (modules, day) => { const dm = modules.filter((m) => dayOf(m) === day); return dm.length ? dm[dm.length - 1].t[1] : null; };
+
+// Découpage de l'après-midi d'une journée : indices, séquences ajustables, bornes possibles (en minutes) ; null si rien à ajuster
+function afternoon(modules, day) {
+  const idx = modules.map((m, i) => i).filter((i) => dayOf(modules[i]) === day);
+  if (!idx.length) return null;
+  const last = idx[idx.length - 1];
+  let a = idx[0];
+  for (const i of idx) if (isLunch(modules[i])) a = i + 1;
+  if (a > last) return null;
+  const dur = (m) => toMin(m.t[1]) - toMin(m.t[0]), base = toMin(modules[last].t[1]);
+  let w = last; // début du bilan
+  while (w - 1 >= a && modules[w - 1].type !== "pause" && toMin(modules[w - 1].t[0]) >= base - 30) w--;
+  const flex = [], fixedDur = { pauses: 0, wind: 0 };
+  for (let i = a; i <= last; i++) {
+    if (i >= w) fixedDur.wind += dur(modules[i]);
+    else if (modules[i].type === "pause") fixedDur.pauses += dur(modules[i]);
+    else flex.push(i);
+  }
+  if (!flex.length) return null;
+  const start = toMin(modules[a].t[0]);
+  return { a, w, last, flex, start, base, min: start + fixedDur.pauses + fixedDur.wind + 5 * flex.length, max: Math.max(MAX_END, base), fixed: fixedDur.pauses + fixedDur.wind };
+}
+
+// Bornes de l'heure de fin d'une journée (déroulé sans ajustement) : { base, min, max, bilan } en HH:MM, ou null
+export function endBounds(modules, day) {
+  const p = afternoon(modules, day);
+  return p ? { base: toHHMM(p.base), min: toHHMM(p.min), max: toHHMM(p.max), bilan: modules[p.w] } : null;
+}
+
+// Répartit total minutes entre des séquences, au prorata de leurs durées, par pas de 5 minutes (5 au moins chacune)
+function spread(durs, total) {
+  const B = durs.reduce((s, d) => s + d, 0), units = Math.floor(total / 5);
+  const exact = durs.map((d) => (d / B) * units), out = exact.map((x) => Math.max(1, Math.floor(x)));
+  let diff = units - out.reduce((s, x) => s + x, 0);
+  const byRest = exact.map((x, i) => i).sort((i, j) => (exact[j] - Math.floor(exact[j])) - (exact[i] - Math.floor(exact[i])) || i - j);
+  for (let k = 0; diff > 0; k = (k + 1) % out.length, diff--) out[byRest[k]]++;
+  const big = () => out.reduce((b, x, i) => (x > out[b] ? i : b), 0);
+  for (; diff < 0; diff++) out[big()]--;
+  const res = out.map((u) => u * 5);
+  res[res.length - 1] += total - units * 5;
+  return res;
+}
+
+// Applique les heures de fin : nouveau tableau (le déroulé d'origine n'est pas modifié)
+export function applyEnds(modules, ends) {
+  if (!ends || typeof ends !== "object") return modules;
+  let out = modules;
+  for (const [k, v] of Object.entries(ends)) {
+    const p = HHMM_RE.test(String(v)) ? afternoon(out, Number(k)) : null;
+    const E = p ? toMin(v) : 0;
+    if (!p || E === p.base || E < p.min || E > p.max) continue;
+    const durOf = (m) => toMin(m.t[1]) - toMin(m.t[0]);
+    const nd = spread(p.flex.map((i) => durOf(out[i])), E - p.start - p.fixed); // pauses et bilan gardent leur durée
+    const seg = [];
+    let t = p.start;
+    for (let i = p.a; i <= p.last; i++) {
+      const m = out[i], f = p.flex.indexOf(i), d0 = durOf(m), d = f < 0 ? d0 : nd[f];
+      const n = { ...m, t: [toHHMM(t), toHHMM(t + d)] };
+      // exercice : raccourci avec sa séquence (jamais allongé), 5 minutes au moins
+      if (m.exo?.duree && d < d0) n.exo = { ...m.exo, duree: Math.min(m.exo.duree, d, Math.max(5, Math.round((m.exo.duree * d) / d0 / 5) * 5)) };
+      seg.push(n); t += d;
+    }
+    out = [...out.slice(0, p.a), ...seg, ...out.slice(p.last + 1)];
+  }
+  return out;
 }
 
 /* Alerte du pilotage : pause qui commence dans les deux minutes (jusqu'à une minute après son début).

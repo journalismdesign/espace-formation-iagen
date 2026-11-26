@@ -1031,3 +1031,11 @@ select:disabled{background-image:none;padding-right:12px !important}
 .pause-alert{position:fixed;right:20px;bottom:20px;z-index:40;max-width:380px;display:flex;flex-direction:column;gap:6px;background:var(--yel);color:var(--ink);padding:14px 16px;border-radius:var(--r);border-left:6px solid var(--navy)}
 .pause-alert b{font-size:17px}
 .pause-alert .chips{margin-top:4px}
+/* Fin de la journée : dernière ligne du déroulé (heure modifiable dans le pilotage, l'après-midi se recale) */
+.pill.fin{background:var(--navy);color:var(--on-dark)}
+.modrow.endrow{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:7px 10px;background:var(--light);border-color:var(--navy)}
+.modrow.endrow.changed{background:var(--yelt)}
+.endrow .endtime{font-family:"IBM Plex Mono",monospace;font-size:14px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);width:auto}
+.endrow .linkbtn{margin-left:auto}
+.mod[data-type=fin] .body{border-color:var(--navy)}
+.mod[data-type=fin] .mhead{background:transparent;cursor:default}

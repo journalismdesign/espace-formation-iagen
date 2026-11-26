@@ -12,9 +12,9 @@ import { joinUrl, joinUrlLabel, qr, showQr, parseEmails, openDuplicate } from ".
 import { logoPair } from "./settings.js";
 import { STEPS, SENSIB, VERIF } from "./cadrageModel.js";
 import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml, EM2_DEFAULT, evaluationQr, EVAL_TITLE, EVAL_TEXT } from "../lib/brand.js";
-import { modulesFor, daysOf, typeLabel, hasCadrage, emargementSlots } from "../lib/content.js";
+import { modulesFor, baseModules, daysOf, typeLabel, hasCadrage, emargementSlots } from "../lib/content.js";
 import { parseConducteur, conducteurMarkdown } from "../lib/conducteur.js";
-import { isLunch, pauseTargets, movePause, shiftPause, pauseAlert, pauseAlertText } from "../lib/programme.js";
+import { isLunch, pauseTargets, movePause, shiftPause, pauseAlert, pauseAlertText, endBounds, dayEnd } from "../lib/programme.js";
 import { loadSkins, skinFor, applySkin, currentSkin } from "../lib/skin.js";
 import { samsaHtml } from "../lib/brand.js";
 import { isAdmin } from "../lib/roles.js";
@@ -448,16 +448,20 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
   function bindConducteur() {
     const imported = session.programme?.modules?.length;
     const mods = modulesFor(session), D = daysOf(session);
+    // heures de fin modifiées dans le Jour J : elles restent en place si l'on importe un conducteur ou revient au déroulé par défaut
+    const ends = session.programme?.ends || {}, endDays = Object.keys(ends).filter((d) => +d <= D.n).sort();
+    const endsNote = endDays.length ? `Fin de journée modifiée dans le Jour J : ${endDays.map((d) => `${D.n > 1 ? `jour ${d} ` : ""}à ${ends[d].replace(/^0/, "").replace(":", " h ")}`).join(", ")}.` : "";
     $("#condSrc", box).innerHTML = T(imported && session.programme.base === "defaut"
       ? `Déroulé par défaut, pauses déplacées depuis le Jour J. « Revenir au déroulé par défaut » les remet à leur place.`
       : imported
       ? `Conducteur importé${session.programme.name ? ` (${session.programme.name})` : ""} : ${mods.filter((m) => m.type !== "pause").length} séquences sur ${D.n} journée${D.n > 1 ? "s" : ""}. Le format suit le conducteur.`
-      : `Déroulé par défaut de la formation en ${session.format === "2" ? "deux journées" : "une journée"}. Importez un fichier .md pour le remplacer.`);
+      : `Déroulé par défaut de la formation en ${session.format === "2" ? "deux journées" : "une journée"}. Importez un fichier .md pour le remplacer.`)
+      + (endsNote ? ` ${T(endsNote)}` : "");
     $("#condExport", box).onclick = () => download(`conducteur-${(session.code || "session").toLowerCase()}.md`,
       conducteurMarkdown(mods, { formation: session.programme?.formation || session.formation, days: D.titles }), "text/markdown;charset=utf-8");
     $("#condReset", box).onclick = async () => {
       if (!confirm("Revenir au déroulé par défaut ? Le conducteur importé sera retiré de cette session.")) return;
-      if (await guard(() => api.updateSession(sid, { programme: null }), "Déroulé par défaut rétabli.")) go(location.hash);
+      if (await guard(() => api.updateSession(sid, { programme: session.programme?.ends ? { ends: session.programme.ends } : null }), "Déroulé par défaut rétabli.")) go(location.hash);
     };
     $("#condFile", box).onchange = async (e) => {
       const f = e.target.files[0]; e.target.value = "";
@@ -479,7 +483,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       $("#condApply", box).onclick = async () => {
         const format = programme.nDays > 1 ? "2" : "1";
         if (format === "2" && !session.date2) toast("Pensez à indiquer la date du jour 2.", "info");
-        const patch = { programme, format };
+        const patch = { programme: session.programme?.ends ? { ...programme, ends: session.programme.ends } : programme, format };
         if (session.live?.module && !programme.modules.some((m) => m.id === session.live.module)) patch.live = { ...session.live, module: null };
         if (await guard(() => api.updateSession(sid, patch), "Conducteur appliqué : déroulé, parcours stagiaire et pilotage sont à jour.")) go(location.hash);
       };
@@ -662,17 +666,30 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const due = slots.find((x) => !emDone[x.key] && x.date === today && nowM >= mins(x.t) - 15 && nowM <= mins(x.t) + 30);
       $("#emRemind", box).innerHTML = due ? `<div class="remind"><b>${T(`${due.label} · ${hhmmT(due.t)}`)}</b><span>${T("C'est le moment de projeter le QR code d'émargement.")}</span><button class="btn sm" data-em="${due.key}">Projeter l'émargement</button></div>` : "";
       // Déroulé : séquence courante + slides Drive des séquences qui en ont
-      const all = modulesFor(session), mods = all.filter((m) => m.type !== "pause");
+      // all : déroulé effectif (heures de fin appliquées) ; base : déroulé sur lequel se déplacent les pauses
+      const all = modulesFor(session), base = baseModules(session), mods = all.filter((m) => m.type !== "pause");
       const cur = mods.find((m) => m.id === live.module);
       if (cur?.day) modDay = cur.day;
       // les pauses figurent dans le déroulé du pilotage ; celles de 15 min se déplacent (glisser-déposer ou ↑ ↓)
       const shown = all.filter((m) => session.format !== "2" || (m.day || 1) === modDay);
+      const shownDay = session.format === "2" ? modDay : 1;
       const pauseRow = (m) => {
         const lunch = isLunch(m), d = mins(m.t[1]) - mins(m.t[0]);
-        const mv = (dir) => `<button type="button" class="iconbtn" data-pmove="${dir}" data-pid="${esc(m.id)}" aria-label="${dir < 0 ? "Avancer" : "Retarder"} la pause d'une séquence"${shiftPause(all, m.id, dir) ? "" : " disabled"}>${dir < 0 ? "↑" : "↓"}</button>`;
+        const mv = (dir) => `<button type="button" class="iconbtn" data-pmove="${dir}" data-pid="${esc(m.id)}" aria-label="${dir < 0 ? "Avancer" : "Retarder"} la pause d'une séquence"${shiftPause(base, m.id, dir) ? "" : " disabled"}>${dir < 0 ? "↑" : "↓"}</button>`;
         return `<div class="modrow pauserow${lunch ? " lunch" : ""}" data-mid="${esc(m.id)}"${lunch ? "" : ` draggable="true" data-pid="${esc(m.id)}" title="Glisser pour placer la pause entre deux autres séquences de la demi-journée"`}>
           ${lunch ? "" : `<span class="drag" aria-hidden="true">⠿</span>`}<button type="button" data-pjpause title="Projeter l'écran Pause"><span class="mono small">${hhmmT(m.t[0])}</span><span class="pill pause">${T(m.titre)}</span><span class="small muted">${d >= 60 ? `${Math.floor(d / 60)} h${d % 60 ? ` ${String(d % 60).padStart(2, "0")}` : ""}` : `${d} min`}</span></button>
           ${lunch ? "" : `<span class="pause-move">${mv(-1)}${mv(1)}</span>`}</div>`;
+      };
+      // Dernière ligne de la journée : heure de fin modifiable ; l'après-midi se recale (programme.js, applyEnds)
+      const endRow = (day) => {
+        const b = endBounds(base, day), eff = dayEnd(all, day);
+        if (!eff) return "";
+        const changed = b && eff !== b.base;
+        return `<div class="modrow endrow${changed ? " changed" : ""}">
+          <span class="pill fin">Fin de la journée</span>
+          ${b ? `<input type="time" class="endtime" step="300" min="${b.min}" max="${b.max}" value="${eff}" data-endday="${day}" aria-label="Heure de fin du jour ${day}">` : `<span class="mono small">${hhmmT(eff)}</span>`}
+          <span class="small muted">${b ? T(changed ? `au lieu de ${hhmmT(b.base)} · après-midi recalculé` : "modifiable : l'après-midi se recale, le bilan garde sa durée") : T("aucune séquence à recaler l'après-midi")}</span>
+          ${changed ? `<button type="button" class="linkbtn" data-endreset="${day}">Rétablir ${hhmmT(b.base)}</button>` : ""}</div>`;
       };
       const skip = skipSet(session), hidden = (m) => parsePages(m.pages).filter((p) => skip.has(p)).length; // pages masquées de la séquence
       $("#modules", box).innerHTML = `${session.format === "2" ? `<div class="days" style="margin:0 0 8px">${[1, 2].map((d) => `<button type="button" data-mday="${d}" aria-pressed="${d === modDay}">Jour ${d}</button>`).join("")}</div>` : ""}
@@ -683,9 +700,10 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
           return `<div class="modrow${on ? " on" : ""}" data-mid="${esc(m.id)}"><button type="button" data-mod="${m.id}"><span class="mono small">${hhmmT(m.t[0])}</span><span class="pill ${m.type}">${T(typeLabel(m.type))}</span><span class="modtxt"><b>${T(m.titre)}</b>${m.cas ? `<small>${T(m.cas)}</small>` : ""}</span></button>
             ${on && pages.length && session.slides_url ? `<div class="slidebar"><button type="button" class="iconbtn" data-sl="prev" aria-label="Page précédente">←</button>${pages.map((p) => `<button type="button" class="chip${V === "slide" && live.slide === p ? " on" : ""}" data-page="${p}">${p}</button>`).join("")}<button type="button" class="iconbtn" data-sl="next" aria-label="Page suivante">→</button>${hidden(m) ? `<span class="small muted" title="Réglages → Slides projetées">${hidden(m)} masquée${hidden(m) > 1 ? "s" : ""}</span>` : ""}</div>` : ""}
             ${on && pages.length && !session.slides_url ? `<div class="small muted" style="padding:4px 8px">Pages ${T(m.pages)} · associez la présentation dans l'onglet Réglages pour les projeter.</div>` : ""}</div>`;
-        }).join("")}</div>`;
+        }).join("")}${endRow(shownDay)}</div>`;
       $$("[data-mday]", box).forEach((b) => (b.onclick = () => { modDay = +b.dataset.mday; draw(); }));
-      bindPauses(all);
+      bindPauses(base);
+      bindEnds();
       $$("[data-em]", box).forEach((b) => (b.onclick = () => showEm(b.dataset.em)));
       $$("[data-mod]", box).forEach((b) => (b.onclick = () => setLive({ ...keep(), module: b.dataset.mod, view: "module", started_at: new Date().toISOString() })));
       const pages = modPages(session, cur);
@@ -742,11 +760,42 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
        session est réécrit (sessions.programme ; à partir du déroulé par défaut si aucun conducteur n'est importé),
        horaires recalculés en cascade (programme.js). Le clic sur une pause projette l'écran Pause. */
     const savePauses = async (modules, pid) => {
-      const D = daysOf(session), p = modules.find((m) => m.id === pid);
-      const programme = session.programme?.modules?.length ? { ...session.programme, modules } : { formation: session.formation, days: D.titles, nDays: D.n, modules, base: "defaut" };
+      const D = daysOf(session);
+      const programme = session.programme?.modules?.length ? { ...session.programme, modules }
+        : { formation: session.formation, days: D.titles, nDays: D.n, modules, base: "defaut", ...(session.programme?.ends ? { ends: session.programme.ends } : {}) };
+      const p = modulesFor({ ...session, programme }).find((m) => m.id === pid); // horaires effectifs (fin de journée appliquée)
       const s = await guard(() => api.updateSession(sid, { programme }), `Pause déplacée : ${hhmmT(p.t[0])} – ${hhmmT(p.t[1])}. Horaires de la demi-journée recalculés.`);
       if (s) session = s;
       draw();
+    };
+    /* Fin de la journée : heure enregistrée dans sessions.programme.ends (sans copier le déroulé par défaut).
+       L'heure d'origine efface l'entrée. Les séquences de l'après-midi se recalent à l'affichage (applyEnds). */
+    const saveEnd = async (day, v) => {
+      const b = endBounds(baseModules(session), day); if (!b) return;
+      if (v < b.min || v > b.max) { toast(v < b.min ? `Au plus tôt ${hhmmT(b.min)} : il faut garder les pauses, le bilan et 5 minutes par séquence de l'après-midi.` : `Au plus tard ${hhmmT(b.max)}.`, "ko"); return draw(); }
+      const ends = { ...(session.programme?.ends || {}) };
+      if (v === b.base) delete ends[day]; else ends[day] = v;
+      const pr = { ...(session.programme || {}) };
+      if (Object.keys(ends).length) pr.ends = ends; else delete pr.ends;
+      const programme = Object.keys(pr).length ? pr : null;
+      const bilan = modulesFor({ ...session, programme }).find((m) => m.id === b.bilan.id);
+      const msg = v === b.base ? `Fin de la journée rétablie à ${hhmmT(v)} : horaires d'origine.` : `Fin de la journée à ${hhmmT(v)}. Après-midi recalculé : « ${b.bilan.titre} » à ${hhmmT(bilan.t[0])}.`;
+      const s = await guard(() => api.updateSession(sid, { programme }), msg);
+      if (s) session = s;
+      draw();
+    };
+    const bindEnds = () => {
+      $$("[data-endday]", box).forEach((inp) => {
+        const day = +inp.dataset.endday, first = inp.value;
+        let tm = null, sent = false;
+        const commit = () => { clearTimeout(tm); tm = null; if (sent || !inp.value || inp.value === first) return; sent = true; saveEnd(day, inp.value); };
+        // la saisie au clavier change l'heure, puis les minutes : seule une heure possible s'enregistre d'office, après une courte attente ;
+        // une heure hors bornes n'est signalée qu'en quittant le champ ou avec Entrée
+        inp.onchange = () => { clearTimeout(tm); if (inp.value >= inp.min && inp.value <= inp.max) tm = setTimeout(commit, 1500); };
+        inp.onblur = commit;
+        inp.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } };
+      });
+      $$("[data-endreset]", box).forEach((b) => (b.onclick = () => { const d = +b.dataset.endreset, bd = endBounds(baseModules(session), d); if (bd) saveEnd(d, bd.base); }));
     };
     const clearDrop = () => $$(".drop-ok, .drop-before, .dragging", box).forEach((r) => r.classList.remove("drop-ok", "drop-before", "dragging"));
     const bindPauses = (all) => {

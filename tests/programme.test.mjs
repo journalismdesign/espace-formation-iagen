@@ -50,4 +50,33 @@ ok(pauseAlert(m1, day, t("10:18:30"))?.m.id === "j1-p1" && pauseAlert(m1, day, t
 const two = (d) => (d === 2 ? "2026-12-05" : "2026-12-04");
 ok(pauseAlert(D2, two, new Date("2026-12-05T09:43:30Z"))?.m.id === "b-p1", "deux journées : pause du jour 2 le jour 2");
 
-console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests des pauses passent.");
+// Fin de la journée : heure modifiable, l'après-midi se recale, le bilan garde sa durée
+const { applyEnds, endBounds, dayEnd } = await import("../src/lib/programme.js");
+const { modulesFor, baseModules, emargementSlots } = await import("../src/lib/content.js");
+const pm2 = (L, d = 2) => L.filter((m) => (m.day || 1) === d && mins(m.t[0]) >= mins("13:30"));
+const b2 = endBounds(D2, 2);
+ok(b2.base === "17:30" && b2.min === "14:35" && b2.max === "20:00" && b2.bilan.id === "b-bilan", "jour 2 : fin à 17 h 30, au plus tôt 14 h 35, bilan « Bilan et évaluation »");
+ok(endBounds(D2, 1).bilan.id === "a-debrief" && endBounds(D1, 1).bilan.id === "j1-libre", "bilan : les séquences de la dernière demi-heure (jour 1 : débrief ; une journée : limites puis bilan)");
+const snap = JSON.stringify(D2), e2 = applyEnds(D2, { 2: "16:30" });
+ok(JSON.stringify(D2) === snap && at(D2, "b-bilan").t[0] === "17:00", "le déroulé d'origine n'est pas modifié");
+ok(dayEnd(e2, 2) === "16:30" && at(e2, "b-bilan").t.join("-") === "16:00-16:30", "fin à 16 h 30 : bilan et évaluation de 16 h 00 à 16 h 30");
+ok(at(e2, "b-paliers").t[0] === "13:30" && dur(at(e2, "b-p2")) === 15 && pm2(e2).every((m, i, L) => i === 0 || L[i - 1].t[1] === m.t[0]), "après-midi : départ à 13 h 30, pause de 15 min gardée, horaires qui s'enchaînent");
+ok(pm2(e2).filter((m) => m.type !== "pause" && m.id !== "b-bilan").every((m) => dur(m) % 5 === 0 && dur(m) >= 5 && dur(m) < dur(at(D2, m.id))), "séquences de l'après-midi raccourcies, par pas de 5 minutes");
+ok(D2.filter((m) => m.day === 1 || mins(m.t[0]) < mins("13:30")).every((m) => JSON.stringify(at(e2, m.id).t) === JSON.stringify(m.t)), "le jour 1 et le matin du jour 2 ne bougent pas");
+ok(at(e2, "b-sve2").exo.duree <= dur(at(e2, "b-sve2")) && at(e2, "b-sve2").exo.duree < at(D2, "b-sve2").exo.duree, "exercice raccourci avec sa séquence");
+const e3 = applyEnds(D2, { 2: "18:00" });
+ok(at(e3, "b-bilan").t.join("-") === "17:30-18:00" && at(e3, "b-sve2").exo.duree === at(D2, "b-sve2").exo.duree, "fin à 18 h : séquences allongées, exercices inchangés");
+ok(applyEnds(D2, { 2: "14:30" }) === D2 && applyEnds(D2, { 2: "20:30" }) === D2 && applyEnds(D2, { 2: "1630" }) === D2 && applyEnds(D2, { 2: "17:30" }) === D2 && applyEnds(D2, null) === D2, "heure hors bornes, mal écrite ou d'origine : déroulé inchangé");
+ok(dayEnd(applyEnds(D2, { 2: "16:47" }), 2) === "16:47" && dayEnd(applyEnds(D2, { 1: "16:00", 2: "16:00" }), 1) === "16:00", "heure hors pas de 5 min tenue ; deux journées modifiées à la fois");
+const e1 = applyEnds(D1, { 1: "16:45" });
+ok(at(e1, "j1-libre").t.join("-") === "16:15-16:30" && at(e1, "j1-bilan").t.join("-") === "16:30-16:45" && at(e1, "j1-redactions").t.join("-") === at(D1, "j1-redactions").t.join("-"), "une journée : limites et bilan gardent leur quart d'heure, le matin ne bouge pas");
+// Session : modulesFor applique la fin de journée ; les pauses se déplacent sur le déroulé de base
+const S = { format: "2", date: "2026-12-04", date2: "2026-12-05", programme: { ends: { 2: "16:30" } } };
+ok(modulesFor(S) === modulesFor({ ...S }) && baseModules(S) === D2 && modulesFor({ format: "2" }) === D2, "session : même tableau tant que rien ne change, déroulé par défaut sans fin modifiée");
+ok(emargementSlots(S).find((x) => x.kind === "evaluation").t === "16:00", "l'évaluation de fin de stage suit le bilan (16 h 00)");
+const moved = movePause(baseModules(S), "b-p2", "b-sve1");
+const S2 = { ...S, programme: { formation: "x", modules: moved, base: "defaut", ends: S.programme.ends } };
+const [ph, pmin] = at(modulesFor(S2), "b-p2").t[0].split(":").map(Number); // Paris = UTC+1 en décembre : 90 s avant la pause
+ok(dayEnd(modulesFor(S2), 2) === "16:30" && order(modulesFor(S2)).includes("b-paliers,b-p2,b-sve1") && pauseAlert(modulesFor(S2), (d) => (d === 2 ? S.date2 : S.date), new Date(Date.UTC(2026, 11, 5, ph - 1, pmin - 2, 30)))?.left === 90, "pause déplacée et fin modifiée : les deux tiennent, l'alerte suit l'heure recalculée");
+
+console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests des pauses et de la fin de journée passent.");
