@@ -20,7 +20,7 @@ import { loadScreenData } from "./adminSession.js";
 const TABS = [
   ["direct", "Le jour J"], ["cadrage", "Mon cadrage"], ["ressources", "Ressources du jour"], ["fiches", "Glossaire"],
   ["outils", "Outils d'exercice"], ["discussion", "Discussion"],
-  ["support", "Support de formation"], ["emargement", "Émargement"],
+  ["support", "Évaluation et support"], ["emargement", "Émargement"],
 ];
 // Après la clôture, les stagiaires gardent leurs ressources, les fiches, les exercices et le support
 // (ni déroulé, ni discussion, ni émargement ; la discussion est aussi fermée côté base)
@@ -423,7 +423,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
       const shown = !!st.unlocked || session.status === "closed" || session.live?.view === "evaluation";
       const ev = shown ? evaluationHtml(session, await evaluationQr(session)) : "";
       if (tab !== "support") return; // onglet changé pendant le chargement
-      body.innerHTML = `<div class="pagehead"><div><div class="kicker-d">${T(session.title)}</div><h1>Support de formation</h1></div></div>${ev ? `<div class="card" style="max-width:820px;margin-bottom:14px">${ev}</div>` : ""}<div class="card" style="max-width:720px">${supportBlock(st, false, evalGate(!!ev))}</div>`;
+      body.innerHTML = `<div class="pagehead"><div><div class="kicker-d">${T(session.title)}</div><h1>Évaluation et support</h1></div></div>${ev ? `<div class="card" style="max-width:820px;margin-bottom:14px">${ev}</div>` : ""}<div class="card" style="max-width:720px">${supportBlock(st, false, evalGate(!!ev))}</div>`;
     };
     await draw();
     tabHandlers.add(draw); // évaluation projetée, évaluation touchée : la page suit

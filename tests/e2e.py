@@ -280,7 +280,7 @@ async def main():
         await tr.goto(URL + f"#/admin/s/{sid}/jour"); await tr.wait_for_selector("#closeDay"); await tr.check("#closeDay"); await tr.wait_for_timeout(600)
         await st.goto(URL + f"#/s/{sid}/discussion"); await st.wait_for_url(f"**/#/s/{sid}/ressources", timeout=5000)
         nav = await st.inner_text(".side-nav")
-        assert "Discussion" not in nav and "Émargement" not in nav and "Glossaire" in nav and "Support" in nav, "accès réduit après clôture : " + nav
+        assert "Discussion" not in nav and "Émargement" not in nav and "Glossaire" in nav and "Évaluation et support" in nav, "accès réduit après clôture : " + nav
         assert await st.locator("#parcours").count() == 0, "déroulé masqué après clôture"
         await shot(st, "18-stagiaire-apres-cloture")
         await tr.goto(URL + f"#/admin/s/{sid}/apres"); await tr.wait_for_selector("#chatAdm .chat-bubble", timeout=6000)

@@ -228,7 +228,7 @@ export function screenHtml(d, compact = false) {
     const gated = !!session.evaluation_url, open = !!support?.unlocked;
     const note = gated ? (open ? "Téléchargeable dès que vous remplissez l'évaluation" : "Téléchargeable après l'évaluation de fin de stage")
       : open ? "Téléchargeable dès maintenant" : `Téléchargeable${when ? ` à partir de <b>${when}</b>` : " en fin de formation"}`;
-    return light(session, `<div class="ds-kick">Le support</div><div class="ds-title">${open && !gated ? "Le support est disponible" : "Le support vous attend"}</div><p class="ds-text">${T("Dans votre espace, menu « Support de formation ».")}</p>`,
+    return light(session, `<div class="ds-kick">Le support</div><div class="ds-title">${open && !gated ? "Le support est disponible" : "Le support vous attend"}</div><p class="ds-text">${T("Dans votre espace, menu « Évaluation et support ».")}</p>`,
       `<div class="ds-bignote"><span class="ds-letter big">${open ? "↓" : "🔒"}</span><div>${note}</div></div>`, right, cls);
   }
 
