@@ -5,14 +5,15 @@ import { mountChat } from "../lib/chat.js";
 import { keepDraft } from "../lib/draft.js";
 import { $, $$, T, esc, fr, NB, guard, toast, debounce, dateFr, download, copyText } from "../lib/dom.js";
 import { QUIZ } from "../data.js";
-import { ACT_TYPES, currentAct, respKey, renderResults, defaultActivities, countOf } from "../lib/activities.js";
+import { ACT_TYPES, currentAct, respKey, renderResults, defaultActivities, countOf, P as presetAct } from "../lib/activities.js";
 import { screenHtml, nextPage, stepLive, pageKey, modPages, skipSet } from "../lib/screen.js";
 import { openSheet } from "../lib/content.js";
 import { joinUrl, joinUrlLabel, qr, showQr, parseEmails, openDuplicate } from "./admin.js";
 import { logoPair } from "./settings.js";
 import { STEPS, SENSIB, VERIF } from "./cadrageModel.js";
 import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml, EM2_DEFAULT, evaluationQr, EVAL_TITLE, EVAL_TEXT } from "../lib/brand.js";
-import { modulesFor, baseModules, daysOf, typeLabel, hasCadrage, emargementSlots } from "../lib/content.js";
+import { modulesFor, baseModules, defaultModules, levelOf, daysOf, typeLabel, hasCadrage, emargementSlots } from "../lib/content.js";
+import { DAY_TITLES } from "../data.js";
 import { parseConducteur, conducteurMarkdown } from "../lib/conducteur.js";
 import { isLunch, pauseTargets, movePause, shiftPause, pauseAlert, pauseAlertText, endBounds, dayEnd } from "../lib/programme.js";
 import { loadSkins, skinFor, applySkin, currentSkin } from "../lib/skin.js";
@@ -466,12 +467,14 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       : imported
       ? `Conducteur importé${session.programme.name ? ` (${session.programme.name})` : ""} : ${mods.filter((m) => m.type !== "pause").length} séquences sur ${D.n} journée${D.n > 1 ? "s" : ""}. Le format suit le conducteur.`
       : `Déroulé par défaut de la formation en ${session.format === "2" ? "deux journées" : "une journée"}. Importez un fichier .md pour le remplacer.`)
+      + (session.format === "2" && (!imported || session.programme.base === "defaut") ? ` ${T(`Jour 2 en niveau ${levelOf(session) === "debutant" ? "débutant (R·M·C·T·F et ateliers en groupe)" : "expert (déroulé d'origine)"}, à changer dans le Jour J.`)}` : "")
       + (endsNote ? ` ${T(endsNote)}` : "");
     $("#condExport", box).onclick = () => download(`conducteur-${(session.code || "session").toLowerCase()}.md`,
       conducteurMarkdown(mods, { formation: session.programme?.formation || session.formation, days: D.titles }), "text/markdown;charset=utf-8");
     $("#condReset", box).onclick = async () => {
       if (!confirm("Revenir au déroulé par défaut ? Le conducteur importé sera retiré de cette session.")) return;
-      if (await guard(() => api.updateSession(sid, { programme: session.programme?.ends ? { ends: session.programme.ends } : null }), "Déroulé par défaut rétabli.")) go(location.hash);
+      const keepP = { ...(session.programme?.ends ? { ends: session.programme.ends } : {}), ...(session.programme?.level ? { level: session.programme.level } : {}) };
+      if (await guard(() => api.updateSession(sid, { programme: Object.keys(keepP).length ? keepP : null }), "Déroulé par défaut rétabli.")) go(location.hash);
     };
     $("#condFile", box).onchange = async (e) => {
       const f = e.target.files[0]; e.target.value = "";
@@ -717,7 +720,9 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
           ${changed ? `<button type="button" class="linkbtn" data-endreset="${day}">Rétablir ${hhmmT(b.base)}</button>` : ""}</div>`;
       };
       const skip = skipSet(session), hidden = (m) => parsePages(m.pages).filter((p) => skip.has(p)).length; // pages masquées de la séquence
-      $("#modules", box).innerHTML = `${session.format === "2" ? `<div class="days" style="margin:0 0 8px">${[1, 2].map((d) => `<button type="button" data-mday="${d}" aria-pressed="${d === modDay}">Jour ${d}</button>`).join("")}</div>` : ""}
+      const imported = session.programme?.modules?.length && session.programme.base !== "defaut", lvl = levelOf(session);
+      const lvlBar = session.format === "2" && modDay === 2 ? `<div class="lvlbar"><span class="small muted">Niveau du jour 2</span><div class="days" role="group" aria-label="Niveau du jour 2">${[["expert", "Expert", "Déroulé d'origine : assistants, jargon, paliers, S·V·E"], ["debutant", "Débutant", "R·M·C·T·F, puis ateliers en groupe sur vos tâches et vos conducteurs"]].map(([v, l, t]) => `<button type="button" data-lvl="${v}" aria-pressed="${lvl === v}" title="${esc(t)}"${imported ? " disabled" : ""}>${l}</button>`).join("")}</div>${imported ? `<span class="small muted">${T("Conducteur importé : le niveau ne s'applique pas.")}</span>` : `<span class="small muted">${T(lvl === "debutant" ? "R·M·C·T·F, puis ateliers en groupe." : "Déroulé d'origine.")}</span>`}</div>` : "";
+      $("#modules", box).innerHTML = `${session.format === "2" ? `<div class="days" style="margin:0 0 8px">${[1, 2].map((d) => `<button type="button" data-mday="${d}" aria-pressed="${d === modDay}">Jour ${d}</button>`).join("")}</div>` : ""}${lvlBar}
         <div class="modlist">${interleave(shown, slots.filter((x) => session.format !== "2" || x.day === modDay)).map((m) => {
           if (m.slot) return `<div class="modrow em${emDone[m.key] ? " done" : ""}${(V === "emargement" || V === "evaluation") && live.emKey === m.key ? " on" : ""}"><button type="button" data-em="${m.key}"><span class="mono small">${hhmmT(m.t)}</span><span class="pill tf">${m.kind === "evaluation" ? "Évaluation" : "Émargement"}</span><b>${T(m.label)}</b>${emDone[m.key] ? `<span class="small muted" style="margin-left:auto">✓ présenté à ${new Date(emDone[m.key]).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>` : ""}</button></div>`;
           if (m.type === "pause") return pauseRow(m);
@@ -727,6 +732,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             ${on && pages.length && !session.slides_url ? `<div class="small muted" style="padding:4px 8px">Pages ${T(m.pages)} · associez la présentation dans l'onglet Réglages pour les projeter.</div>` : ""}</div>`;
         }).join("")}${endRow(shownDay)}</div>`;
       $$("[data-mday]", box).forEach((b) => (b.onclick = () => { modDay = +b.dataset.mday; draw(); }));
+      $$("[data-lvl]", box).forEach((b) => (b.onclick = () => b.dataset.lvl !== lvl && setLevel(b.dataset.lvl)));
       bindPauses(base);
       bindEnds();
       $$("[data-em]", box).forEach((b) => (b.onclick = () => showEm(b.dataset.em)));
@@ -787,9 +793,30 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     const savePauses = async (modules, pid) => {
       const D = daysOf(session);
       const programme = session.programme?.modules?.length ? { ...session.programme, modules }
-        : { formation: session.formation, days: D.titles, nDays: D.n, modules, base: "defaut", ...(session.programme?.ends ? { ends: session.programme.ends } : {}) };
+        : { formation: session.formation, days: D.titles, nDays: D.n, modules, base: "defaut", ...(session.programme?.ends ? { ends: session.programme.ends } : {}), ...(session.programme?.level ? { level: session.programme.level } : {}) };
       const p = modulesFor({ ...session, programme }).find((m) => m.id === pid); // horaires effectifs (fin de journée appliquée)
       const s = await guard(() => api.updateSession(sid, { programme }), `Pause déplacée : ${hhmmT(p.t[0])} – ${hhmmT(p.t[1])}. Horaires de la demi-journée recalculés.`);
+      if (s) session = s;
+      draw();
+    };
+    /* Niveau du jour 2 (deux journées, déroulé par défaut) : expert = jour 2 d'origine, débutant = R·M·C·T·F puis
+       ateliers en groupe (D2B). Gardé dans sessions.programme.level, sans copier le déroulé. Si le déroulé par défaut
+       a déjà été copié (pauses déplacées), son jour 2 est remplacé et le jour 1 garde ses pauses. La séquence lancée
+       qui n'existe plus est oubliée ; le nuage « La tâche pénible » est ajouté aux activités en niveau débutant. */
+    const setLevel = async (level) => {
+      const pr = session.programme || {};
+      if (pr.modules?.length && pr.base !== "defaut") return toast("Conducteur importé : le niveau ne s'applique qu'au déroulé par défaut.", "ko");
+      const { level: _old, ...rest } = pr;
+      const programme = { ...rest, ...(level === "debutant" ? { level } : {}) };
+      if (pr.modules?.length) {
+        const day2 = defaultModules({ format: "2", programme: { level } }).filter((m) => m.day === 2);
+        programme.modules = [...pr.modules.filter((m) => (m.day || 1) !== 2), ...day2];
+        programme.days = { ...(pr.days || {}), 2: DAY_TITLES[level === "debutant" ? "debutant" : "expert"][2] };
+      }
+      const patch = { programme: Object.keys(programme).length ? programme : null };
+      if (session.live?.module && !modulesFor({ ...session, ...patch }).some((m) => m.id === session.live.module)) patch.live = { ...session.live, module: null };
+      if (level === "debutant" && !(session.activities || []).some((a) => a.id === "penible")) patch.activities = [...(session.activities || []), presetAct("penible", "La tâche pénible")];
+      const s = await guard(() => api.updateSession(sid, patch), level === "debutant" ? "Jour 2 en niveau débutant : R·M·C·T·F le matin, ateliers en groupe l'après-midi. Parcours stagiaire et pilotage sont à jour." : "Jour 2 en niveau expert : déroulé d'origine.");
       if (s) session = s;
       draw();
     };

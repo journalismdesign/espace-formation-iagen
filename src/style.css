@@ -1039,3 +1039,23 @@ select:disabled{background-image:none;padding-right:12px !important}
 .endrow .linkbtn{margin-left:auto}
 .mod[data-type=fin] .body{border-color:var(--navy)}
 .mod[data-type=fin] .mhead{background:transparent;cursor:default}
+
+/* Niveau du jour 2 (pilotage) */
+.lvlbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 8px}
+.lvlbar .days{margin:0}
+.lvlbar button:disabled{opacity:.5;cursor:not-allowed}
+/* Pastilles d'aide des ateliers */
+.ideas-g{margin:0 0 8px}
+.ideas-h{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 4px}
+.chip[data-idea].on{background:var(--navy);color:#fff;border-color:var(--navy)} /* comme les pastilles actives des slides */
+.idea-out{border-left:3px solid var(--blue);background:var(--light);padding:8px 12px;margin-top:6px;border-radius:0 6px 6px 0}
+.idea-out p{margin:4px 0 0}
+.ideas-d{margin-top:12px}
+.ideas-d summary{cursor:pointer;color:var(--blue);font-weight:600}
+.ideas-d .ideas{margin-top:8px}
+/* Constructeur R·M·C·T·F : liste de tâches */
+.tasks{display:flex;flex-direction:column;gap:6px}
+.task-row{display:flex;align-items:center;gap:6px}
+.task-row input{flex:1;margin:0}
+.task-n{display:inline-grid;place-items:center;min-width:22px;height:22px;border-radius:50%;background:var(--light);color:var(--ink);font-size:12px;font-weight:700}
+.task-add{margin:6px 0 4px}

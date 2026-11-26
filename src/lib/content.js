@@ -1,7 +1,7 @@
 /* Contenus pédagogiques partagés : parcours, quiz, fiches, prompts, outils,
    assistant. Repris de la version claude.ai et rendus indépendants du
    stockage (la progression est passée en paramètre). */
-import { FICHES, GLOSS, PROMPTS, CASES, QUIZ, D1, D2, PRESETS, CC, CCL } from "../data.js";
+import { FICHES, GLOSS, PROMPTS, CASES, QUIZ, D1, D2, D2B, DAY_TITLES, PRESETS, CC, CCL, IDEES } from "../data.js";
 import { T, esc, fr, $, $$, NB, norm, mins, hfr, fmtMin, bindCopy } from "./dom.js";
 import { applyEnds } from "./programme.js";
 
@@ -34,8 +34,12 @@ export function emargementOpen(session, d = new Date()) {
   const n = parisNow(d), toM = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
   return emargementSlots(session).find((x) => !x.kind && x.date === n.date && n.min >= toM(x.t) && n.min < toM(x.t) + 30) || null;
 }
+/* Niveau du jour 2 (deux journées, déroulé par défaut) : sessions.programme.level vaut "debutant" (R·M·C·T·F, puis
+   ateliers en groupe, D2B) ; absent, c'est le niveau expert (le jour 2 de D2). Sans effet sur un conducteur importé. */
+export const levelOf = (x) => (x && typeof x === "object" && x.programme?.level === "debutant" ? "debutant" : "expert");
+export const defaultModules = (x) => (x && typeof x === "object" ? (x.format === "2" ? (levelOf(x) === "debutant" ? D2B : D2) : D1) : x === "2" ? D2 : D1);
 // Déroulé de base (sans les heures de fin modifiées) : sert au déplacement des pauses et aux bornes de la fin de journée
-export const baseModules = (x) => (x && typeof x === "object" ? (x.programme?.modules?.length ? x.programme.modules : x.format === "2" ? D2 : D1) : x === "2" ? D2 : D1);
+export const baseModules = (x) => (x && typeof x === "object" && x.programme?.modules?.length ? x.programme.modules : defaultModules(x));
 // Déroulé effectif : heures de fin de journée appliquées (sessions.programme.ends, programme.js). Même tableau tant que rien ne change.
 const fitted = new WeakMap();
 export const modulesFor = (x) => {
@@ -50,7 +54,7 @@ export const modulesFor = (x) => {
 // Nombre de journées et titres des journées
 export const daysOf = (x) => {
   const mods = modulesFor(x), n = Math.max(1, ...mods.map((m) => m.day || 1));
-  const titles = x && typeof x === "object" && x.programme?.modules?.length ? x.programme.days || {} : n > 1 ? { 1: "Comprendre et Gemini Notebook", 2: "Les assistants et les méthodes" } : {};
+  const titles = x && typeof x === "object" && x.programme?.modules?.length ? x.programme.days || {} : n > 1 ? DAY_TITLES[levelOf(x)] : {};
   return { n, titles };
 };
 export const typeLabel = (t) => ({ comprendre: "Comprendre", pratique: "Pratique", discussion: "Discussion libre", pause: "Pause" }[t]);
@@ -151,6 +155,30 @@ export function renderParcours(root, format, progress, onChange, opts = {}) {
     });
   };
   draw();
+  bindIdeas(root);
+}
+
+/* Pastilles d'aide (ateliers du jour 2 en niveau débutant, constructeur R·M·C·T·F) : une pastille touchée montre
+   sa situation, une seule à la fois ; touchée de nouveau, elle se referme. */
+export function ideasHtml() {
+  return `<div class="ideas"><p class="small muted" style="margin:0 0 8px">${T("Touchez une pastille pour voir une situation, puis adaptez-la à votre service. Pour formuler le problème : « Chaque [fréquence], nous devons [tâche], ce qui prend [temps] parce que [difficulté]. »")}</p>
+    ${IDEES.map((g, gi) => `<div class="ideas-g"><div class="ideas-h">${T(g.g)}</div><div class="chips">${g.items.map(([t], i) => `<button type="button" class="chip" data-idea="${gi}-${i}" aria-expanded="false">${T(t)}</button>`).join("")}</div></div>`).join("")}
+    <div class="idea-out" hidden></div></div>`;
+}
+const ideasBound = new WeakSet(); // délégation posée une fois par conteneur (le parcours se redessine dans le même)
+export function bindIdeas(root) {
+  if (!root || ideasBound.has(root)) return;
+  ideasBound.add(root);
+  root.addEventListener("click", (e) => {
+    const b = e.target.closest?.("[data-idea]"); if (!b) return;
+    const box = b.closest(".ideas"), out = $(".idea-out", box), [gi, i] = b.dataset.idea.split("-").map(Number);
+    const was = b.getAttribute("aria-expanded") === "true";
+    $$("[data-idea]", box).forEach((x) => { x.setAttribute("aria-expanded", "false"); x.classList.remove("on"); });
+    if (was || !IDEES[gi]?.items[i]) { out.hidden = true; return; }
+    const [t, sit] = IDEES[gi].items[i];
+    b.setAttribute("aria-expanded", "true"); b.classList.add("on");
+    out.innerHTML = `<b>${T(t)}</b><p>${T(sit)}</p>`; out.hidden = false;
+  });
 }
 /* Créneaux d'émargement dans le déroulé du stagiaire (session connue seulement), à leur heure :
    validés quand ils sont passés (30 min après l'heure prévue, jour passé), présentés par le formateur,
@@ -212,6 +240,7 @@ function detail(m, progress) {
       <div class="chips" style="margin-top:10px"><button class="btn sm" data-timer="${m.exo.duree}" data-tl="${esc(m.exo.titre)}">Lancer le minuteur (${m.exo.duree}${NB}min)</button>
       ${(m.exo.prompts || []).map((p) => { const P = PROMPTS.find((x) => x.id === p); return P ? `<button class="chip" data-prompt="${p}">Prompt : ${T(P.titre)}</button>` : ""; }).join("")}</div></div>`;
   }
+  if (m.idees) h += `<div class="blk"><h4>Des idées pour démarrer</h4>${ideasHtml()}</div>`;
   if (m.disc) h += `<div class="blk disc"><h4 style="color:#7A5300">Discussion</h4><ul>${m.disc.map((x) => `<li>${T(x)}</li>`).join("")}</ul></div>`;
   if (m.quiz) h += `<div class="blk"><h4>Quiz · ${T(QUIZ[m.quiz].titre)}</h4><div data-quiz="${m.quiz}"><button class="btn sm ghost" data-startquiz="${m.quiz}">Faire le quiz (${QUIZ[m.quiz].q.length} questions)${progress.quiz?.[m.quiz] != null ? ` · meilleur score ${progress.quiz[m.quiz]}/${QUIZ[m.quiz].q.length}` : ""}</button></div></div>`;
   if (m.fiches) h += `<div class="blk"><h4>Fiches pratiques</h4><div class="chips">${m.fiches.map((f) => (ficheById(f) ? `<button class="chip" data-fiche="${f}">${T(ficheById(f).titre)}</button>` : "")).join("")}</div></div>`;
@@ -267,17 +296,34 @@ export function startTimer(min, label) {
 }
 
 /* ---------- Outils d'exercice ---------- */
+const TASK_MAX = 12;
+const taskRow = (n, ph = "Tâche suivante, avec un verbe : « Classe… », « Vérifie… », « Propose… »") =>
+  `<div class="task-row"><span class="task-n" aria-hidden="true">${n}</span><input type="text" data-task placeholder="${esc(ph)}" aria-label="Tâche ${n}"><button type="button" class="iconbtn" data-task-del aria-label="Retirer la tâche ${n}">×</button></div>`;
+/* Prompt R·M·C·T·F : f = { R, M, C, T: [tâches], F }. Une tâche : « TÂCHE … » ; plusieurs : liste numérotée. */
+export function rmctfPrompt(f, { doubt = false, inv = false } = {}) {
+  const lab = { R: "RÔLE", M: "MISSION", C: "CONTEXTE", F: "FORMAT" };
+  const tasks = (f.T || []).map((x) => String(x).trim()).filter(Boolean);
+  const out = ["R", "M", "C"].filter((k) => f[k]).map((k) => `${lab[k]} ${f[k]}`);
+  if (tasks.length === 1) out.push(`TÂCHE ${tasks[0]}`);
+  else if (tasks.length > 1) out.push(`TÂCHES\n${tasks.map((t, i) => `${i + 1}. ${t}`).join("\n")}`);
+  if (f.F) out.push(`FORMAT ${f.F}`);
+  if (doubt) out.push("Si tu ne sais pas, dis-le. N'invente ni chiffre, ni citation, ni source.");
+  if (inv) out.push("Avant de répondre, pose-moi les questions dont tu as besoin pour faire ce travail.");
+  return out.join("\n");
+}
 export function toolsHtml() {
   return `<div class="grid g2">
   <div class="card" id="toolRmctf">
     <h3>Constructeur R·M·C·T·F</h3>
     <p class="small muted" style="margin-top:0">Méthode d'initiation, pour une demande ponctuelle (p.${NB}101). Remplissez, puis copiez le prompt.</p>
     ${[["R", "Rôle · qui doit répondre ?", "Tu es secrétaire de rédaction d'une rédaction d'information."], ["M", "Mission · pour quoi faire ?", "Aider un·e journaliste à s'approprier un rapport avant une interview."], ["C", "Contexte · ce que l'IA ne peut pas deviner", "Public, source, date, contraintes. « Appuie-toi uniquement sur le texte fourni. »", 1], ["T", "Tâche · l'action précise, avec un verbe", "Extrais les 5 chiffres clés et signale ce qui est contestable."], ["F", "Format · la forme attendue", "5 puces de 25 mots maximum ; un tableau Chiffre | Ce qu'il mesure | Page."]]
-      .map(([k, l, ph, ta]) => `<label class="f"><span class="letter">${k}</span>${T(l)}</label>${ta ? `<textarea data-k="${k}" placeholder="${esc(ph)}"></textarea>` : `<input type="text" data-k="${k}" placeholder="${esc(ph)}">`}`).join("")}
+      .map(([k, l, ph, ta]) => k === "T" ? `<label class="f"><span class="letter">T</span>${T("Tâches · une action par ligne, avec un verbe")}</label><div class="tasks" id="rTasks">${taskRow(1, ph)}</div><button type="button" class="btn sm ghost task-add" id="rTaskAdd">+ Ajouter une tâche</button>`
+        : `<label class="f"><span class="letter">${k}</span>${T(l)}</label>${ta ? `<textarea data-k="${k}" placeholder="${esc(ph)}"></textarea>` : `<input type="text" data-k="${k}" placeholder="${esc(ph)}">`}`).join("")}
     <label class="f inline"><input type="checkbox" id="rDoubt" checked> Ajouter « Si tu ne sais pas, dis-le. N'invente ni chiffre, ni citation, ni source. »</label>
     <label class="f inline"><input type="checkbox" id="rInv"> Prompt inversé : « Avant de répondre, pose-moi les questions dont tu as besoin. »</label>
     <div class="prompt" id="rOut"></div>
     <div style="display:flex;gap:8px;align-items:center"><button class="btn sm" data-copy="rOut">Copier le prompt</button><span class="small muted" id="rCheck"></span></div>
+    <details class="ideas-d"><summary class="small">Besoin d'idées ? Des situations pour démarrer</summary>${ideasHtml()}</details>
   </div>
   <div class="card" id="toolSve">
     <h3>Kit S·V·E pour un travail suivi</h3>
@@ -300,18 +346,46 @@ export function toolsHtml() {
   </div></div>`;
 }
 export function bindTools(root) {
-  const v = (k) => $(`#toolRmctf [data-k="${k}"]`, root).value.trim();
-  const lab = { R: "RÔLE", M: "MISSION", C: "CONTEXTE", T: "TÂCHE", F: "FORMAT" };
+  const card = $("#toolRmctf", root), list = $("#rTasks", root);
+  const tasks = () => $$("[data-task]", list).map((i) => i.value.trim()).filter(Boolean);
+  const v = (k) => (k === "T" ? tasks().join(" ") : $(`#toolRmctf [data-k="${k}"]`, root).value.trim());
   const rm = () => {
-    let out = ["R", "M", "C", "T", "F"].filter((k) => v(k)).map((k) => `${lab[k]} ${v(k)}`).join("\n");
-    if ($("#rDoubt", root).checked) out += (out ? "\n" : "") + "Si tu ne sais pas, dis-le. N'invente ni chiffre, ni citation, ni source.";
-    if ($("#rInv", root).checked) out += (out ? "\n" : "") + "Avant de répondre, pose-moi les questions dont tu as besoin pour faire ce travail.";
+    const out = rmctfPrompt({ R: v("R"), M: v("M"), C: v("C"), T: tasks(), F: v("F") }, { doubt: $("#rDoubt", root).checked, inv: $("#rInv", root).checked });
     $("#rOut", root).textContent = out || "Le prompt apparaîtra ici.";
     const miss = ["R", "M", "C", "T", "F"].filter((k) => !v(k));
     $("#rCheck", root).textContent = miss.length ? fr("Manque : " + miss.join(", ")) : fr("Les cinq lettres y sont. Chaque lettre est-elle précise ?");
   };
-  $$("#toolRmctf input, #toolRmctf textarea", root).forEach((i) => (i.oninput = rm));
-  rm();
+  // Tâches : une par ligne. « Ajouter une tâche » ou Entrée ajoute une ligne, × la retire (il en reste toujours une).
+  const renumber = () => {
+    const rows = $$(".task-row", list);
+    rows.forEach((r, i) => { $(".task-n", r).textContent = i + 1; $("[data-task]", r).setAttribute("aria-label", `Tâche ${i + 1}`); $("[data-task-del]", r).setAttribute("aria-label", `Retirer la tâche ${i + 1}`); $("[data-task-del]", r).hidden = rows.length < 2; });
+    $("#rTaskAdd", root).disabled = rows.length >= TASK_MAX;
+  };
+  const addTask = (after) => {
+    if ($$(".task-row", list).length >= TASK_MAX) return;
+    const tmp = document.createElement("div"); tmp.innerHTML = taskRow(0);
+    const row = tmp.firstElementChild;
+    after ? after.after(row) : list.append(row);
+    renumber(); $("[data-task]", row).focus(); rm();
+  };
+  $("#rTaskAdd", root).onclick = () => addTask(null);
+  list.addEventListener("click", (e) => {
+    const del = e.target.closest("[data-task-del]"); if (!del) return;
+    const row = del.closest(".task-row"), prev = row.previousElementSibling || row.nextElementSibling;
+    if ($$(".task-row", list).length < 2) return;
+    row.remove(); renumber(); rm(); $("[data-task]", prev)?.focus();
+  });
+  list.addEventListener("keydown", (e) => {
+    const inp = e.target.closest("[data-task]"); if (!inp) return;
+    if (e.key === "Enter") { e.preventDefault(); addTask(inp.closest(".task-row")); }
+    else if (e.key === "Backspace" && !inp.value && $$(".task-row", list).length > 1) { // ligne vide effacée : retour à la précédente
+      e.preventDefault(); const row = inp.closest(".task-row"), prev = row.previousElementSibling || row.nextElementSibling;
+      row.remove(); renumber(); rm(); const p = $("[data-task]", prev); p?.focus(); p?.setSelectionRange(p.value.length, p.value.length);
+    }
+  });
+  card.addEventListener("input", rm); card.addEventListener("change", rm); // champs et lignes ajoutées ensuite
+  renumber(); rm();
+  bindIdeas(card);
   let tab = "S";
   const sv = () => {
     $$("#sveNav button", root).forEach((b) => b.setAttribute("aria-pressed", b.dataset.s === tab));

@@ -79,4 +79,26 @@ const S2 = { ...S, programme: { formation: "x", modules: moved, base: "defaut", 
 const [ph, pmin] = at(modulesFor(S2), "b-p2").t[0].split(":").map(Number); // Paris = UTC+1 en décembre : 90 s avant la pause
 ok(dayEnd(modulesFor(S2), 2) === "16:30" && order(modulesFor(S2)).includes("b-paliers,b-p2,b-sve1") && pauseAlert(modulesFor(S2), (d) => (d === 2 ? S.date2 : S.date), new Date(Date.UTC(2026, 11, 5, ph - 1, pmin - 2, 30)))?.left === 90, "pause déplacée et fin modifiée : les deux tiennent, l'alerte suit l'heure recalculée");
 
-console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests des pauses et de la fin de journée passent.");
+// Niveau du jour 2 : débutant (R·M·C·T·F puis ateliers) ou expert (déroulé d'origine)
+const { D2B, DAY_TITLES, PRESETS, QUIZ, PROMPTS, IDEES } = await import("../src/data.js");
+const { defaultModules, levelOf, daysOf, ficheById, rmctfPrompt, TOOL_IDS } = await import("../src/lib/content.js");
+const deb = D2B.filter((m) => m.day === 2), d1 = D2.filter((m) => m.day === 1);
+ok(D2B.filter((m) => m.day === 1).every((m, i) => m === d1[i]) && D2B.filter((m) => m.day === 1).length === d1.length, "débutant : le jour 1 est celui des deux journées");
+ok(new Set(D2B.map((m) => m.id)).size === D2B.length && deb[0].t[0] === "09:30" && dayEnd(D2B, 2) === "17:30" && deb.every((m, i) => i === 0 || deb[i - 1].t[1] === m.t[0]), "débutant : identifiants uniques, de 9 h 30 à 17 h 30 sans trou");
+ok(["b-p1", "b-dej", "b-p2", "b-bilan"].every((id) => JSON.stringify(at(deb, id)?.t) === JSON.stringify(at(D2, id).t)) && deb[deb.length - 1].id === "b-bilan", "débutant : mêmes pauses, même déjeuner, bilan et évaluation en dernier");
+ok(deb.filter((m) => m.outil).every((m) => m.outil === "toolRmctf") && deb.some((m) => m.idees) && deb.filter((m) => m.exo).every((m) => m.exo.duree < dur(m)), "débutant : R·M·C·T·F seulement, pastilles d'aide, exercices plus courts que leur séquence");
+ok(deb.every((m) => (!m.quiz || QUIZ[m.quiz]) && (!m.live || PRESETS[m.live]) && (m.fiches || []).every(ficheById) && (m.exo?.prompts || []).every((p) => PROMPTS.some((x) => x.id === p)) && (!m.outil || TOOL_IDS.includes(m.outil))), "débutant : quiz, activités, fiches, prompts et outils cités existent");
+ok(IDEES.length === 2 && IDEES.every((g) => g.items.length >= 5 && g.items.every(([t, s]) => t && s)), "pastilles d'aide : tâches pénibles et conducteurs assistés");
+const SB = { format: "2", programme: { level: "debutant" } };
+ok(levelOf(SB) === "debutant" && levelOf({ format: "2" }) === "expert" && defaultModules(SB) === D2B && baseModules(SB) === D2B && modulesFor({ format: "2" }) === D2 && defaultModules({ format: "1", programme: { level: "debutant" } }) !== D2B, "niveau : débutant lu dans programme.level, expert par défaut, sans effet en une journée");
+ok(daysOf(SB).titles[2] === DAY_TITLES.debutant[2] && daysOf({ format: "2" }).titles[2] === DAY_TITLES.expert[2], "niveau : titre du jour 2");
+const bb = endBounds(D2B, 2);
+ok(bb.base === "17:30" && bb.bilan.id === "b-bilan" && bb.min === "14:35", "débutant : fin de journée modifiable comme en expert (au plus tôt 14 h 35)");
+const SBe = { format: "2", date: "2026-12-04", date2: "2026-12-05", programme: { level: "debutant", ends: { 2: "16:30" } } };
+ok(at(modulesFor(SBe), "b-bilan").t.join("-") === "16:00-16:30" && emargementSlots(SBe).find((x) => x.kind === "evaluation").t === "16:00" && at(modulesFor(SBe), "d-rmctf").t[0] === "11:00", "débutant et fin à 16 h 30 : l'après-midi se recale, le matin ne bouge pas");
+// Constructeur R·M·C·T·F : tâches une par ligne
+ok(rmctfPrompt({ R: "Tu es chef d'édition.", T: ["Classe les sujets."] }) === "RÔLE Tu es chef d'édition.\nTÂCHE Classe les sujets.", "une tâche : « TÂCHE … »");
+ok(rmctfPrompt({ M: "Préparer le journal.", T: ["Classe les sujets.", " ", "Minute chaque sujet."], F: "Un tableau." }, { doubt: true }) === "MISSION Préparer le journal.\nTÂCHES\n1. Classe les sujets.\n2. Minute chaque sujet.\nFORMAT Un tableau.\nSi tu ne sais pas, dis-le. N'invente ni chiffre, ni citation, ni source.", "plusieurs tâches : liste numérotée, lignes vides ignorées");
+ok(rmctfPrompt({}) === "" && rmctfPrompt({}, { inv: true }).startsWith("Avant de répondre"), "prompt vide, prompt inversé seul");
+
+console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests des pauses, de la fin de journée et du niveau du jour 2 passent.");

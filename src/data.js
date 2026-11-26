@@ -321,6 +321,68 @@ const D2 = [
  {id:"b-bilan", day:2, t:["17:00","17:30"], type:"discussion", titre:"Bilan et évaluation", pages:"133, 134", disc:["Une tâche précise que vous testerez la semaine prochaine.","Une question qui reste ouverte."], live:"lundi"},
 ];
 
+/* Jour 2, niveau débutant (sessions.programme.level = "debutant", choisi dans le pilotage) : on reste sur
+   R·M·C·T·F, puis ateliers libres par deux ou trois sur des problèmes réels du service (tâches pénibles à
+   automatiser, enchaînements à modéliser en conducteurs assistés). Le niveau expert garde le jour 2 de D2.
+   Mêmes heures de début, de pauses, de déjeuner, de bilan et de fin : la fin de journée et l'évaluation suivent. */
+const B = (id) => D2.find((m) => m.id === id);
+const D2_DEBUTANT = [
+ B("b-retour"),
+ B("b-assist"),
+ B("b-p1"),
+ {id:"d-rmctf", day:2, t:["11:00","11:45"], type:"pratique", tf:2, titre:"Méthode R·M·C·T·F : les cinq questions", pages:"100 à 103, 122, 123",
+  obj:["Écrire une demande complète en cinq questions.","Voir ce que chaque lettre change dans la réponse."],
+  pts:["Rôle, mission, contexte, tâche, format.","Une tâche par ligne : l'assistant les traite dans l'ordre."],
+  exo:{titre:"Résumé nu, puis résumé guidé", duree:35, steps:["Palier 1 : « Résume ce texte » dans deux assistants.","Palier 2 : le même texte avec R·M·C·T·F, dans le constructeur de l'onglet Outils.","Comparer précision, utilité, temps de vérification."], prompts:["resume"]}, quiz:"rmctf", fiches:["rmctf"], outil:"toolRmctf", live:"lettre"},
+ {id:"d-flou", day:2, t:["11:45","12:30"], type:"pratique", tf:2, titre:"R·M·C·T·F à l'entraînement : réparer des demandes floues", pages:"100 à 103",
+  obj:["Transformer une demande vague en demande complète.","Découper une tâche en étapes."],
+  pts:["Une demande floue laisse l'assistant deviner, et il devine mal.","« Si tu ne sais pas, dis-le » et le prompt inversé limitent les inventions."],
+  exo:{titre:"Trois demandes floues à réparer", duree:35, steps:["Partir de trois demandes floues : « Fais-moi un titre », « Résume la réunion », « Trouve des idées de sujets ».","Les réécrire avec les cinq lettres, en découpant la tâche en étapes avec « Ajouter une tâche ».","Tester chaque version dans un assistant et noter ce qui change.","Relancer avec le prompt inversé : quelles questions l'assistant vous pose-t-il ?"]}, outil:"toolRmctf"},
+ B("b-dej"),
+ {id:"d-probleme", day:2, t:["13:30","14:15"], type:"pratique", tf:2, titre:"Atelier · Vos tâches pénibles, vos conducteurs",
+  obj:["Repérer dans votre semaine une tâche répétitive, ou un enchaînement d'étapes à modéliser.","Formuler le problème à résoudre en une phrase."],
+  pts:["Une tâche pénible revient souvent, prend du temps et demande peu de jugement.","Un conducteur assisté reprend un enchaînement que vous suivez déjà : un journal, une émission, une édition spéciale.","Rien de sensible dans l'assistant : le code couleur d'hier s'applique."],
+  exo:{titre:"Trouver et formuler le problème", duree:40, steps:["Formez des groupes de deux ou trois.","Chacun·e raconte sa journée type. Notez les tâches qui reviennent et celles qui pèsent.","Choisissez une tâche pénible à automatiser, ou un enchaînement à modéliser en conducteur assisté.","Formulez le problème en une phrase : « Chaque [fréquence], nous devons [tâche], ce qui prend [temps] parce que [difficulté]. »","Notez ce que l'assistant aura besoin de savoir, et ce qu'il ne doit jamais recevoir."]}, idees:true, live:"penible"},
+ {id:"d-prompt", day:2, t:["14:15","15:15"], type:"pratique", tf:2, titre:"Atelier · Un prompt R·M·C·T·F pour votre problème",
+  obj:["Traduire le problème formulé en une demande complète.","Lister les tâches dans l'ordre où vous les feriez."],
+  pts:["Le problème formulé devient la mission.","Le contexte dit ce que l'assistant ne peut pas deviner sur votre service.","Le format décrit le résultat exact : liste, tableau, conducteur minuté."],
+  exo:{titre:"Écrire le prompt, puis le tester", duree:50, steps:["Ouvrez le constructeur R·M·C·T·F, dans l'onglet Outils.","Rôle et mission à partir du problème formulé par le groupe.","Contexte : votre service, votre public, vos contraintes de temps et de format.","Tâches : une par ligne, avec « Ajouter une tâche », dans l'ordre où vous les feriez.","Format : la forme exacte du résultat.","Testez sur un exemple public ou anonymisé, dans deux assistants."]}, idees:true, outil:"toolRmctf"},
+ B("b-p2"),
+ {id:"d-tester", day:2, t:["15:30","16:30"], type:"pratique", tf:2, titre:"Atelier · Tester, corriger, rendre le prompt réutilisable",
+  obj:["Améliorer le prompt après un premier essai.","En faire un outil que le service peut reprendre."],
+  pts:["Chaque défaut de la réponse renvoie à une lettre à préciser.","Un prompt réutilisable met entre [crochets] ce qui change à chaque fois."],
+  exo:{titre:"Deux tours d'amélioration", duree:50, steps:["Relevez trois défauts de la première réponse, et la lettre qui les corrige.","Corrigez le prompt et relancez-le dans une nouvelle conversation.","Remplacez ce qui change à chaque fois par des [crochets] : sujet, date, durée, invité.","Testez avec un second exemple. Le résultat tient-il ?","Préparez une restitution de deux minutes : le problème, le prompt, ce qui reste à vérifier."]}, outil:"toolRmctf"},
+ {id:"d-restitution", day:2, t:["16:30","17:00"], type:"discussion", titre:"Restitution des groupes : problèmes, prompts, limites",
+  disc:["Quel problème, quel prompt, quel temps gagné ?","Ce que l'assistant fait mal, ou ne doit pas faire, dans ce travail.","Qui vérifie le résultat, et à quel moment ?"]},
+ B("b-bilan"),
+];
+export const D2B = [...D2.filter((m) => m.day === 1), ...D2_DEBUTANT];
+// Titres des journées du déroulé par défaut en deux journées, selon le niveau du jour 2
+export const DAY_TITLES = { expert: { 1: "Comprendre et Gemini Notebook", 2: "Les assistants et les méthodes" }, debutant: { 1: "Comprendre et Gemini Notebook", 2: "Les assistants et R·M·C·T·F en atelier" } };
+
+/* Pastilles d'aide des ateliers (jour 2, niveau débutant, et constructeur R·M·C·T·F) : des situations pour
+   imaginer son propre problème. [titre, situation] */
+const IDEES = [
+ {g:"Tâches pénibles à automatiser", items:[
+  ["Dérusher une interview", "À partir de la transcription d'une longue interview, repérer les passages forts, leurs minutages et les citations à vérifier à l'écoute."],
+  ["Lancements et titres", "Proposer trois lancements, titres et chapôs à partir du texte d'un sujet déjà monté."],
+  ["Revue de presse du matin", "Classer les articles et dépêches publics du jour par thème, et résumer chacun en deux lignes avec son lien."],
+  ["Fiche invité", "Préparer la fiche d'un invité à partir de sources publiques que vous fournissez : parcours, déclarations récentes, contradictions."],
+  ["Déclinaisons pour les réseaux", "Décliner un reportage en un texte court par réseau social, dans le ton de la chaîne ou de la station."],
+  ["Résumé et mots-clés", "Résumer un sujet diffusé pour le site ou pour l'archivage : résumé, mots-clés, personnes citées."],
+  ["Traduire une source", "Traduire et résumer un document public en langue étrangère, en signalant les passages incertains."],
+  ["Messages du public", "Trier par thème des messages d'auditeurs ou de téléspectateurs anonymisés, et proposer une réponse type."],
+ ]},
+ {g:"Conducteurs assistés à modéliser", items:[
+  ["Conducteur d'un journal", "Ordonner les sujets du jour, minuter chaque élément, proposer les lancements, signaler ce qui dépasse la durée prévue."],
+  ["Émission avec invité", "Fiche invité, questions dans l'ordre, relances possibles, points à vérifier avant l'antenne."],
+  ["Édition spéciale", "Un déroulé type pour une soirée électorale ou un événement prévu : séquences, durées, rôles, solutions de repli."],
+  ["Rétroplanning", "De J-15 au jour J pour un événement à couvrir : tâches, responsables, dates, en vérifiant les jours de la semaine."],
+  ["Vérifier une vidéo virale", "Les étapes de vérification d'une vidéo reçue : source, date, lieu, recoupements, décision de diffuser ou non."],
+  ["De l'antenne au numérique", "L'enchaînement après diffusion : article, titre, résumé, extraits, textes pour les réseaux."],
+ ]},
+];
+
 /* Activités prêtes pour la salle */
 const PRESETS = {
  niveau:{type:"poll", q:"Votre niveau avec l'IA générative ?", o:["Jamais utilisée","Quelques essais","Usage régulier","Usage quotidien au travail"]},
@@ -331,6 +393,7 @@ const PRESETS = {
  fini:{type:"poll", q:"Où en êtes-vous de l'exercice ?", o:["J'ai terminé","Presque","J'ai besoin d'aide"]},
  ia:{type:"cloud", q:"Un mot pour décrire l'IA aujourd'hui"},
  lundi:{type:"cloud", q:"Qu'allez-vous tester lundi matin ?"},
+ penible:{type:"cloud", q:"En quelques mots : la tâche la plus pénible de votre semaine"},
 };
 
 /* Code couleur : jeu */
@@ -350,4 +413,4 @@ const CC = [
 ];
 const CCL = {jam:"Jamais", pre:"Avec précaution", san:"Sans risque"};
 
-export { FICHES, GLOSS, PROMPTS, CASES, QUIZ, D1, D2, PRESETS, CC, CCL };
+export { FICHES, GLOSS, PROMPTS, CASES, QUIZ, D1, D2, PRESETS, CC, CCL, IDEES };

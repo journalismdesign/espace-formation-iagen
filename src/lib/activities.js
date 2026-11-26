@@ -7,7 +7,7 @@ export const ACT_TYPES = {
   welcome: "Accueil", cloud: "Nuage de mots", poll: "Sondage", quiz: "Quiz", vote: "Vote", projects: "Projets",
 };
 
-const P = (id, titre) => ({ id, titre, type: PRESETS[id].type, q: PRESETS[id].q, ...(PRESETS[id].o ? { o: PRESETS[id].o } : {}) });
+export const P = (id, titre) => ({ id, titre, type: PRESETS[id].type, q: PRESETS[id].q, ...(PRESETS[id].o ? { o: PRESETS[id].o } : {}) });
 
 // Séquence proposée à la création d'une session (modifiable ensuite)
 export function defaultActivities(format = "1") {
@@ -21,13 +21,14 @@ export function defaultActivities(format = "1") {
     P("invente", "Notebook a-t-il inventé ?"),
     { id: "quiz-rmctf", type: "quiz", titre: "Quiz · R·M·C·T·F", quiz: "rmctf" },
     P("lettre", "La lettre oubliée"),
+    P("penible", "La tâche pénible"),
     { id: "vote", type: "vote", titre: "Vote", q: "Quel cas d'usage voulez-vous voir testé devant le groupe ?" },
     { id: "projets", type: "projects", titre: "Projets" },
     { id: "quiz-sve", type: "quiz", titre: "Quiz · S·V·E", quiz: "sve" },
     P("lundi", "Lundi matin"),
   ];
   // vote et présentation des projets reposent sur le cadrage, réservé aux formations de deux journées
-  if (format !== "2") return base.filter((a) => !["vote", "projects"].includes(a.type));
+  if (format !== "2") return base.filter((a) => !["vote", "projects"].includes(a.type) && a.id !== "penible"); // la tâche pénible : ateliers du jour 2
   base.splice(9, 0, { id: "quiz-jargon", type: "quiz", titre: "Quiz · le jargon", quiz: "jargon" }, { id: "quiz-donnees", type: "quiz", titre: "Quiz · vos données", quiz: "donnees" });
   return base;
 }
