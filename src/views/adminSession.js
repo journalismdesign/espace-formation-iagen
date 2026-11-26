@@ -223,11 +223,18 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     $("#onlineLbl", root).classList.toggle("on", !!session.online);
     $("#onlineSub", root).textContent = onlineSub(session.online);
   };
-  /* « Projeter le QR code » du bandeau du Jour J, en bascule, salle ouverte ou non :
-     un clic met la slide « Rejoindre » sur l'écran projeté (pour un·e retardataire) en gardant de côté ce qui
-     était projeté (live.prev) ; un second clic remet cet écran. Lancer autre chose entre-temps abandonne live.prev. */
+  /* Écrans en bascule, salle ouverte ou non : « Projeter le QR code » du bandeau du Jour J (pour un·e retardataire),
+     et les écrans d'ouverture, de pause et de clôture du pilotage (OPENING_VIEWS). Projeter un de ces écrans garde
+     de côté ce qui était projeté (live.prev, en pile : titre, puis émargement, puis formateur…) ; un second clic sur
+     l'écran projeté remet l'écran précédent (une page du support, une séquence, une activité, l'écran d'accueil).
+     Lancer autre chose entre-temps (séquence, page, activité, présentation) abandonne la pile. */
   const KEEP = ["module", "emarg", "tools", "started", "clock"]; // ce qui survit à tout changement d'écran
   const pick = (o, keep) => Object.fromEntries(Object.entries(o).filter(([k]) => keep(k)));
+  const trimPrev = (p, n = 6) => { if (!p || n <= 0) return undefined; const { prev, ...rest } = p; const q = trimPrev(prev, n - 1); return q ? { ...rest, prev: q } : rest; };
+  // l'écran en cours, sans ce qui survit de toute façon ; sa pile seulement s'il est lui-même en bascule (une page
+  // atteinte à la flèche depuis un écran d'ouverture en garde une trace sans objet)
+  const stash = (l) => trimPrev(pick(l || {}, (k) => !KEEP.includes(k) && (k !== "prev" || OPENING_VIEWS.has(l.view))));
+  const unstash = (l) => ({ ...pick(l, (k) => KEEP.includes(k)), ...(l.prev || {}) }); // l'écran précédent revient
   let afterLive = () => {}; // le pilotage du Jour J redessine l'aperçu
   function qrBtn() {
     const b = $("#pjQ", root); if (!b) return;
@@ -239,8 +246,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
   if ($("#pjQ", root)) $("#pjQ", root).onclick = async () => {
     const l = session.live || {}, base = pick(l, (k) => KEEP.includes(k));
     const back = l.view === "qr";
-    const live = back ? { ...base, ...(l.prev || {}) }
-      : { ...base, view: "qr", prev: pick(l, (k) => !KEEP.includes(k) && k !== "prev"), started_at: new Date().toISOString() };
+    const live = back ? unstash(l) : { ...base, view: "qr", prev: stash(l), started_at: new Date().toISOString() };
     session = await guard(() => api.updateSession(sid, { live }), back ? "Retour à l'écran précédent." : "QR code projeté. Un second clic remet l'écran précédent.") || session;
     qrBtn(); afterLive();
   };
@@ -406,7 +412,11 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     };
     bindPair();
     if (sup.url) $("#gSu", box).value = sup.url;
-    const supInfo = (st) => (st.unlock_at ? T(`Téléchargeable par les stagiaires à partir du ${new Date(st.unlock_at).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "full", timeStyle: "short" })} (une heure avant la fin). La page Support reste visible dans leur menu.`) : T("Renseignez la date et l'heure de fin pour programmer le déblocage."));
+    const supInfo = (st) => {
+      const at = st.unlock_at ? new Date(st.unlock_at).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "full", timeStyle: "short" }) : null;
+      if (session.evaluation_url) return T(`Chaque stagiaire le débloque en touchant « Remplir l'évaluation ». L'évaluation lui est proposée dès que vous la projetez${at ? `, ou à partir du ${at} (une heure avant la fin)` : ""}. « Débloquer dès maintenant » la propose tout de suite. La page Support reste visible dans le menu des stagiaires.`);
+      return at ? T(`Téléchargeable par les stagiaires dès que vous projetez l'évaluation, ou à partir du ${at} (une heure avant la fin). La page Support reste visible dans leur menu.`) : T("Renseignez la date et l'heure de fin pour programmer le déblocage, ou projetez l'évaluation le moment venu.");
+    };
     $("#supInfo", box).innerHTML = supInfo(sup);
     bindConducteur();
     keepDraft($("#regF", box), `reglages:${sid}`, { saveLabel: "Enregistrer les réglages" }); // brouillon automatique + « Tout réinitialiser »
@@ -563,7 +573,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <h3>Pilotage</h3>
             <p class="small muted" id="hint" style="margin-top:0"></p>
             <div id="emRemind"></div><div id="pauseRemind"></div>
-            <div class="kicker-d" style="margin:10px 0 6px">Écrans de la session · ouverture, pause et clôture</div>
+            <div class="kicker-d" style="margin:10px 0 2px">Écrans de la session · ouverture, pause et clôture</div>
+            <p class="small muted" style="margin:0 0 6px">${T("Un clic projette l'écran, un second clic remet ce qui était projeté avant.")}</p>
             <div class="acts" id="opening"></div>
             <div class="kicker-d" style="margin:16px 0 6px">Déroulé · ce que voient les stagiaires et l'écran</div>
             <div id="modules"></div>
@@ -612,13 +623,25 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     const keep = () => ({ module: session.live?.module || null, emarg: session.live?.emarg || {}, tools: session.live?.tools || [], ...(session.live?.started ? { started: session.live.started } : {}), ...(session.live?.clock ? { clock: session.live.clock } : {}) });
     // Écrans d'ouverture et de clôture : projetables salle fermée, sans l'ouvrir. Les stagiaires ne les voient
     // dans leur espace qu'une fois la salle ouverte (session active).
+    // Écran d'ouverture, de pause ou de clôture : ce qui était projeté est gardé de côté (live.prev), pour le second clic.
+    // L'évaluation débloque le support (sessions.support_unlocked) : avec un lien d'évaluation, chaque stagiaire
+    // le télécharge une fois « Remplir l'évaluation » touché ; sans lien, tout de suite.
     const show = async (view, extra = {}) => {
-      const live = { ...keep(), view, ...extra, started_at: new Date().toISOString() };
+      const l = session.live || {};
+      const prev = OPENING_VIEWS.has(view) ? (l.view === view ? l.prev : stash(l)) : undefined;
+      const live = { ...keep(), view, ...extra, ...(prev ? { prev } : {}), started_at: new Date().toISOString() };
+      const patch = view === "evaluation" && !session.support_unlocked ? { support_unlocked: true } : {};
+      if (patch.support_unlocked) toast(session.evaluation_url ? "Évaluation projetée : chaque stagiaire débloque le support en touchant « Remplir l'évaluation »." : "Évaluation projetée : le support est débloqué pour les stagiaires.", "ok");
       if (session.status !== "live" && (view === null || OPENING_VIEWS.has(view))) {
-        session = await guard(() => api.updateSession(sid, { live })) || session;
+        session = await guard(() => api.updateSession(sid, { live, ...patch })) || session;
         return draw();
       }
-      return setLive(live);
+      return setLive(live, patch);
+    };
+    // Second clic sur l'écran projeté : l'écran précédent revient (salle ouverte ou non, sans l'ouvrir)
+    const back = async () => {
+      session = await guard(() => api.updateSession(sid, { live: unstash(session.live || {}) }), "Retour à l'écran précédent.") || session;
+      draw();
     };
     let modDay = 1;
     // Flèches du clavier (et télécommandes de présentation) : page suivante / précédente
@@ -650,8 +673,10 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const V = session.status === "live" || OPENING_VIEWS.has(live.view) ? live.view : null;
       const autoPause = live.started?.day === parisDay() ? "pause" : ""; // rien de projeté après une ouverture du jour : l'écran montre la pause
       $("#opening", box).innerHTML = [["title", "Slide de titre", "Titre, logos, dates, QR"], ["emargement", "Émargement", session.emargement_url || session.emargement_qr ? "QR de l'organisme" : "À configurer"], ["trainer", "Formateur", session.trainer_id ? "Fiche de l'intervenant" : "À choisir"], ["support", "Support", "Annonce du téléchargement"], ["evaluation", "Évaluation", session.evaluation_url || session.evaluation_qr ? "QR et lien du formulaire" : "À configurer"], ["pause", "Pause", "Tasse de café animée"]]
-        .map(([v, l, sub]) => `<button class="act${(V || autoPause) === v && !act ? " on" : ""}" data-view="${v}"><span>${v ? "▣" : "□"}</span>${l}<small>${T(sub)}</small></button>`).join("");
+        .map(([v, l, sub]) => { const on = (V || autoPause) === v && !act, again = V === v && !act;
+          return `<button class="act${on ? " on" : ""}" data-view="${v}" aria-pressed="${on}" title="${again ? "Second clic : revenir à l'écran précédent" : "Projeter cet écran (un second clic remet l'écran précédent)"}"><span>${v ? "▣" : "□"}</span>${l}<small>${T(sub)}</small></button>`; }).join("");
       $$("[data-view]", box).forEach((b) => (b.onclick = () => {
+        if (V === b.dataset.view && !act) return back(); // second clic : l'écran précédent revient
         // Écran « Formateur » sans fiche choisie : on prévient au lieu de projeter une slide vide
         if (b.dataset.view === "trainer" && !session.trainer_id) return toast("Aucune fiche intervenant n'est enregistrée pour cette session : choisissez-la dans Réglages → Intervenant·e, puis enregistrez.", "ko");
         return show(b.dataset.view || null);

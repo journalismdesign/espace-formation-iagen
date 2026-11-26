@@ -100,6 +100,23 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   // Écouteurs et minuteries propres à l'onglet affiché : coupés à chaque changement d'onglet
   let tabCleanups = [], fullRender = false;
   const tabHandlers = new Set();
+  /* Évaluation de fin de stage : quand un lien d'évaluation est renseigné, chaque stagiaire débloque le support en
+     touchant « Remplir l'évaluation » (progress.eval, enregistré au clic, le formulaire s'ouvre dans un autre onglet).
+     L'évaluation est proposée dans l'onglet Support quand le formateur la projette (ce qui débloque le support côté
+     serveur, sessions.support_unlocked), à l'heure de déblocage, ou après la clôture. Aperçu formateur : rien n'est
+     enregistré, le clic montre simplement le téléchargement. */
+  let previewEval = false;
+  const evalDone = () => (membership ? !!membership.progress?.eval : previewEval);
+  const evalGate = (shown) => (session.evaluation_url && !evalDone() ? (shown ? "eval" : "later") : null);
+  const markEval = async () => {
+    if (evalDone()) return;
+    if (membership) {
+      membership.progress = { ...(membership.progress || {}), eval: new Date().toISOString() };
+      await api.saveProgress(sid, membership.progress).catch(() => {});
+    } else previewEval = true;
+    tabHandlers.forEach((f) => f());
+  };
+  body.addEventListener("click", (e) => { if (e.target.closest?.("[data-evalgo]")) markEval(); });
 
   // Mise à jour en direct de la session (activité lancée, statut)
   const refreshSession = debounce(async () => {
@@ -201,7 +218,12 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
       <h2 style="margin:22px 0 8px">Le déroulé</h2>
       <p class="muted small" style="margin-top:0">${T(`Cochez les séquences au fil de la journée. Progression : `)}<b id="pp">${parcoursPct(session, progress, session.live?.module)}${NB}%</b></p>
       <div id="parcours"></div>`;
-    const save = debounce((p) => membership && api.saveProgress(sid, p).catch(() => {}), 600);
+    const save = debounce((p) => {
+      if (!membership) return;
+      const q = { ...p, ...(membership.progress?.eval ? { eval: membership.progress.eval } : {}) }; // l'évaluation a pu être touchée entre-temps
+      membership.progress = q;
+      api.saveProgress(sid, q).catch(() => {});
+    }, 600);
     let lastMod;
     let parcLast;
     // créneaux d'émargement validés à l'heure : clé de redessin = séquence + émargements présentés + quart d'heure
@@ -236,7 +258,12 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
         const data = await loadScreenData(api, session, { trainee: !trainerPreview }).catch(() => null);
         if (n !== olSeq || !data || !$("#olScr", card)) return;
         morph($("#olScr", card), screenHtml({ ...data, session, qrUrl: "", forTrainee: true }));
-        const note = L.view === "module" && mod?.obj ? `<ul class="small" style="margin:10px 0 0">${mod.obj.map((x) => `<li>${T(x)}</li>`).join("")}</ul>` : "";
+        let note = L.view === "module" && mod?.obj ? `<ul class="small" style="margin:10px 0 0">${mod.obj.map((x) => `<li>${T(x)}</li>`).join("")}</ul>` : "";
+        if (L.view === "evaluation" && session.evaluation_url) { // l'écran montre le QR : ici le bouton, et le support une fois l'évaluation touchée
+          const st = await api.supportStatus(sid).catch(() => null);
+          if (n !== olSeq || !$("#olNote", card)) return;
+          note = `<div class="eval-sup"><p style="margin:10px 0"><a class="btn" href="${esc(session.evaluation_url)}" target="_blank" rel="noopener noreferrer" data-evalgo>Remplir l'évaluation ↗</a></p>${st?.configured ? supportBlock(st, false, evalGate(true)) : ""}</div>`;
+        }
         if ($("#olNote", card).innerHTML !== note) $("#olNote", card).innerHTML = note;
         return;
       }
@@ -259,7 +286,10 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
             <ul class="small" style="margin:0;padding-left:18px">${(t.roles || []).map((r) => `<li>${T(r.label)} ${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${T(r.value)}</a>` : T(r.value || "")}</li>`).join("")}</ul>
             <p class="small" style="margin:8px 0 0">${t.email ? `<a href="mailto:${esc(t.email)}">${esc(t.email)}</a>` : ""}${t.website ? ` · <a href="${esc(t.website)}" target="_blank" rel="noopener noreferrer">${esc(t.website.replace(/^https?:\/\//, ""))}</a>` : ""}${(t.socials || []).map((x) => ` · ${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.label)}</a>` : esc(x.label)}`).join("")}</p></div></div>` : `<h3>L'intervenant</h3>`;
         }
-        else if (L.view === "evaluation") h = `<h3>Évaluation de fin de stage</h3>${evaluationHtml(session, await evaluationQr(session)) || `<p class="muted">Le formateur vous indique comment évaluer la formation.</p>`}`;
+        else if (L.view === "evaluation") {
+          const ev = evaluationHtml(session, await evaluationQr(session)), st = await api.supportStatus(sid).catch(() => null);
+          h = `<h3>Évaluation de fin de stage</h3>${ev || `<p class="muted">Le formateur vous indique comment évaluer la formation.</p>`}${st?.configured ? `<div class="eval-sup">${supportBlock(st, false, evalGate(true))}</div>` : ""}`;
+        }
         else if (L.view === "deck") { const d = (session.decks || []).find((x) => x.id === L.deck); h = `<h3>${T(d?.title || "Présentation")}</h3><p class="muted">Le formateur projette une présentation.</p>`; }
         else if (L.view === "pause") h = `<div class="pause-card"><img src="${pauseGif}" alt=""><div><h3 style="margin:0 0 4px">Pause</h3><p class="muted" style="margin:0">${T("Cette page se mettra à jour à la reprise.")}</p></div></div>`;
         else if (L.view === "slide") h = `<h3>${T(mod?.titre || "Présentation")}</h3><p class="muted">${T(`Le formateur présente la page ${L.slide} du support.`)}</p>`;
@@ -375,10 +405,14 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   async function tabSupport() {
     const draw = async () => {
       const st = await api.supportStatus(sid).catch(() => ({ configured: false }));
-      const ev = st.unlocked ? evaluationHtml(session, await evaluationQr(session)) : "";
-      body.innerHTML = `<div class="pagehead"><div><div class="kicker-d">${T(session.title)}</div><h1>Support de formation</h1></div></div>${ev ? `<div class="card" style="max-width:820px;margin-bottom:14px">${ev}</div>` : ""}<div class="card" style="max-width:720px">${supportBlock(st)}</div>`;
+      // évaluation proposée : projetée (ou déjà projetée : support débloqué), heure de déblocage passée, session close
+      const shown = !!st.unlocked || session.status === "closed" || session.live?.view === "evaluation";
+      const ev = shown ? evaluationHtml(session, await evaluationQr(session)) : "";
+      if (tab !== "support") return; // onglet changé pendant le chargement
+      body.innerHTML = `<div class="pagehead"><div><div class="kicker-d">${T(session.title)}</div><h1>Support de formation</h1></div></div>${ev ? `<div class="card" style="max-width:820px;margin-bottom:14px">${ev}</div>` : ""}<div class="card" style="max-width:720px">${supportBlock(st, false, evalGate(!!ev))}</div>`;
     };
     await draw();
+    tabHandlers.add(draw); // évaluation projetée, évaluation touchée : la page suit
     const t = setInterval(draw, 60000); // le déblocage se fait à l'heure dite
     tabCleanups.push(() => clearInterval(t));
   }

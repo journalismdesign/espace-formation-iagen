@@ -145,11 +145,11 @@ export async function evaluationQr(session, size = 520) {
   if (session.evaluation_url) return QRCode.toDataURL(session.evaluation_url, { width: size, margin: 1, color: { dark: "#000000", light: "#ffffff" } });
   return null;
 }
-// Bloc stagiaire : titre, texte, QR, lien
+// Bloc stagiaire : titre, texte, QR, lien (data-evalgo : le clic débloque le support de la personne, voir session.js)
 export function evaluationHtml(session, qr, onDark = false) {
   const e = evaluationInfo(session);
   if (!e.configured) return "";
   return `<div class="eval-block${onDark ? " dark" : ""}"><div class="eval-txt"><div class="em-h">${T(e.title)}</div><p>${T(e.text)}</p>
-    ${e.url ? `<a class="btn${onDark ? " light" : ""}" href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">Remplir l'évaluation ↗</a>` : ""}</div>
+    ${e.url ? `<a class="btn${onDark ? " light" : ""}" href="${esc(e.url)}" target="_blank" rel="noopener noreferrer" data-evalgo>Remplir l'évaluation ↗</a>` : ""}</div>
     ${qr ? `<div class="em-qr"><img src="${qr}" alt="QR code de l'évaluation"></div>` : ""}</div>`;
 }

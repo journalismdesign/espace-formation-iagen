@@ -224,8 +224,12 @@ export function screenHtml(d, compact = false) {
 
   if (view === "support") {
     const when = support?.unlock_at ? new Date(support.unlock_at).toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).replace(":", " h ") : null;
-    return light(session, `<div class="ds-kick">Le support</div><div class="ds-title">${support?.unlocked ? "Le support est disponible" : "Le support vous attend"}</div><p class="ds-text">${T("Dans votre espace, menu « Support de formation ».")}</p>`,
-      `<div class="ds-bignote"><span class="ds-letter big">${support?.unlocked ? "↓" : "🔒"}</span><div>${support?.unlocked ? "Téléchargeable dès maintenant" : `Téléchargeable${when ? ` à partir de <b>${when}</b>` : " en fin de formation"}`}</div></div>`, right, cls);
+    // lien d'évaluation renseigné : chaque stagiaire débloque le support en touchant « Remplir l'évaluation »
+    const gated = !!session.evaluation_url, open = !!support?.unlocked;
+    const note = gated ? (open ? "Téléchargeable dès que vous remplissez l'évaluation" : "Téléchargeable après l'évaluation de fin de stage")
+      : open ? "Téléchargeable dès maintenant" : `Téléchargeable${when ? ` à partir de <b>${when}</b>` : " en fin de formation"}`;
+    return light(session, `<div class="ds-kick">Le support</div><div class="ds-title">${open && !gated ? "Le support est disponible" : "Le support vous attend"}</div><p class="ds-text">${T("Dans votre espace, menu « Support de formation ».")}</p>`,
+      `<div class="ds-bignote"><span class="ds-letter big">${open ? "↓" : "🔒"}</span><div>${note}</div></div>`, right, cls);
   }
 
   if (act?.type === "projects") {
