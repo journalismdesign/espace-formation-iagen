@@ -1015,3 +1015,19 @@ select:disabled{background-image:none;padding-right:12px !important}
 .ds-joinbig-qr{justify-self:center;background:#fff;border-radius:1cqw;padding:2cqw;display:flex;flex-direction:column;align-items:center;gap:1cqw;color:var(--dnavy)}
 .ds-joinbig-qr img{width:26cqw;height:26cqw;display:block}
 .ds-joinbig-qr b{font-size:3cqw;letter-spacing:.3cqw}
+
+/* Pilotage : pauses dans le déroulé (celles de 15 min se glissent entre deux séquences de leur demi-journée) */
+.modrow.pauserow{display:flex;align-items:center;gap:4px;background:var(--light);border-style:dashed}
+.modrow.pauserow>button{flex:1;padding:6px 8px}
+.modrow.pauserow.lunch{border-style:solid}
+.pauserow .drag{cursor:grab;color:var(--muted);padding-left:8px;font-size:15px;user-select:none}
+.pauserow[draggable]{cursor:grab}
+.pauserow.dragging{opacity:.45}
+.pause-move{display:flex;gap:2px;padding-right:6px}
+.pause-move .iconbtn{margin-left:0;width:26px;height:26px}
+.modlist .modrow.drop-ok{outline:1px dashed var(--blue);outline-offset:-1px}
+.modlist .modrow.drop-before{box-shadow:0 -4px 0 var(--blue)}
+/* Alerte deux minutes avant une pause : en bas à droite, visible où que l'on soit dans la page */
+.pause-alert{position:fixed;right:20px;bottom:20px;z-index:40;max-width:380px;display:flex;flex-direction:column;gap:6px;background:var(--yel);color:var(--ink);padding:14px 16px;border-radius:var(--r);border-left:6px solid var(--navy)}
+.pause-alert b{font-size:17px}
+.pause-alert .chips{margin-top:4px}

@@ -14,6 +14,7 @@ import { STEPS, SENSIB, VERIF } from "./cadrageModel.js";
 import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml, EM2_DEFAULT, evaluationQr, EVAL_TITLE, EVAL_TEXT } from "../lib/brand.js";
 import { modulesFor, daysOf, typeLabel, hasCadrage, emargementSlots } from "../lib/content.js";
 import { parseConducteur, conducteurMarkdown } from "../lib/conducteur.js";
+import { isLunch, pauseTargets, movePause, shiftPause, pauseAlert, pauseAlertText } from "../lib/programme.js";
 import { loadSkins, skinFor, applySkin, currentSkin } from "../lib/skin.js";
 import { samsaHtml } from "../lib/brand.js";
 import { isAdmin } from "../lib/roles.js";
@@ -447,7 +448,9 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
   function bindConducteur() {
     const imported = session.programme?.modules?.length;
     const mods = modulesFor(session), D = daysOf(session);
-    $("#condSrc", box).innerHTML = T(imported
+    $("#condSrc", box).innerHTML = T(imported && session.programme.base === "defaut"
+      ? `Déroulé par défaut, pauses déplacées depuis le Jour J. « Revenir au déroulé par défaut » les remet à leur place.`
+      : imported
       ? `Conducteur importé${session.programme.name ? ` (${session.programme.name})` : ""} : ${mods.filter((m) => m.type !== "pause").length} séquences sur ${D.n} journée${D.n > 1 ? "s" : ""}. Le format suit le conducteur.`
       : `Déroulé par défaut de la formation en ${session.format === "2" ? "deux journées" : "une journée"}. Importez un fichier .md pour le remplacer.`);
     $("#condExport", box).onclick = () => download(`conducteur-${(session.code || "session").toLowerCase()}.md`,
@@ -548,13 +551,14 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
      JOUR J
      ================================================================= */
   async function phaseJour() {
+    let dragPause = null; // pause en cours de glisser-déposer : le redessin temps réel attend
     box.innerHTML = `
       <div class="grid jour2">
         <div>
           <div class="card">
             <h3>Pilotage</h3>
             <p class="small muted" id="hint" style="margin-top:0"></p>
-            <div id="emRemind"></div>
+            <div id="emRemind"></div><div id="pauseRemind"></div>
             <div class="kicker-d" style="margin:10px 0 6px">Écrans de la session · ouverture, pause et clôture</div>
             <div class="acts" id="opening"></div>
             <div class="kicker-d" style="margin:16px 0 6px">Déroulé · ce que voient les stagiaires et l'écran</div>
@@ -658,20 +662,30 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const due = slots.find((x) => !emDone[x.key] && x.date === today && nowM >= mins(x.t) - 15 && nowM <= mins(x.t) + 30);
       $("#emRemind", box).innerHTML = due ? `<div class="remind"><b>${T(`${due.label} · ${hhmmT(due.t)}`)}</b><span>${T("C'est le moment de projeter le QR code d'émargement.")}</span><button class="btn sm" data-em="${due.key}">Projeter l'émargement</button></div>` : "";
       // Déroulé : séquence courante + slides Drive des séquences qui en ont
-      const mods = modulesFor(session).filter((m) => m.type !== "pause");
+      const all = modulesFor(session), mods = all.filter((m) => m.type !== "pause");
       const cur = mods.find((m) => m.id === live.module);
       if (cur?.day) modDay = cur.day;
-      const shown = mods.filter((m) => session.format !== "2" || (m.day || 1) === modDay);
+      // les pauses figurent dans le déroulé du pilotage ; celles de 15 min se déplacent (glisser-déposer ou ↑ ↓)
+      const shown = all.filter((m) => session.format !== "2" || (m.day || 1) === modDay);
+      const pauseRow = (m) => {
+        const lunch = isLunch(m), d = mins(m.t[1]) - mins(m.t[0]);
+        const mv = (dir) => `<button type="button" class="iconbtn" data-pmove="${dir}" data-pid="${esc(m.id)}" aria-label="${dir < 0 ? "Avancer" : "Retarder"} la pause d'une séquence"${shiftPause(all, m.id, dir) ? "" : " disabled"}>${dir < 0 ? "↑" : "↓"}</button>`;
+        return `<div class="modrow pauserow${lunch ? " lunch" : ""}" data-mid="${esc(m.id)}"${lunch ? "" : ` draggable="true" data-pid="${esc(m.id)}" title="Glisser pour placer la pause entre deux autres séquences de la demi-journée"`}>
+          ${lunch ? "" : `<span class="drag" aria-hidden="true">⠿</span>`}<button type="button" data-pjpause title="Projeter l'écran Pause"><span class="mono small">${hhmmT(m.t[0])}</span><span class="pill pause">${T(m.titre)}</span><span class="small muted">${d >= 60 ? `${Math.floor(d / 60)} h${d % 60 ? ` ${String(d % 60).padStart(2, "0")}` : ""}` : `${d} min`}</span></button>
+          ${lunch ? "" : `<span class="pause-move">${mv(-1)}${mv(1)}</span>`}</div>`;
+      };
       const skip = skipSet(session), hidden = (m) => parsePages(m.pages).filter((p) => skip.has(p)).length; // pages masquées de la séquence
       $("#modules", box).innerHTML = `${session.format === "2" ? `<div class="days" style="margin:0 0 8px">${[1, 2].map((d) => `<button type="button" data-mday="${d}" aria-pressed="${d === modDay}">Jour ${d}</button>`).join("")}</div>` : ""}
         <div class="modlist">${interleave(shown, slots.filter((x) => session.format !== "2" || x.day === modDay)).map((m) => {
           if (m.slot) return `<div class="modrow em${emDone[m.key] ? " done" : ""}${(V === "emargement" || V === "evaluation") && live.emKey === m.key ? " on" : ""}"><button type="button" data-em="${m.key}"><span class="mono small">${hhmmT(m.t)}</span><span class="pill tf">${m.kind === "evaluation" ? "Évaluation" : "Émargement"}</span><b>${T(m.label)}</b>${emDone[m.key] ? `<span class="small muted" style="margin-left:auto">✓ présenté à ${new Date(emDone[m.key]).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>` : ""}</button></div>`;
+          if (m.type === "pause") return pauseRow(m);
           const on = m.id === live.module, pages = modPages(session, m);
-          return `<div class="modrow${on ? " on" : ""}"><button type="button" data-mod="${m.id}"><span class="mono small">${hhmmT(m.t[0])}</span><span class="pill ${m.type}">${T(typeLabel(m.type))}</span><span class="modtxt"><b>${T(m.titre)}</b>${m.cas ? `<small>${T(m.cas)}</small>` : ""}</span></button>
+          return `<div class="modrow${on ? " on" : ""}" data-mid="${esc(m.id)}"><button type="button" data-mod="${m.id}"><span class="mono small">${hhmmT(m.t[0])}</span><span class="pill ${m.type}">${T(typeLabel(m.type))}</span><span class="modtxt"><b>${T(m.titre)}</b>${m.cas ? `<small>${T(m.cas)}</small>` : ""}</span></button>
             ${on && pages.length && session.slides_url ? `<div class="slidebar"><button type="button" class="iconbtn" data-sl="prev" aria-label="Page précédente">←</button>${pages.map((p) => `<button type="button" class="chip${V === "slide" && live.slide === p ? " on" : ""}" data-page="${p}">${p}</button>`).join("")}<button type="button" class="iconbtn" data-sl="next" aria-label="Page suivante">→</button>${hidden(m) ? `<span class="small muted" title="Réglages → Slides projetées">${hidden(m)} masquée${hidden(m) > 1 ? "s" : ""}</span>` : ""}</div>` : ""}
             ${on && pages.length && !session.slides_url ? `<div class="small muted" style="padding:4px 8px">Pages ${T(m.pages)} · associez la présentation dans l'onglet Réglages pour les projeter.</div>` : ""}</div>`;
         }).join("")}</div>`;
       $$("[data-mday]", box).forEach((b) => (b.onclick = () => { modDay = +b.dataset.mday; draw(); }));
+      bindPauses(all);
       $$("[data-em]", box).forEach((b) => (b.onclick = () => showEm(b.dataset.em)));
       $$("[data-mod]", box).forEach((b) => (b.onclick = () => setLive({ ...keep(), module: b.dataset.mod, view: "module", started_at: new Date().toISOString() })));
       const pages = modPages(session, cur);
@@ -724,6 +738,61 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       $("#plist", box).innerHTML = roster.map((r) => `<div class="prow"><span>${T(r.full_name || r.email)}</span>${r.project_status === "validated" ? `<span class="tag ok">✓ Cadrage</span>` : r.project_id ? `<span class="tag">${r.project_steps}/${STEPS.length}</span>` : `<span class="tag muted">—</span>`}</div>`).join("") || `<p class="small muted">Personne pour l'instant. Projetez le QR code.</p>`;
       drawEdit();
     };
+    /* Pauses de 15 minutes : glisser-déposer (ou ↑ ↓) entre deux séquences de leur demi-journée. Le déroulé de la
+       session est réécrit (sessions.programme ; à partir du déroulé par défaut si aucun conducteur n'est importé),
+       horaires recalculés en cascade (programme.js). Le clic sur une pause projette l'écran Pause. */
+    const savePauses = async (modules, pid) => {
+      const D = daysOf(session), p = modules.find((m) => m.id === pid);
+      const programme = session.programme?.modules?.length ? { ...session.programme, modules } : { formation: session.formation, days: D.titles, nDays: D.n, modules, base: "defaut" };
+      const s = await guard(() => api.updateSession(sid, { programme }), `Pause déplacée : ${hhmmT(p.t[0])} – ${hhmmT(p.t[1])}. Horaires de la demi-journée recalculés.`);
+      if (s) session = s;
+      draw();
+    };
+    const clearDrop = () => $$(".drop-ok, .drop-before, .dragging", box).forEach((r) => r.classList.remove("drop-ok", "drop-before", "dragging"));
+    const bindPauses = (all) => {
+      $$("[data-pjpause]", box).forEach((b) => (b.onclick = () => show("pause")));
+      $$("[data-pmove]", box).forEach((b) => (b.onclick = () => { const nm = shiftPause(all, b.dataset.pid, +b.dataset.pmove); if (nm) savePauses(nm, b.dataset.pid); }));
+      $$(".pauserow[draggable]", box).forEach((row) => {
+        row.ondragstart = (e) => {
+          dragPause = row.dataset.pid;
+          e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", dragPause);
+          const ok = new Set(pauseTargets(all, dragPause));
+          row.classList.add("dragging");
+          $$(".modrow[data-mid]", box).forEach((r) => r.classList.toggle("drop-ok", ok.has(r.dataset.mid)));
+        };
+        row.ondragend = () => { dragPause = null; clearDrop(); };
+      });
+      $$(".modrow[data-mid]", box).forEach((r) => {
+        r.ondragover = (e) => {
+          if (!dragPause || !r.classList.contains("drop-ok")) return;
+          e.preventDefault(); e.dataTransfer.dropEffect = "move";
+          $$(".drop-before", box).forEach((x) => x !== r && x.classList.remove("drop-before"));
+          r.classList.add("drop-before");
+        };
+        r.ondragleave = (e) => { if (!r.contains(e.relatedTarget)) r.classList.remove("drop-before"); };
+        r.ondrop = (e) => {
+          e.preventDefault();
+          const pid = dragPause; dragPause = null; clearDrop();
+          const nm = pid ? movePause(all, pid, r.dataset.mid) : null;
+          if (nm) savePauses(nm, pid);
+        };
+      });
+    };
+    // Alerte du pilotage : la pause (ou le déjeuner) commence dans deux minutes. « OK » la masque jusqu'à la pause suivante.
+    let pauseOff = null;
+    const pauseTick = () => {
+      const el = $("#pauseRemind", box); if (!el) return;
+      const a = session.status === "closed" ? null : pauseAlert(modulesFor(session), (d) => (d === 2 ? session.date2 : session.date) || null);
+      const key = a ? `${a.m.day || 1}:${a.m.id}:${a.m.t[0]}` : "";
+      const txt = a && key !== pauseOff ? pauseAlertText(a) : "";
+      if (el.dataset.k === key + txt) return;
+      el.dataset.k = key + txt;
+      if (!txt) { el.innerHTML = ""; return; }
+      el.innerHTML = `<div class="pause-alert" role="status"><b>${T(txt)}</b><span class="small">${T(`${isLunch(a.m) ? "Déjeuner prévu" : "Pause prévue"} à ${hhmmT(a.m.t[0])}`)}</span>
+        <div class="chips"><button type="button" class="btn sm" data-pa="pj">Projeter l'écran Pause</button><button type="button" class="btn sm ghost" data-pa="ok">OK</button></div></div>`;
+      $('[data-pa="pj"]', el).onclick = () => show("pause");
+      $('[data-pa="ok"]', el).onclick = () => { pauseOff = key; pauseTick(); };
+    };
     const drawEdit = () => {
       $("#actEdit", box).innerHTML = `
         ${session.activities.map((a, i) => `<div class="prow"><span>${i + 1}. ${T(a.titre)} <small class="muted">${ACT_TYPES[a.type]}</small></span><span><button class="iconbtn" data-up="${i}" ${i === 0 ? "disabled" : ""} aria-label="Monter">↑</button><button class="iconbtn danger" data-drop="${i}" aria-label="Retirer">✕</button></span></div>`).join("")}
@@ -752,7 +821,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       };
     };
     await draw();
-    const redraw = debounce(() => { if (!box.contains(document.activeElement) || document.activeElement.tagName === "BUTTON") draw(); }, 300);
+    const redraw = debounce(() => { if (dragPause) return; if (!box.contains(document.activeElement) || document.activeElement.tagName === "BUTTON") draw(); }, 300);
+    pauseTick(); const pauseT = setInterval(pauseTick, 5000); cleanups.push(() => clearInterval(pauseT));
     cleanups.push(api.watch(sid, redraw));
   }
 

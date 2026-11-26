@@ -170,7 +170,7 @@ function modHtml(m, progress, nm, rel = null) {
   const isNow = rel === null ? nm >= mins(m.t[0]) && nm < mins(m.t[1]) : rel === 0;
   const passed = rel !== null && rel < 0; // séquence dépassée par le formateur : validée d'office
   const tag = rel === null || rel === 0 ? "" : rel > 0 ? `<span class="pill">À venir</span>` : `<span class="pill passed">✓ Validé</span>`;
-  if (m.type === "pause") return `<div class="mod" data-type="pause"><div class="time"><b>${hfr(m.t[0])}</b></div><div class="body"><div class="mhead"><div class="meta"><span class="pill pause">${m.titre}</span><span class="small muted">${fmtMin(dur)}</span></div></div></div></div>`;
+  if (m.type === "pause") return `<div class="mod" data-type="pause"><div class="time"><b>${hfr(m.t[0])}</b></div><div class="body"><div class="mhead"><div class="meta"><span class="pill pause">${T(m.titre)}</span><span class="small muted">${fmtMin(dur)}</span></div></div></div></div>`;
   const done = !!progress.done?.[m.id] || passed;
   return `<div class="mod${done ? " done" : ""}${passed ? " passed" : ""}${isNow ? " now" : ""}${rel !== null && rel > 0 ? " later" : ""}" data-type="${m.type}" data-id="${m.id}">
     <div class="time"><b>${hfr(m.t[0])}</b>${hfr(m.t[1])}</div>
