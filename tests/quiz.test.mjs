@@ -36,6 +36,7 @@ ok(cleanQuiz({ titre: "", questions: [] }).errors.length === 2, "quiz sans titre
 ok(cleanQuiz({ titre: "T", questions: [{ q: "?", o: ["seule"], ok: 0 }] }).errors.some((e) => e.includes("au moins deux")), "une seule réponse : refus");
 ok(cleanQuiz({ titre: "T", questions: [{ q: "", o: ["a", "b"], ok: 0 }] }).errors.some((e) => e.includes("énoncé")), "énoncé vide : refus");
 ok(cleanQuiz({ titre: "T", questions: [{ q: "?", o: ["a", "b", ""], ok: 2 }] }).errors.some((e) => e.includes("bonne réponse")), "bonne réponse sur une case vide : refus");
+ok([null, undefined, ""].every((v) => cleanQuiz({ titre: "T", questions: [{ q: "?", o: ["a", "b"], ok: v }] }).errors.some((e) => e.includes("bonne réponse"))), "aucune bonne réponse cochée : refus (et non la première par défaut)");
 const remap = cleanQuiz({ titre: "T", questions: [{ q: "?", o: ["", "a", "b"], ok: 2 }] });
 ok(!remap.errors.length && remap.value.questions[0].ok === 1 && remap.value.questions[0].o.join() === "a,b", "case vide retirée : la bonne réponse suit");
 ok(cleanQuiz({ titre: "T", questions: [{ q: "?", o: ["1", "2", "3", "4", "5", "6", "7"], ok: 0 }] }).errors.some((e) => e.includes("6 réponses")), "sept réponses : refus");

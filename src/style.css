@@ -1015,3 +1015,29 @@ select:disabled{background-image:none;padding-right:12px !important}
 .ds-joinbig-qr{justify-self:center;background:#fff;border-radius:1cqw;padding:2cqw;display:flex;flex-direction:column;align-items:center;gap:1cqw;color:var(--dnavy)}
 .ds-joinbig-qr img{width:26cqw;height:26cqw;display:block}
 .ds-joinbig-qr b{font-size:3cqw;letter-spacing:.3cqw}
+
+/* Éditeur de quiz, de sondages et de nuages de mots (bibliothèque et Jour J) */
+.qe-card{max-width:860px}
+.qe .qe-note{background:var(--light);border-radius:8px;padding:8px 10px;margin:0 0 6px}
+.qe-q{border:1px solid var(--line);border-radius:var(--r);padding:10px 14px 14px;margin:14px 0 0;background:#fff;min-width:0}
+.qe-q legend{font-weight:700;font-size:13px;padding:0 6px;color:var(--ink)}
+.qe-tools{display:flex;gap:6px;align-items:center;justify-content:flex-end;margin-top:-4px}
+.qe-tools .iconbtn,.qe-opt .iconbtn{margin-left:0}
+.qe-lbl{display:block;font-weight:600;font-size:13px;margin:10px 0 4px;color:var(--ink)}
+.qe-opts{display:grid;gap:6px;margin-bottom:4px}
+.qe-opt{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center}
+.qe-opt input[type=radio]{width:18px;height:18px;accent-color:var(--ok);margin:0;cursor:pointer}
+.qe-opt:has(input[type=radio]:checked) input[type=text]{border-color:var(--ok);background:var(--oktint)}
+.qe-n{width:18px;text-align:center;font-size:12px;color:var(--muted)}
+.qe [data-act=qadd]{margin-top:12px}
+.qe-err:not(:empty){background:var(--kotint);border-left:4px solid var(--ko);padding:10px 12px;border-radius:6px;margin-top:12px}
+.qe-err ul{margin:4px 0 0;padding-left:18px}
+.qe-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;position:sticky;bottom:0;background:#fff;padding:10px 0;border-top:1px solid var(--line)}
+main .linkbtn.danger,.sheet .linkbtn.danger{color:var(--ko)}
+.qb-tbl td.actions{white-space:nowrap;text-align:right}
+.act-row{gap:8px;align-items:center}
+.act-tools{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.act-add{margin-top:10px;background:var(--light)}
+.act-add .askrow select{flex:1}
+.qe .draftbar:has(> .draft-st:empty){display:none}
+.sheet .qe-actions{bottom:-60px;padding-bottom:16px} /* le panneau a 60 px de marge basse : la barre colle au vrai bas */

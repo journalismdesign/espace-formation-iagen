@@ -107,7 +107,8 @@ export function cleanQuiz(raw) {
     const o = kept.map(([t]) => t);
     if (o.length < LIMITS.quizOpts[0]) errors.push(n + "au moins deux réponses.");
     if (o.length > LIMITS.quizOpts[1]) errors.push(n + `${LIMITS.quizOpts[1]} réponses au plus.`);
-    const ok = kept.findIndex(([, j]) => j === Number(x?.ok));
+    const want = x?.ok === null || x?.ok === undefined || x?.ok === "" ? -1 : Number(x.ok); // Number(null) vaudrait 0
+    const ok = kept.findIndex(([, j]) => j === want);
     if (o.length >= 2 && ok < 0) errors.push(n + "choisissez la bonne réponse.");
     let id = QID_RE.test(String(x?.id || "")) ? String(x.id) : newQid();
     while (seen.has(id)) id = newQid();
