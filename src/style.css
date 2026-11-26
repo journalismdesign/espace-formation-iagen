@@ -725,7 +725,10 @@ input[type=url],input[type=email],input[type=date],input[type=time],input[type=n
 .ds-eval-qr{display:flex;flex-direction:column;align-items:center;gap:3cqw}
 .ds-eval-qr .ds-qrbox img{width:21cqw;height:21cqw}
 .ds-eval-url{font-size:2.1cqw;color:#1155CC;text-decoration:underline;word-break:break-all;text-align:center}
-.eval-block{display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:space-between}
+.eval-block{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;justify-content:space-between}
+/* QR calé en haut, sur la ligne du titre, et son ombre gardée à l'intérieur du cadre de la carte */
+.eval-block .em-qr{margin:0 5px 5px 0;flex:none}
+.eval-block + .eval-sup{margin-top:14px}
 .eval-txt{flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
 .eval-txt p{margin:0}
 .eval-block.dark .em-h,.eval-block.dark p{color:#fff}

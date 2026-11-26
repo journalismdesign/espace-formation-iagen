@@ -23,8 +23,8 @@ const SECTIONS = { objectifs: "obj", objectif: "obj", "points clés": "pts", "po
 const KEYS = { type: "type", cas: "cas", exemple: "cas", pages: "pages", page: "pages", "temps fort": "tf", tf: "tf", activité: "live", activite: "live", live: "live", quiz: "quiz", fiches: "fiches", fiche: "fiches", exemples: "ex", outil: "outil", id: "id" };
 
 // Outils d'exercice débloqués côté stagiaire quand la séquence est lancée
-const TOOLS = { rmctf: "toolRmctf", toolrmctf: "toolRmctf", sve: "toolSve", toolsve: "toolSve" };
-const TOOL_NAMES = { toolRmctf: "rmctf", toolSve: "sve" };
+const TOOLS = { rmctf: "toolRmctf", toolrmctf: "toolRmctf", sve: "toolSve", toolsve: "toolSve", codecouleur: "toolCc", couleur: "toolCc", toolcc: "toolCc" };
+const TOOL_NAMES = { toolRmctf: "rmctf", toolSve: "sve", toolCc: "code couleur" };
 const slug = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32) || "seq";
 const hm = (s) => { const m = String(s).trim().match(/^(\d{1,2})\s*[:hH.]\s*(\d{2})$/); return m && +m[1] < 24 && +m[2] < 60 ? `${m[1].padStart(2, "0")}:${m[2]}` : null; };
 const mins = (t) => +t.slice(0, 2) * 60 + +t.slice(3);
@@ -105,7 +105,7 @@ export function parseConducteur(md) {
         else if (key === "tf") cur.tf = parseInt(v, 10) || undefined;
         else if (key === "fiches") cur.fiches = list(v);
         else if (key === "ex") cur.ex = yes(v) || undefined;
-        else if (key === "outil") { const t = TOOLS[v.toLowerCase().replace(/[^a-z]/g, "")]; if (t) cur.outil = t; else at(i, `outil « ${v} » inconnu (rmctf ou sve).`, warnings); }
+        else if (key === "outil") { const t = TOOLS[v.toLowerCase().replace(/[^a-z]/g, "")]; if (t) cur.outil = t; else at(i, `outil « ${v} » inconnu (rmctf, sve ou code couleur).`, warnings); }
         else cur[key] = v || undefined;
         continue;
       }

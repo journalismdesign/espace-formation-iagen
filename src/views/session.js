@@ -4,7 +4,7 @@
 import { isStaff } from "../lib/roles.js";
 import { $, $$, T, esc, fr, NB, matches, dateFr, guard, toast, bindCopy, copyText, download, debounce } from "../lib/dom.js";
 import { FICHES, GLOSS, PROMPTS, CASES } from "../data.js";
-import { renderParcours, parcoursPct, ficheById, ficheHtml, bindRefs, openPrompt, toolsHtml, bindTools, corpusMarkdown, unlockedTools, TOOL_IDS, hasCadrage } from "../lib/content.js";
+import { renderParcours, parcoursPct, ficheById, ficheHtml, bindRefs, openPrompt, toolsHtml, bindTools, corpusMarkdown, unlockedTools, TOOL_IDS, TOOL_LABELS, hasCadrage } from "../lib/content.js";
 import { currentAct, renderInput, renderResults, respKey } from "../lib/activities.js";
 import { renderCadrage } from "./cadrage.js";
 import { STATUS } from "./home.js";
@@ -18,7 +18,7 @@ import { morph } from "../lib/morph.js";
 import { loadScreenData } from "./adminSession.js";
 
 const TABS = [
-  ["direct", "Le jour J"], ["cadrage", "Mon cadrage"], ["ressources", "Ressources du jour"], ["fiches", "Fiches pratiques"],
+  ["direct", "Le jour J"], ["cadrage", "Mon cadrage"], ["ressources", "Ressources du jour"], ["fiches", "Glossaire"],
   ["outils", "Outils d'exercice"], ["discussion", "Discussion"],
   ["support", "Support de formation"], ["emargement", "Émargement"],
 ];
@@ -57,7 +57,9 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
      et « Mon cadrage » avant le premier jour (préparation des formations de deux journées). Message selon le
      moment : avant le premier jour, la date ; salle déjà ouverte dans la journée (pause), « va reprendre » ;
      sinon « va commencer ». L'aperçu formateur montre la même chose. */
-  const waitingNow = () => !closedView && session.status === "draft";
+  // Évaluation de fin de stage projetée : elle s'affiche dans la carte « En direct », salle ouverte ou fermée
+  const evalOn = () => session.status !== "closed" && session.live?.view === "evaluation";
+  const waitingNow = () => !closedView && session.status === "draft" && !evalOn();
   const isWaiting = waitingNow();
   const beforeDay1 = !!session.date && parisDay() < session.date;
   const resumed = session.live?.started?.day === parisDay(); // salle déjà ouverte aujourd'hui : c'est une pause
@@ -82,7 +84,7 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
       <div class="side-head"><div><b>${T(session.title)}</b><div class="small muted">${T(datesFr(session))}</div></div></div>
       <div class="side-live${live() ? " on" : ""}" id="sideLive"><span class="dot${live() ? " on" : ""}"></span>${live() ? "En direct" : STATUS[session.status]}</div>
       <div id="sideEm"></div>
-${closedView ? `      <p class="small muted" style="margin:0 0 12px">${T("La formation est terminée. Vous gardez l'accès aux ressources, aux fiches pratiques, aux exercices et au support.")}</p>` : `      <div class="side-label">Le parcours</div>
+${closedView ? `      <p class="small muted" style="margin:0 0 12px">${T("La formation est terminée. Vous gardez l'accès aux ressources, au glossaire, aux exercices et au support.")}</p>` : `      <div class="side-label">Le parcours</div>
       <div class="side-path">
         <a href="#/s/${sid}/direct" class="${tab === "direct" ? "cur" : ""}"><span class="ring"></span><div><b>Le jour J</b><div class="small muted">La formation en direct</div></div></a>
 ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "cadrage" ? "cur" : ""}"><span class="ring${project?.status === "validated" ? " on" : ""}">${project?.status === "validated" ? "✓" : ""}</span><div><b>Mon cadrage</b><div class="small muted">${project?.status === "validated" ? "Cas validé" : "Avant la formation"}</div></div></a>` : ""}
@@ -132,6 +134,14 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   onSession.add(() => { if (!trainerPreview && (session.status === "closed") !== (status0 === "closed")) { fullRender = true; ctx.go(location.hash); } });
   // Ouverture de la salle pendant l'attente : place au jour J ; fermeture (pause, fin de journée) : retour à l'attente
   onSession.add(() => { if (waitingNow() !== isWaiting) { fullRender = true; ctx.go(isWaiting ? `#/s/${sid}/direct` : location.hash); } });
+  /* Évaluation projetée : le stagiaire qui est sur un autre onglet revient au jour J, où la carte « En direct »
+     présente le lien. Une fois par projection : il peut ensuite aller chercher le support sans être ramené. */
+  let evalSeen = evalOn();
+  onSession.add(() => {
+    const on = evalOn();
+    if (on && !evalSeen && !fullRender && tab !== "direct") ctx.go(`#/s/${sid}/direct`);
+    evalSeen = on;
+  });
   onSession.add(() => tabHandlers.forEach((f) => f()));
   cleanups.push(api.watch(sid, (e) => { if (e.table === "sessions" || e.table === "*") refreshSession(); }, ["sessions"]));
   // Émargement : bouton vert sous « En direct », affiché pendant les créneaux (début de journée et reprise
@@ -181,7 +191,6 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
 
   async function renderTab() {
     tabCleanups.forEach((f) => f && f()); tabCleanups = []; tabHandlers.clear();
-    delete body.dataset.tools;
     if (isWaiting && !waitAllowed(tab)) { body.innerHTML = WAIT; return; } // avant l'ouverture de la salle
     const extra = $("#sideExtra", root); if (extra) extra.innerHTML = ""; // complément du cadrage
   if (tab === "direct") await tabDirect();
@@ -191,14 +200,19 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   else if (tab === "fiches") tabFiches();
   else if (tab === "outils") {
     const drawTools = () => {
-      const open = openTools();
-      if (!trainerPreview && !open.size) { body.innerHTML = `<div class="pagehead"><div><h1>Outils d'exercice</h1></div></div><p class="empty">${T("Les outils apparaîtront ici quand le formateur lancera l'exercice qui s'en sert. Ils resteront ensuite disponibles.")}</p>`; return; }
-      if (body.dataset.tools === [...open].sort().join() && $("#toolRmctf", body)) return; // déjà affichés : on ne perd pas la saisie
-      body.dataset.tools = [...open].sort().join();
-      body.innerHTML = `<div class="pagehead"><div><h1>Outils d'exercice</h1><p class="muted">${T("De quoi s'entraîner pendant les temps de pratique, et après. Rien de ce que vous tapez ici ne quitte votre navigateur.")}</p>${trainerPreview && session.status !== "closed" ? `<p class="small muted">${T(`Aperçu formateur : tous les outils sont affichés. Les stagiaires ne voient que ceux des exercices déjà lancés (${open.size ? [...open].map((t) => (t === "toolRmctf" ? "R·M·C·T·F" : "S·V·E")).join(", ") : "aucun pour l'instant"}).`)}</p>` : ""}</div></div>${toolsHtml()}`;
-      bindTools(body);
-      // les outils pas encore proposés restent masqués (ils sont dans la page pour que les liaisons fonctionnent)
-      if (!trainerPreview) TOOL_IDS.forEach((id) => { const c = $(`#${id}`, body); if (c && !open.has(id)) c.hidden = true; });
+      const open = openTools(), masked = TOOL_IDS.filter((id) => !open.has(id));
+      if (!$("#toolRmctf", body)) {
+        body.innerHTML = `<div class="pagehead"><div><h1>Outils d'exercice</h1><p class="muted">${T("De quoi s'entraîner pendant les temps de pratique, et après. Rien de ce que vous tapez ici ne quitte votre navigateur.")}</p><div id="toolsNote"></div></div></div>
+          <p class="empty" id="toolsNone" hidden>${T("Les outils apparaîtront ici quand le formateur abordera, dans le déroulé, la séquence qui s'en sert. Ils resteront ensuite disponibles.")}</p><div id="toolsAll">${toolsHtml()}</div>`;
+        bindTools(body);
+      }
+      // aperçu formateur : les mêmes outils que les stagiaires, et la liste de ceux qui attendent leur séquence
+      const note = trainerPreview && session.status !== "closed" ? `<p class="small muted">${T(`Aperçu formateur : vous voyez ce que voient les stagiaires. ${masked.length ? `Masqués jusqu'à leur séquence dans le déroulé : ${masked.map((id) => TOOL_LABELS[id]).join(", ")}.` : "Tous les outils sont débloqués."}`)}</p>` : "";
+      if ($("#toolsNote", body).innerHTML !== note) $("#toolsNote", body).innerHTML = note;
+      $("#toolsNone", body).hidden = open.size > 0;
+      $("#toolsAll", body).hidden = !open.size;
+      // les outils pas encore abordés restent dans la page, masqués (liaisons et saisie conservées)
+      TOOL_IDS.forEach((id) => { const c = $(`#${id}`, body); if (c) c.hidden = !open.has(id); });
     };
     drawTools();
     tabHandlers.add(drawTools);
@@ -268,7 +282,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
         return;
       }
       olSeq++;
-      if (session.status !== "live" || (!act && !L.view)) {
+      if ((session.status !== "live" && !evalOn()) || (!act && !L.view)) {
         card.innerHTML = `<div class="kicker-d">En direct</div>${modLine}<p class="empty" style="margin:8px 0 0">${session.status === "closed" ? "La session est close. Le déroulé et les ressources restent consultables." : "Les sondages, quiz et consignes s'afficheront ici quand le formateur les lancera. Gardez cette page ouverte."}</p>`;
         return;
       }
@@ -294,7 +308,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
         else if (L.view === "pause") h = `<div class="pause-card"><img src="${pauseGif}" alt=""><div><h3 style="margin:0 0 4px">Pause</h3><p class="muted" style="margin:0">${T("Cette page se mettra à jour à la reprise.")}</p></div></div>`;
         else if (L.view === "slide") h = `<h3>${T(mod?.titre || "Présentation")}</h3><p class="muted">${T(`Le formateur présente la page ${L.slide} du support.`)}</p>`;
         else h = `<h3>${T(mod?.titre || "")}</h3>${mod?.obj ? `<ul class="small">${mod.obj.map((x) => `<li>${T(x)}</li>`).join("")}</ul>` : ""}`;
-        card.innerHTML = `<div class="kicker-d"><span class="dot on"></span> En direct</div>${h}`;
+        card.innerHTML = `<div class="kicker-d">${session.status === "live" ? `<span class="dot on"></span> En direct` : "Fin de la formation"}</div>${h}`; // salle fermée : seule l'évaluation arrive ici
         return;
       }
       const key = respKey(act, session.live);
@@ -342,7 +356,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
     bindCopy(body);
   }
 
-  /* ---------------- Fiches pratiques ---------------- */
+  /* ---------------- Glossaire (fiches, termes, prompts) ---------------- */
   function tabFiches() {
     if (sub) {
       const f = ficheById(sub);
@@ -354,7 +368,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
     }
     let cat = "tout", kind = "fiches";
     body.innerHTML = `
-      <div class="pagehead"><div><div class="kicker-d">Fiches · ${T(session.title)}</div><h1>Fiches pratiques</h1></div>
+      <div class="pagehead"><div><div class="kicker-d">Glossaire · ${T(session.title)}</div><h1>Glossaire</h1></div>
         <button class="btn" id="useAi" title="Copie toutes les ressources en Markdown, à coller dans votre assistant">Utiliser les ressources avec une IA</button></div>
       <div class="subnav" id="kinds">${[["fiches", `Fiches (${FICHES.length})`], ["glossaire", `Glossaire (${GLOSS.length})`], ["prompts", `Prompts (${PROMPTS.length})`]].map(([k, l]) => `<button data-k="${k}" aria-pressed="${k === kind}">${l}</button>`).join("")}</div>
       <div class="subnav" id="cats"></div>

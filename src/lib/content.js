@@ -243,7 +243,7 @@ function detail(m, progress) {
   if (m.idees) h += `<div class="blk"><h4>Des idées pour démarrer</h4>${ideasHtml()}</div>`;
   if (m.disc) h += `<div class="blk disc"><h4 style="color:#7A5300">Discussion</h4><ul>${m.disc.map((x) => `<li>${T(x)}</li>`).join("")}</ul></div>`;
   if (m.quiz) h += `<div class="blk"><h4>Quiz · ${T(QUIZ[m.quiz].titre)}</h4><div data-quiz="${m.quiz}"><button class="btn sm ghost" data-startquiz="${m.quiz}">Faire le quiz (${QUIZ[m.quiz].q.length} questions)${progress.quiz?.[m.quiz] != null ? ` · meilleur score ${progress.quiz[m.quiz]}/${QUIZ[m.quiz].q.length}` : ""}</button></div></div>`;
-  if (m.fiches) h += `<div class="blk"><h4>Fiches pratiques</h4><div class="chips">${m.fiches.map((f) => (ficheById(f) ? `<button class="chip" data-fiche="${f}">${T(ficheById(f).titre)}</button>` : "")).join("")}</div></div>`;
+  if (m.fiches) h += `<div class="blk"><h4>Dans le glossaire</h4><div class="chips">${m.fiches.map((f) => (ficheById(f) ? `<button class="chip" data-fiche="${f}">${T(ficheById(f).titre)}</button>` : "")).join("")}</div></div>`;
   if (m.live && PRESETS[m.live]) h += `<p class="small muted" style="margin:0">Activité en salle prévue : « ${T(PRESETS[m.live].q)} ».</p>`;
   return h;
 }
@@ -253,7 +253,10 @@ export const hasCadrage = (session) => daysOf(session).n > 1;
 
 /* Outils d'exercice : ils apparaissent côté stagiaire quand le formateur lance (ou dépasse) la séquence
    qui les propose, puis restent disponibles. Après la session (close), tous restent accessibles. */
-export const TOOL_IDS = ["toolRmctf", "toolSve"];
+export const TOOL_IDS = ["toolRmctf", "toolSve", "toolCc"];
+export const TOOL_LABELS = { toolRmctf: "Constructeur R·M·C·T·F", toolSve: "Kit S·V·E", toolCc: "Jeu du code couleur" };
+/* Outils visibles des stagiaires : ceux des séquences qui portent `outil`, une fois lancées ou dépassées dans le
+   déroulé ; live.tools les garde ensuite (revenir en arrière ne les retire pas). Tous après la clôture. */
 export function unlockedTools(session) {
   if (!session) return new Set();
   if (session.status === "closed") return new Set(TOOL_IDS);
@@ -333,7 +336,7 @@ export function toolsHtml() {
     <div class="subnav" id="sveNav"><button data-s="S" aria-pressed="true">S · Spec par interview</button><button data-s="V" aria-pressed="false">V · Critères d'abord</button><button data-s="E" aria-pressed="false">E · Instructions du projet</button><button data-s="N" aria-pressed="false">Note de décisions</button></div>
     <div class="prompt" id="sveOut"></div><button class="btn sm" data-copy="sveOut">Copier le prompt</button>
   </div>
-  <div class="card">
+  <div class="card" id="toolCc">
     <h3>Jeu : le code couleur de la rédaction</h3>
     <p class="small muted" style="margin-top:0">Pour chaque contenu : jamais, avec précaution ou sans risque dans un assistant grand public (p.${NB}97).</p>
     <div id="ccGame"></div>

@@ -101,4 +101,17 @@ ok(rmctfPrompt({ R: "Tu es chef d'édition.", T: ["Classe les sujets."] }) === "
 ok(rmctfPrompt({ M: "Préparer le journal.", T: ["Classe les sujets.", " ", "Minute chaque sujet."], F: "Un tableau." }, { doubt: true }) === "MISSION Préparer le journal.\nTÂCHES\n1. Classe les sujets.\n2. Minute chaque sujet.\nFORMAT Un tableau.\nSi tu ne sais pas, dis-le. N'invente ni chiffre, ni citation, ni source.", "plusieurs tâches : liste numérotée, lignes vides ignorées");
 ok(rmctfPrompt({}) === "" && rmctfPrompt({}, { inv: true }).startsWith("Avant de répondre"), "prompt vide, prompt inversé seul");
 
-console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests des pauses, de la fin de journée et du niveau du jour 2 passent.");
+// Outils d'exercice : chacun n'apparaît qu'une fois sa séquence abordée dans le déroulé
+const { unlockedTools, TOOL_LABELS } = await import("../src/lib/content.js");
+const { parseConducteur, conducteurMarkdown } = await import("../src/lib/conducteur.js");
+
+const toolsAt = (s, mod, tools) => [...unlockedTools({ ...s, status: "live", live: { module: mod, ...(tools ? { tools } : {}) } })].sort().join();
+ok(TOOL_IDS.every((id) => TOOL_LABELS[id]) && at(D2, "a-donnees").outil === "toolCc" && at(D2, "b-rmctf").outil === "toolRmctf" && at(D2, "b-sve1").outil === "toolSve", "deux journées : code couleur (jour 1), R·M·C·T·F et S·V·E (jour 2) liés à leur séquence");
+ok(toolsAt({ format: "2" }, "a-disc1") === "" && toolsAt({ format: "2" }, "a-donnees") === "toolCc" && toolsAt({ format: "2" }, "b-rmctf") === "toolCc,toolRmctf" && toolsAt({ format: "2" }, "b-sve1") === "toolCc,toolRmctf,toolSve", "deux journées : chaque outil apparaît à sa séquence, pas avant");
+ok(toolsAt({ format: "2" }, "b-paliers").includes("toolSve") === false && toolsAt({ format: "2" }, "a-disc1", ["toolSve"]) === "toolSve" && unlockedTools({ format: "2", status: "closed" }).size === TOOL_IDS.length, "Kit S·V·E masqué avant sa séquence, gardé une fois lancé, tous les outils après la clôture");
+ok(toolsAt(SB, "d-tester").split(",").includes("toolSve") === false && toolsAt(SB, "a-donnees") === "toolCc", "débutant : pas de Kit S·V·E au jour 2, code couleur au jour 1");
+ok(toolsAt({ format: "1" }, "j1-assistants") === "" && toolsAt({ format: "1" }, "j1-tour") === "toolCc" && toolsAt({ format: "1" }, "j1-paliers") === "toolCc,toolRmctf", "une journée : le code couleur arrive avec les réglages de confidentialité");
+const cc = parseConducteur("## 09:30–10:00 · Vos données\ntype: pratique\noutil: code couleur\n").programme;
+ok(cc.modules?.[0]?.outil === "toolCc" && conducteurMarkdown(cc.modules).includes("outil: code couleur"), "conducteur : « outil: code couleur » lu et réécrit");
+
+console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests des pauses, de la fin de journée, du niveau du jour 2 et des outils passent.");

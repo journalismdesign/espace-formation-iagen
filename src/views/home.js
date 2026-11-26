@@ -62,7 +62,7 @@ export async function viewHome(root, _p, { api, me, go }) {
         ${threads.length ? threads.map((t) => `<a class="res" style="display:block" href="#/s/${next.id}/discussion/${t.id}"><b>${T(t.title)}</b><div class="small muted">${T(t.author_name)} · ${t.count} réponse${t.count > 1 ? "s" : ""}</div></a>`).join("") : `<p class="small muted">Aucune discussion pour le moment.</p>`}
         <a class="small" href="#/s/${next.id}/discussion/new">Lancer une discussion →</a>
       </div>
-      <a class="card dark" href="#/s/${next.id}/fiches"><div><h2>Fiches ressources</h2><p class="small">Fiches pratiques, glossaire, prompts et exemples de rédactions, réservés aux stagiaires.</p></div><span class="roundico" aria-hidden="true">|||</span></a>
+      <a class="card dark" href="#/s/${next.id}/fiches"><div><h2>Glossaire</h2><p class="small">Fiches, termes, prompts et exemples de rédactions, réservés aux stagiaires.</p></div><span class="roundico" aria-hidden="true">|||</span></a>
     </div>` : ""}
     <div class="card" style="margin-top:14px">
       <div class="kicker-d">Mes sessions</div>
