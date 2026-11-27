@@ -216,11 +216,13 @@ export async function viewGuestLogin(root, _p, { api, go }) {
   let email = "";
   const msg = (h) => ($("#gMsg").innerHTML = h);
   // Retour après un code valide pour une adresse sans invitation (main.js a déconnecté le compte) : le dire clairement
-  let refused = null; try { refused = sessionStorage.getItem(GUEST_REFUSED); sessionStorage.removeItem(GUEST_REFUSED); } catch {}
+  // (gardé jusqu'à la prochaine saisie : la déconnexion redessine la page plusieurs fois)
+  let refused = null; try { refused = sessionStorage.getItem(GUEST_REFUSED); } catch {}
   if (refused) msg(`<div class="warn">${T(`L'adresse ${esc(refused)} n'a pas d'invitation en cours. Demandez à l'équipe de l'ajouter dans « Équipe et accès » avec le rôle « Invité·e (démo) », puis recommencez.`)}</div>`);
   $("#gF").onsubmit = async (e) => {
     e.preventDefault();
     email = $("#gMail").value.trim().toLowerCase();
+    try { sessionStorage.removeItem(GUEST_REFUSED); } catch {}
     const btn = $("#gF button"); btn.disabled = true; btn.textContent = "Envoi…";
     const r = await guard(() => api.sendGuestOtp(email));
     btn.disabled = false; btn.textContent = "Recevoir le code";
