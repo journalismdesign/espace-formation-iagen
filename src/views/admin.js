@@ -34,7 +34,7 @@ export async function viewAdmin(root, [view], { api, go, me }) {
     .sort((a, b) => group(a) - group(b) || (group(a) === 2 ? byDate(b, a) : byDate(a, b)));
   const shortFr = (d) => new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" }).replace(/^1 /, "1er ");
   const stateHtml = (s) => isArchived(s) ? `<span class="state archived">Archivée</span>`
-    : sessionEnded(s) ? `<span class="state closed">Terminée</span>${archiveDate(s) ? ` <span class="small muted">${T(`· archivage le ${shortFr(archiveDate(s))}`)}</span>` : ""}`
+    : sessionEnded(s) ? `<span class="state closed">Terminée</span>${archiveDate(s) ? `<div class="small muted archive-on">${T(`archivage le ${shortFr(archiveDate(s))}`)}</div>` : ""}`
     : current(s) ? `<span class="state current">${s.status === "live" ? `<span class="dot on"></span> ` : ""}En cours</span>`
     : `<span class="state ${s.status}">${STATUS[s.status]}</span>`;
   const trainerName = (id) => trainers.find((t) => t.id === id)?.name || "";

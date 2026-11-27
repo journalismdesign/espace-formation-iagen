@@ -314,7 +314,8 @@ select::-ms-expand{display:none}
 .end-screen a:not(.btn){color:var(--blue)}
 .state.archived{background:var(--light);color:var(--muted)}
 .state.current{background:var(--tint);color:var(--blue);display:inline-flex;align-items:center;gap:6px}
-.tbl td.state-cell{white-space:nowrap} /* « Terminée · archivage le 1er déc. » sur une ligne */
+.tbl td.state-cell{white-space:nowrap} /* « Terminée », puis dessous « archivage le 1er déc. » sans coupure */
+.archive-on{margin-top:4px;white-space:nowrap}
 .tbl tr.row-ended td{background:var(--light)}
 /* Direct (stagiaire) */
 .card.live{border:2px solid var(--navy)}
