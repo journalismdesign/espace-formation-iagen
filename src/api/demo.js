@@ -4,7 +4,7 @@
    stagiaire pour tester le direct. Aucune donnée ne quitte la machine. */
 
 import { DIRECT_PASS_HOURS } from "../lib/accessRules.js";
-import { isArchived } from "../lib/archive.js";
+import { isArchived, lastDate, sessionEnded } from "../lib/archive.js";
 import { bankFromData, ID_RE } from "../lib/quizzes.js";
 
 const KEY = "iagen-demo-db-v9";
@@ -351,6 +351,15 @@ export function createDemoApi({ defaultActivities }) {
         db.passes = (db.passes || []).filter((c) => c.session_id !== id);
       }
       commit(); return s;
+    },
+    // Comme close_finished_sessions : sessions finies closes (pas les démos des invité·es)
+    async closeFinished() {
+      let n = 0;
+      db.sessions.filter((x) => x.status !== "closed" && !x.demo_owner && lastDate(x) && sessionEnded({ ...x, status: "live" })).forEach((x) => {
+        x.status = "closed"; x.live = {}; n++;
+        db.codes = (db.codes || []).filter((c) => c.session_id !== x.id);
+      });
+      if (n) commit(); return n;
     },
     async deleteSession(id) {
       const x = db.sessions.find((y) => y.id === id);

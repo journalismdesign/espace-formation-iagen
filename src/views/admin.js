@@ -1,6 +1,6 @@
 /* Back-office : liste des sessions, création, QR code, suppression. */
 import QRCode from "qrcode";
-import { $, $$, T, esc, guard, dateFr } from "../lib/dom.js";
+import { $, $$, T, esc, guard, toast, dateFr } from "../lib/dom.js";
 import { defaultActivities } from "../lib/activities.js";
 import { quizKeysOf, snapshotQuizzes } from "../lib/quizzes.js";
 import { modulesFor } from "../lib/content.js";
@@ -20,6 +20,7 @@ export async function viewAdmin(root, [view], { api, go, me }) {
   const admin = isAdmin(me), guest = isGuest(me);
   if (guest) return viewGuestDemos(root, { api, go, me }); // invité·e : ses deux sessions de démo, rien d'autre
   const archivedTab = view === "archives";
+  await api.closeFinished().catch(() => 0); // sessions finies depuis plus de 15 min : closes (aussi côté base, par pg_cron)
   const [listed, counts, brands, trainers, skins] = await Promise.all([api.listSessions(), api.memberCounts(), api.listBrands().catch(() => []),
     api.listTrainers().catch(() => []), api.listSkins().catch(() => [])]);
   const all = listed.filter((s) => !s.demo_owner); // les sessions de démo des invité·es n'apparaissent pas ici
@@ -201,7 +202,9 @@ async function viewGuestDemos(root, { api, go, me }) {
     root.innerHTML = `<div class="card"><h2>Invitation terminée</h2><p class="muted">${T("Votre accès de démonstration a pris fin. Pour le prolonger, écrivez à formations@journalism.design.")}</p></div>`;
     return;
   }
-  const demos = await guard(() => ensureDemos(api, me));
+  let missingMig = false;
+  const demos = await ensureDemos(api, me).catch((e) => { missingMig = /demo_owner|schema cache/i.test(e.message); if (!missingMig) toast(e.message, "ko"); return null; });
+  if (!demos && missingMig) { root.innerHTML = `<div class="card"><h2>Sessions de démonstration bientôt prêtes</h2><p class="muted">${T("Elles seront disponibles dès que l'équipe aura activé cette fonction (migration 20261128020000_invites_demo.sql dans Supabase). Revenez dans un moment.")}</p></div>`; return; }
   if (!demos) { root.innerHTML = `<div class="card"><h2>Sessions de démonstration indisponibles</h2><p class="muted">${T("Elles n'ont pas pu être préparées. Réessayez dans un instant, ou écrivez à formations@journalism.design.")}</p></div>`; return; }
   root.innerHTML = `
     <div class="pagehead"><div><div class="kicker-d">Invitation · démonstration</div><h1>Vos sessions de démonstration</h1>

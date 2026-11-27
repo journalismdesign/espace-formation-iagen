@@ -153,6 +153,7 @@ function openAccessSheet(api, session) {
 export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
   const admin = isAdmin(ctx.me); // l'attribution, l'habillage et la duplication restent à l'administration
   const { api, go } = ctx;
+  await api.closeFinished().catch(() => 0); // finie depuis plus de 15 min : la session passe à « Terminée »
   let session = await api.getSession(sid);
   if (!session) { root.innerHTML = `<div class="card"><h2>Session introuvable</h2><a class="btn" href="#/admin">Retour</a></div>`; return; }
   if (!PHASES.some(([k]) => k === phase)) phase = "avant";

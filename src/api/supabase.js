@@ -198,6 +198,8 @@ export function createSupabaseApi(url, anonKey) {
     async getSession(id) { return ok(await sb.from("sessions").select("*").eq("id", id).maybeSingle()); },
     async createSession(s) { return ok(await sb.from("sessions").insert(s).select().single()); },
     async updateSession(id, patch) { return ok(await sb.from("sessions").update(patch).eq("id", id).select().single()); },
+    // Clôture automatique des sessions finies (15 min après l'heure de fin, le dernier jour) ; sans la migration : rien
+    async closeFinished() { const r = await sb.rpc("close_finished_sessions"); return r.error ? 0 : r.data || 0; },
     async deleteSession(id) { ok(await sb.from("sessions").delete().eq("id", id)); },
     // opts : { title, date, date2, invites (mêmes stagiaires), secretValues (valeurs des codes d'accès) }
     async duplicateSession(id, o = {}) {

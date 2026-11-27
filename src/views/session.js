@@ -59,6 +59,7 @@ export const FICHE_CATS = [
 
 export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   const { api, me } = ctx;
+  await api.closeFinished().catch(() => 0); // finie depuis plus de 15 min : « Terminée », aussi côté base
   let session = await api.getSession(sid);
   if (!session) {
     root.innerHTML = `<div class="card"><h2>Session introuvable</h2><p class="muted">${T("Vous n'avez pas accès à cette session, ou elle a été supprimée. Rejoignez-la avec son code depuis « Mon espace ».")}</p><a class="btn" href="#/">Mon espace</a></div>`;

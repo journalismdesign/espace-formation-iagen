@@ -471,4 +471,26 @@ ok((await db.query(`select count(*)::int n from resources where session_id = '${
 ok((await db.query(`select url from public.support_status('${SA.id}')`)).rows[0].url.includes("vieux.pdf"), "archivage : l'équipe garde le lien du support");
 ok((await db.query(`select count(*)::int n from threads where session_id = '${SA.id}'`)).rows[0].n === 1, "archivage : l'équipe garde la discussion");
 
+/* ---------- Clôture automatique : 15 min après l'heure de fin, le dernier jour ---------- */
+{
+await as(T, "formateur@exemple.fr");
+const F1 = (await db.query(`insert into sessions (title, status, date, format, end_time) values ('Finie hier', 'live', current_date - 1, '1', '17:30') returning id`)).rows[0].id;
+const F2 = (await db.query(`insert into sessions (title, status, date, format, end_time) values ('Pas finie', 'live', current_date + 1, '1', '17:30') returning id`)).rows[0].id;
+const F3 = (await db.query(`insert into sessions (title, status, date, date2, format, end_time) values ('Jour 2 demain', 'draft', current_date - 1, current_date + 1, '2', '17:30') returning id`)).rows[0].id;
+const F4 = (await db.query(`insert into sessions (title, status, format) values ('Sans date', 'live', '1') returning id`)).rows[0].id;
+await su();
+await db.exec(`insert into access_codes (session_id, email, code_hash, expires_at) values ('${F1}', 'x@exemple.fr', 'h', now() + interval '1 day')`);
+await as(B, "bob@exemple.fr");
+const closedN = (await db.query(`select public.close_finished_sessions() n`)).rows[0].n;
+await as(T, "formateur@exemple.fr");
+const st = Object.fromEntries((await db.query(`select id, status from sessions where id in ('${F1}', '${F2}', '${F3}', '${F4}')`)).rows.map((r) => [r.id, r.status]));
+ok(closedN >= 1 && st[F1] === "closed", "clôture automatique : session finie la veille close (appelable par tout compte connecté)");
+ok(st[F2] === "live" && st[F3] === "draft" && st[F4] === "live", "clôture automatique : ni avant le dernier jour, ni sans date");
+await su();
+ok((await db.query(`select count(*)::int n from access_codes where session_id = '${F1}'`)).rows[0].n === 0, "clôture automatique : codes purgés comme à la main");
+await db.exec(`reset role; set test.uid=''; set role anon;`);
+await fails(`select public.close_finished_sessions()`, "clôture automatique : pas sans connexion");
+await su();
+}
+
 console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests SQL passent.");

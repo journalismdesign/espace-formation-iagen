@@ -6,6 +6,9 @@
    Toutes les dates sont des chaînes AAAA-MM-JJ (heure de Paris), les heures des chaînes HH:MM. */
 export const ARCHIVE_DAYS = 5;
 export const ARCHIVE_CONTACT = "formations@journalism.design";
+// Clôture automatique : au plus tard 15 minutes après l'heure de fin des réglages (end_time), le dernier jour
+export const AUTO_CLOSE_MIN = 15;
+export const plusMin = (hm, n) => { const [h, m] = String(hm || "0:0").slice(0, 5).split(":").map(Number); const t = (h || 0) * 60 + (m || 0) + n; return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`; };
 
 export const parisToday = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
 export const parisHM = () => new Date().toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" });
@@ -22,15 +25,18 @@ export const isArchived = (s, today = parisToday()) => { const a = archiveDate(s
 // Jours d'accès restants avant l'archivage (null sans date)
 export const daysLeft = (s, today = parisToday()) => { const a = archiveDate(s); return a ? Math.max(0, daysBetween(today, a)) : null; };
 
-/* Formation terminée. `endOf(n)` : heure de fin de la journée n (déroulé, fin de journée modifiée comprise) ;
-   le dernier jour, salle fermée après cette heure, la formation est finie (plus de « va reprendre »). */
+/* Formation terminée : close ; ou dernier jour passé ; ou, le dernier jour, 15 minutes après l'heure de fin des réglages
+   (clôture automatique, même salle ouverte : close_finished_sessions la ferme côté base) ; ou, le dernier jour, salle
+   fermée après l'heure de fin de la journée du déroulé (`endOf(n)`, fin de journée modifiée comprise). */
 export function sessionEnded(s, { today = parisToday(), hm = parisHM(), endOf = () => null } = {}) {
   if (!s) return false;
   if (s.status === "closed") return true;
   const dates = trainingDates(s), last = dates.at(-1);
   if (!last) return false;
   if (today > last) return true;
-  if (today < last || s.status === "live") return false;
+  if (today < last) return false;
+  if (s.end_time && hm >= plusMin(s.end_time, AUTO_CLOSE_MIN)) return true;
+  if (s.status === "live") return false;
   const end = endOf(dates.length);
   return !!end && hm >= end;
 }

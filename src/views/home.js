@@ -12,6 +12,7 @@ export const STATUS = { draft: "À venir", live: "En direct", closed: "Terminée
 
 export async function viewHome(root, _p, { api, me, go }) {
   if (canView(me)) { go("#/admin"); return; } // la vue stagiaire reste accessible depuis chaque session
+  await api.closeFinished().catch(() => 0);
   const sessions = await api.listSessions();
   // Sessions en cours ou à venir : ni terminées, ni archivées (5 jours après la fin)
   const open = sessions.filter((s) => !sessionEnded(s) && !isArchived(s));
