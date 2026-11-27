@@ -21,6 +21,12 @@ ok(bad.errors.some((e) => e.includes("finit avant")), "horaires inversés : erre
 ok(bad.errors.some((e) => e.includes("horaires introuvables")), "horaire de fin manquant : erreur");
 ok(bad.errors.some((e) => e.includes("type « atelier libre »")), "type inconnu : erreur");
 ok(bad.warnings.some((e) => e.includes("quiz « inexistant »")), "quiz inconnu : remarque et retrait");
-ok(bad.errors.some((e) => e.includes("deux au plus")), "trois journées : refus");
+ok(!bad.errors.some((e) => e.includes("au plus")), "trois journées : acceptées (cinq au plus)");
+{
+  const six = [1, 2, 3, 4, 5, 6].map((d) => `# Jour ${d}\n## 09:30–10:00 · Séquence ${d}\n`).join("\n");
+  ok(parseConducteur(six).errors.some((e) => e.includes("cinq au plus")), "six journées : refus");
+  const five = parseConducteur(six.split("# Jour 6")[0]);
+  ok(!five.errors.length && five.programme.nDays === 5, "cinq journées : acceptées");
+}
 ok(parseConducteur("Bonjour").errors.length === 1, "texte sans séquence : refus");
 console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests du conducteur passent.");

@@ -14,8 +14,13 @@ const at = (d) => Date.parse(d + "T12:00:00Z");
 export const addDays = (d, n) => new Date(at(d) + n * 864e5).toISOString().slice(0, 10);
 export const daysBetween = (from, to) => Math.round((at(to) - at(from)) / 864e5);
 
-// Dates des journées de formation, dans l'ordre (le jour 2 seulement pour une formation de deux journées)
-export const trainingDates = (s) => [s?.date, s?.format === "2" ? s?.date2 : null].filter(Boolean);
+/* Journées : de 1 à 5 (sessions.format, '1' à '5'), une date chacune (sessions.dates, migration …_journees.sql).
+   Sans `dates` (sessions d'avant, ou migration pas encore exécutée) : date pour le jour 1, date2 pour le jour 2. */
+export const MAX_DAYS = 5;
+export const dayCount = (s) => Math.min(MAX_DAYS, Math.max(1, parseInt(s?.format, 10) || 1));
+export const dateOfDay = (s, d) => s?.dates?.[d - 1] || (d === 1 ? s?.date : d === 2 && dayCount(s) > 1 ? s?.date2 : null) || null;
+// Dates des journées de formation, dans l'ordre (celles qui sont renseignées)
+export const trainingDates = (s) => Array.from({ length: dayCount(s) }, (_, i) => dateOfDay(s, i + 1)).filter(Boolean);
 export const lastDate = (s) => trainingDates(s).at(-1) || null;
 export const archiveDate = (s) => { const d = lastDate(s); return d ? addDays(d, ARCHIVE_DAYS) : null; };
 export const isArchived = (s, today = parisToday()) => { const a = archiveDate(s); return !!a && today >= a; };

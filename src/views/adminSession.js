@@ -20,6 +20,7 @@ import { isLunch, pauseTargets, movePause, shiftPause, pauseAlert, pauseAlertTex
 import { loadSkins, skinFor, applySkin, currentSkin } from "../lib/skin.js";
 import { samsaHtml } from "../lib/brand.js";
 import { isAdmin } from "../lib/roles.js";
+import { dateOfDay, MAX_DAYS } from "../lib/archive.js";
 import { morph } from "../lib/morph.js";
 import { parsePages, formatPages, slideEmbedUrl, deckId, deckKind } from "../deck.js";
 
@@ -285,7 +286,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
           <p class="small muted">${T("Le format détermine le déroulé visible côté stagiaire : en une journée, seul le programme d'une journée est accessible.")}</p>
           <div class="grid g2">
             <div><label class="f" for="gD1">Date (jour 1)</label><input type="date" id="gD1" value="${esc(session.date || "")}"></div>
-            <div id="d2wrap"><label class="f" for="gD2">Date (jour 2)</label><input type="date" id="gD2" value="${esc(session.date2 || "")}"></div>
+            ${Array.from({ length: MAX_DAYS - 1 }, (_, i) => i + 2).map((d) => `<div class="dwrap" data-dday="${d}"><label class="f" for="gD${d}">Date (jour ${d})</label><input type="date" id="gD${d}" value="${esc(dateOfDay(session, d) || "")}"></div>`).join("")}
             <div><label class="f" for="gS">Début</label><input type="time" id="gS" value="${esc(String(session.start_time || "09:30").slice(0, 5))}"></div>
             <div><label class="f" for="gE">Fin</label><input type="time" id="gE" value="${esc(String(session.end_time || "17:30").slice(0, 5))}"></div>
           </div>
@@ -393,7 +394,9 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     $("#gEvU", box).oninput = debounce(drawEv, 400); drawEv();
     $("#gEvQ", box).onchange = async (e) => { const f = e.target.files[0]; if (f) { evQr = await guard(() => fileToDataUrl(f, 800)) || evQr; drawEv(); } };
     const fmt = () => box.querySelector('input[name="fmt"]:checked')?.value || session.format || "1";
-    const syncD2 = () => ($("#d2wrap", box).style.visibility = fmt() === "2" ? "visible" : "hidden");
+    // Une date par journée : autant de champs que de journées (déroulé importé ou trame, sinon le format choisi)
+    const nDays = () => (session.programme?.modules?.length ? daysOf(session).n : Number(fmt()) || 1);
+    const syncD2 = () => $$(".dwrap", box).forEach((w) => (w.hidden = Number(w.dataset.dday) > nDays()));
     box.querySelectorAll('input[name="fmt"]').forEach((r) => (r.onchange = syncD2)); syncD2();
     const drawEm = async () => {
       const qrUrl2 = await emargementQr({ emargement_qr: emQr, emargement_url: $("#gEm", box).value.trim() }, 600);
@@ -426,11 +429,14 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     keepDraft($("#regF", box), `reglages:${sid}`, { saveLabel: "Enregistrer les réglages" }); // brouillon automatique + « Tout réinitialiser »
     $("#regF", box).onsubmit = async (e) => {
       e.preventDefault();
-      const format = fmt();
-      if (format === "2" && !$("#gD2", box).value) return toast("Indiquez la date du jour 2.", "ko");
+      const n = nDays(), format = String(n);
+      const dates = Array.from({ length: n }, (_, i) => $(`#gD${i + 1}`, box).value || null);
+      const missing = dates.findIndex((d, i) => i > 0 && !d && dates[0]);
+      if (missing > 0) return toast(`Indiquez la date du jour ${missing + 1}.`, "ko");
+      if (n > 2 && !("dates" in session)) return toast("Plus de deux journées : exécutez d'abord la migration 20261129000000_journees.sql dans Supabase.", "ko");
       const patch = {
         title: $("#gT", box).value.trim(), formation: $("#gF", box).value.trim() || "Prendre en main les IA génératives",
-        format, date: $("#gD1", box).value || null, date2: format === "2" ? $("#gD2", box).value || null : null,
+        format, date: dates[0], date2: n > 1 ? dates[1] : null, ...("dates" in session ? { dates: dates[0] ? dates : null } : {}),
         start_time: $("#gS", box).value || "09:30", end_time: $("#gE", box).value || "17:30",
         brand_id: box.querySelector('input[name="brand"]:checked')?.value || null, ...(admin ? { trainer_id: $("#gTr", box).value || null, skin_id: $("#gSk", box).value || null } : {}),
         emargement_url: $("#gEm", box).value.trim() || null, emargement_qr: emQr, emargement_label: $("#gEl", box).value.trim() || null,
@@ -506,8 +512,9 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         </div></div>`;
       $("#condCancel", box).onclick = () => ($("#condPrev", box).innerHTML = "");
       $("#condApply", box).onclick = async () => {
-        const format = programme.nDays > 1 ? "2" : "1";
-        if (format === "2" && !session.date2) toast("Pensez à indiquer la date du jour 2.", "info");
+        const format = String(programme.nDays);
+        if (programme.nDays > 2 && !("dates" in session)) return toast("Plus de deux journées : exécutez d'abord la migration 20261129000000_journees.sql dans Supabase.", "ko");
+        if (programme.nDays > 1 && Array.from({ length: programme.nDays }, (_, i) => dateOfDay({ ...session, format }, i + 1)).some((d) => !d)) toast("Pensez à indiquer la date de chaque journée dans les réglages.", "info");
         const patch = { programme: session.programme?.ends ? { ...programme, ends: session.programme.ends } : programme, format };
         // sondages et nuages cités par « activité: » : ajoutés aux activités de la session s'ils n'y sont pas
         const missing = [...new Set(programme.modules.map((m) => m.live).filter(Boolean))].filter((k) => !session.activities.some((a) => a.id === k || a.from === k));
@@ -739,8 +746,10 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const cur = mods.find((m) => m.id === live.module);
       if (cur?.day) modDay = cur.day;
       // les pauses figurent dans le déroulé du pilotage ; celles de 15 min se déplacent (glisser-déposer ou ↑ ↓)
-      const shown = all.filter((m) => session.format !== "2" || (m.day || 1) === modDay);
-      const shownDay = session.format === "2" ? modDay : 1;
+      const nD = daysOf(session).n; // journées du déroulé (1 à 5)
+      if (modDay > nD) modDay = 1;
+      const shown = all.filter((m) => nD === 1 || (m.day || 1) === modDay);
+      const shownDay = nD > 1 ? modDay : 1;
       const pauseRow = (m) => {
         const lunch = isLunch(m), d = mins(m.t[1]) - mins(m.t[0]);
         const mv = (dir) => `<button type="button" class="iconbtn" data-pmove="${dir}" data-pid="${esc(m.id)}" aria-label="${dir < 0 ? "Avancer" : "Retarder"} la pause d'une séquence"${shiftPause(base, m.id, dir) ? "" : " disabled"}>${dir < 0 ? "↑" : "↓"}</button>`;
@@ -768,8 +777,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         const n = a.type === "quiz" ? quizFor(session, a.quiz)?.questions.length || 0 : 0, isOn = act?.id === a.id;
         return `<div class="modrow actrow${isOn ? " on" : ""}"><button type="button" data-a="${esc(a.id)}"><span class="mono small" aria-hidden="true">↳</span><span class="pill actp">${T(ACT_TYPES[a.type] || "Activité")}</span><span class="modtxt"><b>${T(a.titre)}</b>${n ? `<small>${n} question${n > 1 ? "s" : ""}${isOn ? ` · question ${(live.qi || 0) + 1} à l'écran` : ""}</small>` : ""}</span></button><button type="button" class="iconbtn actout" data-unplace="${esc(a.id)}" title="${esc(fr("Retirer du déroulé (l'activité reste dans la session)"))}" aria-label="${esc(fr(`Retirer « ${a.titre} » du déroulé`))}">✕</button>${isOn ? `<div class="act-ctrl" data-ctrl-for="${esc(a.id)}"></div>` : ""}</div>`;
       }).join("");
-      $("#modules", box).innerHTML = `${session.format === "2" ? `<div class="days" style="margin:0 0 8px">${[1, 2].map((d) => `<button type="button" data-mday="${d}" aria-pressed="${d === modDay}">Jour ${d}</button>`).join("")}</div>` : ""}${lvlBar}
-        <div class="modlist">${interleave(shown, slots.filter((x) => session.format !== "2" || x.day === modDay)).map((m) => {
+      $("#modules", box).innerHTML = `${nD > 1 ? `<div class="days" style="margin:0 0 8px">${Array.from({ length: nD }, (_, i) => i + 1).map((d) => `<button type="button" data-mday="${d}" aria-pressed="${d === modDay}">Jour ${d}</button>`).join("")}</div>` : ""}${lvlBar}
+        <div class="modlist">${interleave(shown, slots.filter((x) => nD === 1 || x.day === modDay)).map((m) => {
           if (m.slot) return `<div class="modrow em${emDone[m.key] ? " done" : ""}${(V === "emargement" || V === "evaluation") && live.emKey === m.key ? " on" : ""}"><button type="button" data-em="${m.key}"><span class="mono small">${hhmmT(m.t)}</span><span class="pill tf">${m.kind === "evaluation" ? "Évaluation" : "Émargement"}</span><b>${T(m.label)}</b>${emDone[m.key] ? `<span class="small muted" style="margin-left:auto">✓ présenté à ${new Date(emDone[m.key]).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>` : ""}</button></div>`;
           if (m.type === "pause") return pauseRow(m);
           const on = m.id === live.module, pages = modPages(session, m);
@@ -935,7 +944,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     let pauseOff = null;
     const pauseTick = () => {
       const el = $("#pauseRemind", box); if (!el) return;
-      const a = session.status === "closed" ? null : pauseAlert(modulesFor(session), (d) => (d === 2 ? session.date2 : session.date) || null);
+      const a = session.status === "closed" ? null : pauseAlert(modulesFor(session), (d) => dateOfDay(session, d));
       const key = a ? `${a.m.day || 1}:${a.m.id}:${a.m.t[0]}` : "";
       const txt = a && key !== pauseOff ? pauseAlertText(a) : "";
       if (el.dataset.k === key + txt) return;
@@ -1045,7 +1054,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const m = at ? modulesFor(session).find((x) => x.id === at) : null;
       return saveSession({ activities: session.activities.map((x) => (x.id === id ? { ...x, at } : x)) }, m ? `« ${a.titre} » placé dans « ${m.titre} ».` : `« ${a.titre} » retiré du déroulé. Il reste dans les activités hors déroulé.`);
     };
-    const modLabel = (m) => `${session.format === "2" ? `J${m.day || 1} · ` : ""}${hhmmT(m.t[0])} · ${m.titre}`;
+    const modLabel = (m) => `${daysOf(session).n > 1 ? `J${m.day || 1} · ` : ""}${hhmmT(m.t[0])} · ${m.titre}`;
     // « + » d'une séquence : placer une activité de la session, en ajouter une de la bibliothèque, ou en créer une
     const openAddSheet = (mid) => {
       const mods = modulesFor(session), m = mods.find((x) => x.id === mid); if (!m) return;
@@ -1054,7 +1063,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         const at = actPlace(session, a, mods), where = at ? mods.find((x) => x.id === at) : null;
         return `<div class="prow act-row"><span>${T(a.titre)} <small class="muted">${ACT_TYPES[a.type]}${where ? ` · ${at === mid ? "déjà ici" : T(`dans « ${where.titre} »`)}` : " · hors déroulé"}</small></span>${at === mid ? "" : `<button class="btn sm ghost" type="button" data-placehere="${esc(a.id)}">${where ? "Déplacer ici" : "Placer ici"}</button>`}</div>`;
       }).join("");
-      openSheet(`<span class="pill">Déroulé</span><h2>Ajouter une activité</h2><p class="muted" style="margin-top:0">${T(`À « ${m.titre} », ${session.format === "2" ? `jour ${m.day || 1}, ` : ""}${hhmmT(m.t[0])}. Elle s'affichera sous la séquence, dans le pilotage : un clic la lance, les flèches y passent après les pages de la séquence.`)}</p>
+      openSheet(`<span class="pill">Déroulé</span><h2>Ajouter une activité</h2><p class="muted" style="margin-top:0">${T(`À « ${m.titre} », ${daysOf(session).n > 1 ? `jour ${m.day || 1}, ` : ""}${hhmmT(m.t[0])}. Elle s'affichera sous la séquence, dans le pilotage : un clic la lance, les flèches y passent après les pages de la séquence.`)}</p>
         <h3 style="margin-top:16px">Créer pour cette séquence</h3>
         <div class="chips"><button class="btn sm" type="button" data-createat="quiz">Quiz</button><button class="btn sm" type="button" data-createat="poll">Sondage</button><button class="btn sm" type="button" data-createat="cloud">Nuage de mots</button></div>
         <h3 style="margin-top:16px">Depuis la bibliothèque</h3>

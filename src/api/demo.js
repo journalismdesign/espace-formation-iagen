@@ -4,7 +4,7 @@
    stagiaire pour tester le direct. Aucune donnée ne quitte la machine. */
 
 import { DIRECT_PASS_HOURS } from "../lib/accessRules.js";
-import { isArchived } from "../lib/archive.js";
+import { isArchived, lastDate, addDays, dayCount } from "../lib/archive.js";
 import { bankFromData, ID_RE } from "../lib/quizzes.js";
 
 const KEY = "iagen-demo-db-v9";
@@ -20,7 +20,7 @@ function load() {
   try { const raw = localStorage.getItem(KEY); if (raw) return JSON.parse(raw); } catch {}
   return null;
 }
-export const SESSION_DEFAULTS = { date2: null, start_time: "09:30", end_time: "17:30", brand_id: null, client_logo: null, client_logo_light: null,
+export const SESSION_DEFAULTS = { date2: null, dates: null, start_time: "09:30", end_time: "17:30", brand_id: null, client_logo: null, client_logo_light: null,
   slides_url: "https://docs.google.com/presentation/d/1G-exjcmMujp3XtEAOMCyzR9Plk3OzgS1qnVdTI0rJkg/edit", emargement_url: "", emargement_qr: null, emargement_label: null, support_unlocked: false, decks: [], trainer_id: null, emargement2_enabled: true, emargement2_text: null,
   evaluation_url: null, evaluation_qr: null, evaluation_title: null, evaluation_text: null };
 
@@ -100,7 +100,7 @@ export function createDemoApi({ defaultActivities }) {
   const chatOpen = (sid) => { const s = db.sessions.find((x) => x.id === sid); return manages(sid) || (isMember(sid) && !memberLocked(sid) && !!s?.online && s.status !== "closed"); };
   const nameOf = (id) => { const p = prof(id); return p ? (p.full_name || p.email.split("@")[0]) : "?"; };
 
-  const lastDay = (x) => (x.format === "2" && x.date2) || x.date;
+  const lastDay = (x) => lastDate(x);
   const accessExpiry = (x) => new Date((lastDay(x) || new Date().toISOString().slice(0, 10)) + "T23:59:00").toISOString();
   // Code ou accès remis par l'équipe : qui pilote la session, jamais pour une adresse de l'équipe
   const needTeamFor = (sid, email) => {
@@ -123,7 +123,7 @@ export function createDemoApi({ defaultActivities }) {
   };
   const pub = (x) => {
     const b = db.brands.find((y) => y.id === x.brand_id);
-    return { id: x.id, title: x.title, formation: x.formation, client: x.client || b?.name || "", date: x.date, date2: x.format === "2" ? x.date2 : null,
+    return { id: x.id, title: x.title, formation: x.formation, client: x.client || b?.name || "", date: x.date, date2: dayCount(x) > 1 ? lastDate(x) : null,
       start_time: x.start_time, end_time: x.end_time, format: x.format, status: x.status, client_logo: x.client_logo || b?.logo || null,
       client_logo_light: x.client_logo_light || b?.logo_light || null,
       org_name: db.settings.org_name, org_logo: db.settings.org_logo, org_logo_light: db.settings.org_logo_light,
@@ -351,8 +351,11 @@ export function createDemoApi({ defaultActivities }) {
     async duplicateSession(id, o = {}) {
       needAdmin();
       const s = db.sessions.find((x) => x.id === id); if (!s) throw new Error("Session introuvable.");
-      const { id: _i, code: _c, status: _s, live: _l, created_at: _d, title, date, date2, ...rest } = s;
-      const n = await api.createSession({ ...rest, title: (o.title || "").trim() || title + " (copie)", date: o.date || null, date2: s.format === "2" ? o.date2 || null : null, support_unlocked: false });
+      const { id: _i, code: _c, status: _s, live: _l, created_at: _d, title, date, date2, dates, ...rest } = s;
+      // toutes les dates décalées du même écart que le jour 1 (deux journées : le jour 2 choisi)
+      const gap = o.date && date ? Math.round((Date.parse(o.date) - Date.parse(date)) / 864e5) : null;
+      const nd = !o.date ? null : s.format === "2" && o.date2 ? [o.date, o.date2] : dates?.length && gap != null ? dates.map((d) => (d ? addDays(d, gap) : null)) : s.format === "1" ? [o.date] : null;
+      const n = await api.createSession({ ...rest, title: (o.title || "").trim() || title + " (copie)", date: o.date || null, date2: dayCount(s) > 1 ? o.date2 || nd?.[1] || null : null, dates: nd, support_unlocked: false });
       if (db.support[id]) db.support[n.id] = db.support[id];
       db.resources.filter((r) => r.session_id === id).forEach((r) => db.resources.push({ ...r, id: uid(), session_id: n.id }));
       db.secrets.filter((r) => r.session_id === id).forEach((r) => db.secrets.push({ ...r, id: uid(), session_id: n.id, value: o.secretValues ? r.value : "" }));

@@ -469,4 +469,17 @@ ok((await db.query(`select count(*)::int n from resources where session_id = '${
 ok((await db.query(`select url from public.support_status('${SA.id}')`)).rows[0].url.includes("vieux.pdf"), "archivage : l'équipe garde le lien du support");
 ok((await db.query(`select count(*)::int n from threads where session_id = '${SA.id}'`)).rows[0].n === 1, "archivage : l'équipe garde la discussion");
 
+/* ---------- Formations de 1 à 5 journées ---------- */
+await as(T, "formateur@exemple.fr");
+const S5 = (await db.query(`insert into sessions (title, format, date, date2, dates) values ('Cinq jours', '5', '2027-03-01', '2027-03-02', array['2027-03-01','2027-03-02','2027-03-08','2027-03-09','2027-03-15']::date[]) returning id, code`)).rows[0];
+await fails(`insert into sessions (title, format) values ('Six jours', '6')`, "journées : six refusées");
+await fails(`insert into sessions (title, format, dates) values ('Trop de dates', '5', array['2027-01-01','2027-01-02','2027-01-03','2027-01-04','2027-01-05','2027-01-06']::date[])`, "journées : six dates refusées");
+ok((await db.query(`select public.session_last_day(s)::text d from sessions s where id = '${S5.id}'`)).rows[0].d === "2027-03-15", "journées : le dernier jour est la plus tardive des dates");
+ok((await db.query(`select date2::text d from public.session_public('${S5.code}')`)).rows[0].d === "2027-03-15", "journées : l'entrée stagiaire reçoit le dernier jour");
+const d6 = (await db.query(`select public.duplicate_session('${S5.id}', 'Cinq jours (bis)', '2027-04-05') id`)).rows[0].id;
+const r6 = (await db.query(`select date::text d1, date2::text d2, array_to_string(dates, ',') ds, format from sessions where id = '${d6}'`)).rows[0];
+ok(r6.ds === "2027-04-05,2027-04-06,2027-04-12,2027-04-13,2027-04-19" && r6.d2 === "2027-04-06" && r6.format === "5", "journées : la duplication décale toutes les dates du même écart");
+const d7 = (await db.query(`select public.duplicate_session('${SR.id}', null, '2027-05-10') id`)).rows[0].id;
+ok((await db.query(`select array_to_string(dates, ',') ds from sessions where id = '${d7}'`)).rows[0].ds === "2027-05-10", "journées : une journée dupliquée garde sa date");
+
 console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests SQL passent.");

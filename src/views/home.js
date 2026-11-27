@@ -1,7 +1,7 @@
 /* « Mon espace » (stagiaire) : la seule chose à faire maintenant, la
    préparation, le parcours, les discussions et toutes les sessions. */
 import { canView } from "../lib/roles.js";
-import { isArchived, sessionEnded } from "../lib/archive.js";
+import { isArchived, sessionEnded, dayCount } from "../lib/archive.js";
 import { $, $$, T, esc, dateFr, guard, NB } from "../lib/dom.js";
 import { preparation } from "./cadrageModel.js";
 import { datesFr } from "../lib/brand.js";
@@ -76,7 +76,7 @@ export async function viewHome(root, _p, { api, me, go }) {
         ${sessions.length ? sessions.map((s) => `<div class="sess-card">
           <div class="kicker-d">${s.status === "live" && !sessionEnded(s) && !isArchived(s) ? `<span class="live-tag"><span class="dot on"></span>En direct</span>` : stateOf(s)} · ${T(dateFr(s.date, { day: "numeric", month: "long" }))}</div>
           <b>${T(s.title)}</b>
-          <div class="small muted">${T(s.formation)}${s.format === "2" ? " · 2 jours" : ""}</div>
+          <div class="small muted">${T(s.formation)}${dayCount(s) > 1 ? ` · ${dayCount(s)} jours` : ""}</div>
           <div style="display:flex;gap:6px;margin-top:10px"><a class="btn sm" href="#/s/${s.id}">${isArchived(s) ? "Voir" : sessionEnded(s) ? "Revoir" : "Rejoindre"}</a>${chatOn(s) && !sessionEnded(s) && !isArchived(s) ? `<a class="btn sm ghost" href="#/s/${s.id}/discussion">Discussion</a>` : ""}</div>
         </div>`).join("") : `<p class="small muted">Aucune session pour l'instant.</p>`}
       </div>

@@ -2,6 +2,7 @@
    assistant. Repris de la version claude.ai et rendus indépendants du
    stockage (la progression est passée en paramètre). */
 import { FICHES, GLOSS, PROMPTS, CASES, D1, D2, D2B, DAY_TITLES, CC, CCL, IDEES } from "../data.js";
+import { dateOfDay } from "./archive.js";
 import { quizFor, pollFor } from "./quizzes.js";
 import { T, esc, fr, $, $$, NB, norm, mins, hfr, fmtMin, bindCopy } from "./dom.js";
 import { applyEnds } from "./programme.js";
@@ -13,13 +14,14 @@ export const ficheById = (id) => FICHES.find((f) => f.id === id);
 // pour chaque journée ; sur la dernière, l'évaluation de fin de stage avant la dernière séquence.
 export function emargementSlots(session) {
   const all = modulesFor(session);
-  const days = session.format === "2" ? [1, 2] : [1];
+  const days = Array.from({ length: daysOf(session).n }, (_, i) => i + 1);
+  const own = !!session.programme?.modules?.length; // conducteur ou trame : chaque journée commence à sa première séquence
   return days.flatMap((d) => {
     const dm = all.filter((m) => (m.day || 1) === d);
     const lunch = dm.find((m) => m.type === "pause" && /jeuner/i.test(m.titre));
-    const am = String(session.start_time || dm[0]?.t[0] || "09:30").slice(0, 5);
+    const am = String((own && dm[0]?.t[0]) || session.start_time || dm[0]?.t[0] || "09:30").slice(0, 5);
     const pm = lunch ? lunch.t[1] : "13:30";
-    const date = d === 2 ? session.date2 : session.date;
+    const date = dateOfDay(session, d);
     const out = [{ key: `j${d}-matin`, day: d, t: am, label: "Émargement du matin", date }, { key: `j${d}-aprem`, day: d, t: pm, label: "Émargement de l'après-midi", date }];
     if (d === days[days.length - 1]) { const last = dm.filter((m) => m.type !== "pause").pop(); if (last) out.push({ key: `j${d}-eval`, day: d, t: last.t[0], label: "Évaluation de fin de stage", date, kind: "evaluation" }); }
     return out;

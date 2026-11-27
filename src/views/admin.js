@@ -7,7 +7,7 @@ import { modulesFor } from "../lib/content.js";
 import { STATUS } from "./home.js";
 import { skinDark } from "../lib/skin.js";
 import { isAdmin, isGuest } from "../lib/roles.js";
-import { isArchived, archiveDate, sessionEnded } from "../lib/archive.js";
+import { isArchived, archiveDate, sessionEnded, dayCount } from "../lib/archive.js";
 
 // Lien court de la session : <site>/CODE (redirigé vers #/join/CODE par 404.html ou au démarrage).
 // VITE_SHORT_BASE permet un domaine plus court (ex. https://formation.samsa.fr/).
@@ -45,7 +45,7 @@ export async function viewAdmin(root, [view], { api, go, me }) {
       <div class="grid g2">
         <div><label class="f" for="nTitle">Intitulé</label><input type="text" id="nTitle" required maxlength="140" placeholder="Libération · Prendre en main les IA génératives"></div>
         <div><label class="f" for="nClient">Client ou rédaction</label><input type="text" id="nClient" maxlength="80" placeholder="Libération"></div>
-        <div><label class="f" for="nDate">Date (jour 1 · le jour 2 se règle ensuite)</label><input type="date" id="nDate"></div>
+        <div><label class="f" for="nDate">Date (jour 1 · les autres jours se règlent ensuite)</label><input type="date" id="nDate"></div>
         <div><label class="f" for="nFmt">Format</label><select id="nFmt"><option value="1">Une journée</option><option value="2">Deux journées</option></select></div>
         <div><label class="f" for="nTr">Intervenant·e (attribution)</label><select id="nTr">${trOptions(null)}</select></div>
         <div><label class="f" for="nSk">Habillage (environnement du centre)</label><select id="nSk"><option value="">Par défaut</option>${skins.map((k) => `<option value="${k.id}">${T(k.name)}</option>`).join("")}</select></div>
@@ -59,7 +59,7 @@ export async function viewAdmin(root, [view], { api, go, me }) {
     <div class="card table-card">
       ${sessions.length ? `<table class="tbl"><thead><tr><th>Session</th><th>Client</th><th>Intervenant·e</th><th>État</th><th>Date</th><th>Code</th><th>Participants</th><th></th></tr></thead><tbody>
       ${sessions.map((s) => `<tr>
-        <td><a href="#/admin/s/${s.id}"><b>${T(s.title)}</b></a><div class="small muted">${T(s.formation || "")}${s.format === "2" ? " · 2 jours" : " · 1 jour"}</div></td>
+        <td><a href="#/admin/s/${s.id}"><b>${T(s.title)}</b></a><div class="small muted">${T(s.formation || "")}${dayCount(s) > 1 ? ` · ${dayCount(s)} jours` : " · 1 jour"}</div></td>
         <td class="client-cell">${(() => { const c = clientOf(s); return c.logo ? `<img src="${esc(c.logo)}" alt="${esc(c.name)}" title="${esc(c.name)}" class="client-logo">` : c.name ? `<span>${T(c.name)}</span>` : `<span class="muted">—</span>`; })()}</td>
         <td class="small">${admin ? `<select class="assign" data-assign="${s.id}" aria-label="Intervenant·e de la session">${trOptions(s.trainer_id)}</select>` : T(trainerName(s.trainer_id) || "—")}</td>
         <td>${stateHtml(s)}</td>
@@ -140,6 +140,7 @@ export function openDuplicate(api, s, go) {
         <div><label class="f" for="dD">${two ? "Jour 1" : "Date"}</label><input type="date" id="dD"></div>
         ${two ? `<div><label class="f" for="dD2">Jour 2</label><input type="date" id="dD2"></div>` : ""}
       </div>
+      ${dayCount(s) > 2 ? `<p class="small muted">${T(`Formation de ${dayCount(s)} journées : les dates suivantes gardent le même écart avec le jour 1 (modifiables ensuite dans les réglages).`)}</p>` : ""}
       <label class="f inline"><input type="checkbox" id="dInv"> ${T("Reprendre les stagiaires (invitations et participant·es de la session d'origine)")}</label>
       <label class="f inline"><input type="checkbox" id="dSec"> ${T("Recopier les valeurs des codes et accès des exercices (sinon, seuls leurs intitulés)")}</label>
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn" type="submit">Dupliquer</button><button class="btn ghost" type="button" id="dX">Annuler</button></div>

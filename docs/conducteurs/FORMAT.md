@@ -7,7 +7,7 @@ Un conducteur décrit le déroulé d'une session : journées, séquences, horair
 formation: Prendre en main les IA génératives      ← facultatif
 ---
 
-# Jour 1 · Comprendre, puis Gemini Notebook        ← une ligne par journée ; inutile pour une seule journée (2 journées au plus)
+# Jour 1 · Comprendre, puis Gemini Notebook        ← une ligne par journée ; inutile pour une seule journée (5 journées au plus)
 
 ## 09:30–09:40 · Accueil, objectifs, attentes      ← une séquence : début–fin, puis titre
 type: discussion                                   ← comprendre | pratique | discussion | pause

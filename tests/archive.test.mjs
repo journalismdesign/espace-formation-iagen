@@ -31,3 +31,12 @@ ok(nextTrainingDay(two, { today: "2026-12-06", hm: "18:00", endOf }) === "2026-1
 ok(nextTrainingDay(two, { today: "2026-12-06", hm: "12:45", endOf }) === null, "jour 1, déjeuner : reprise dans quelques minutes");
 ok(nextTrainingDay(two, { today: "2026-12-08", hm: "18:00", endOf }) === null && nextTrainingDay(one, { today: "2026-12-06", hm: "18:00", endOf }) === null, "dernier jour : pas de journée suivante");
 ok(nextTrainingDay({ ...two, status: "live" }, { today: "2026-12-06", hm: "18:00", endOf }) === null, "salle ouverte : pas d'attente");
+
+// Formations de 1 à 5 journées, une date par journée
+import { dayCount, dateOfDay, trainingDates } from "../src/lib/archive.js";
+const five = { format: "5", date: "2027-03-01", date2: "2027-03-02", dates: ["2027-03-01", "2027-03-02", "2027-03-08", "2027-03-09", "2027-03-15"], status: "draft" };
+ok(dayCount(five) === 5 && dayCount({ format: "9" }) === 5 && dayCount({}) === 1, "journées : de 1 à 5");
+ok(dateOfDay(five, 3) === "2027-03-08" && dateOfDay(two, 2) === "2026-12-08" && dateOfDay(one, 2) === null, "date de chaque journée (avec ou sans dates)");
+ok(trainingDates(five).length === 5 && lastDate(five) === "2027-03-15" && archiveDate(five) === "2027-03-20", "cinq journées : dernier jour et archivage");
+ok(nextTrainingDay(five, { today: "2027-03-02", hm: "18:00", endOf: () => "17:30" }) === "2027-03-08", "cinq journées : la journée suivante peut être la semaine d'après");
+ok(!sessionEnded(five, { today: "2027-03-09", hm: "18:00", endOf: () => "17:30" }), "cinq journées : pas finie avant le dernier jour");

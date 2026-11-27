@@ -136,7 +136,7 @@ export function parseConducteur(md, known = {}) {
     Object.keys(mo).forEach((x) => mo[x] === undefined && delete mo[x]);
   });
   const nDays = Math.max(1, ...modules.map((x) => x.day || 1));
-  if (nDays > 2) errors.push(`Le conducteur compte ${nDays} journées : une session en compte deux au plus.`);
+  if (nDays > 5) errors.push(`Le conducteur compte ${nDays} journées : une session en compte cinq au plus.`);
   if ([...new Set(modules.map((x) => x.day || 1))].length < nDays) warnings.push("Une des journées n'a aucune séquence.");
   return { programme: { formation, days, nDays, modules }, warnings, errors };
 }
