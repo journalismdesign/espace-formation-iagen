@@ -11,7 +11,7 @@ import { api } from "./api/index.js";
 import { $, esc, toast, dateFr } from "./lib/dom.js";
 import { samsaHtml } from "./lib/brand.js";
 import { closeSheet } from "./lib/content.js";
-import { viewLogin, viewTrainerLogin, viewSetTrainerCode, viewGuestLogin, RESET } from "./views/login.js";
+import { viewLogin, viewTrainerLogin, viewSetTrainerCode, viewGuestLogin, RESET, GUEST_TRY, GUEST_REFUSED } from "./views/login.js";
 import { viewEntry } from "./views/entry.js";
 import { viewHome } from "./views/home.js";
 import { viewProfile } from "./views/profile.js";
@@ -100,6 +100,13 @@ async function render() {
   if (user && route.public) { go("#/"); return; }
   me = user ? await api.me() : null;
   if (tok !== renderTok) return;
+  // Connexion par la page d'invitation d'une adresse sans invitation : pas d'espace stagiaire, retour à la page avec un message
+  let tried = null; try { tried = sessionStorage.getItem(GUEST_TRY); sessionStorage.removeItem(GUEST_TRY); } catch {}
+  if (user && tried && !canView(me)) {
+    await api.signOut(); me = null; booted = false;
+    try { sessionStorage.setItem(GUEST_REFUSED, tried); } catch {}
+    go("#/invitation"); return;
+  }
   if (user && !booted) { booted = true; if (!isGuest(me)) { try { await api.claimInvites(); } catch (e) { console.warn(e); } } }
   if (route.trainer && !canView(me)) { go("#/"); return; }
   if (route.admin && !isAdmin(me)) { go("#/admin"); return; } // pages réservées à l'administration
