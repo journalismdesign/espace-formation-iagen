@@ -1,6 +1,7 @@
 /* « Mon espace » (stagiaire) : la seule chose à faire maintenant, la
    préparation, le parcours, les discussions et toutes les sessions. */
-import { isStaff } from "../lib/roles.js";
+import { canView } from "../lib/roles.js";
+import { isArchived, sessionEnded } from "../lib/archive.js";
 import { $, $$, T, esc, dateFr, guard, NB } from "../lib/dom.js";
 import { preparation } from "./cadrageModel.js";
 import { datesFr } from "../lib/brand.js";
@@ -10,9 +11,11 @@ import { chatOn } from "../lib/chat.js";
 export const STATUS = { draft: "À venir", live: "En direct", closed: "Terminée" };
 
 export async function viewHome(root, _p, { api, me, go }) {
-  if (isStaff(me)) { go("#/admin"); return; } // la vue stagiaire reste accessible depuis chaque session
+  if (canView(me)) { go("#/admin"); return; } // la vue stagiaire reste accessible depuis chaque session
   const sessions = await api.listSessions();
-  const open = sessions.filter((s) => s.status !== "closed");
+  // Sessions en cours ou à venir : ni terminées, ni archivées (5 jours après la fin)
+  const open = sessions.filter((s) => !sessionEnded(s) && !isArchived(s));
+  const stateOf = (s) => (isArchived(s) ? "Archivée" : sessionEnded(s) ? "Terminée" : STATUS[s.status]);
   const next = open.find((s) => s.status === "live") || open[0] || null;
   const cad = next ? hasCadrage(next) : false; // pas de cadrage pour une formation d'une journée
   const project = next && cad ? await api.myProject(next.id).catch(() => null) : null;
@@ -48,7 +51,7 @@ export async function viewHome(root, _p, { api, me, go }) {
 
   root.innerHTML = `
     <div class="pagehead"><div><h1>Mon espace</h1><p class="muted">${T("Le bloc « À faire maintenant » indique toujours la seule chose à faire aujourd'hui. Le reste du parcours s'ouvre au fur et à mesure.")}</p></div>
-      ${isStaff(me) ? `<a class="btn ghost sm" href="#/admin">Back-office</a>` : ""}</div>
+      ${canView(me) ? `<a class="btn ghost sm" href="#/admin">Back-office</a>` : ""}</div>
     <div class="grid home-top">${todo}</div>
     ${next ? `
     <div class="card" style="margin-top:14px">
@@ -71,10 +74,10 @@ export async function viewHome(root, _p, { api, me, go }) {
       <div class="kicker-d">Mes sessions</div>
       <div class="grid g3" style="margin-top:10px">
         ${sessions.length ? sessions.map((s) => `<div class="sess-card">
-          <div class="kicker-d">${s.status === "live" ? `<span class="live-tag"><span class="dot on"></span>En direct</span>` : STATUS[s.status]} · ${T(dateFr(s.date, { day: "numeric", month: "long" }))}</div>
+          <div class="kicker-d">${s.status === "live" && !sessionEnded(s) && !isArchived(s) ? `<span class="live-tag"><span class="dot on"></span>En direct</span>` : stateOf(s)} · ${T(dateFr(s.date, { day: "numeric", month: "long" }))}</div>
           <b>${T(s.title)}</b>
           <div class="small muted">${T(s.formation)}${s.format === "2" ? " · 2 jours" : ""}</div>
-          <div style="display:flex;gap:6px;margin-top:10px"><a class="btn sm" href="#/s/${s.id}">${s.status === "closed" ? "Revoir" : "Rejoindre"}</a>${chatOn(s) ? `<a class="btn sm ghost" href="#/s/${s.id}/discussion">Discussion</a>` : ""}</div>
+          <div style="display:flex;gap:6px;margin-top:10px"><a class="btn sm" href="#/s/${s.id}">${isArchived(s) ? "Voir" : sessionEnded(s) ? "Revoir" : "Rejoindre"}</a>${chatOn(s) && !sessionEnded(s) && !isArchived(s) ? `<a class="btn sm ghost" href="#/s/${s.id}/discussion">Discussion</a>` : ""}</div>
         </div>`).join("") : `<p class="small muted">Aucune session pour l'instant.</p>`}
       </div>
       ${next ? `<details style="margin-top:12px"><summary class="small" style="cursor:pointer">Rejoindre une autre session avec un code</summary>${joinForm()}</details>` : ""}

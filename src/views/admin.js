@@ -6,7 +6,8 @@ import { quizKeysOf, snapshotQuizzes } from "../lib/quizzes.js";
 import { modulesFor } from "../lib/content.js";
 import { STATUS } from "./home.js";
 import { skinDark } from "../lib/skin.js";
-import { isAdmin } from "../lib/roles.js";
+import { isAdmin, isGuest } from "../lib/roles.js";
+import { isArchived, archiveDate, sessionEnded } from "../lib/archive.js";
 
 // Lien court de la session : <site>/CODE (redirigé vers #/join/CODE par 404.html ou au démarrage).
 // VITE_SHORT_BASE permet un domaine plus court (ex. https://formation.samsa.fr/).
@@ -15,10 +16,19 @@ export const joinUrl = (code) => (SHORT_BASE ? SHORT_BASE.replace(/\/?$/, "/") :
 export const joinUrlLabel = (code) => joinUrl(code).replace(/^https?:\/\//, "");
 export const qr = (text, size = 320) => QRCode.toDataURL(text, { width: size, margin: 1, color: { dark: skinDark(), light: "#ffffff" } });
 
-export async function viewAdmin(root, _p, { api, go, me }) {
-  const admin = isAdmin(me);
-  const [sessions, counts, brands, trainers, skins] = await Promise.all([api.listSessions(), api.memberCounts(), api.listBrands().catch(() => []),
+export async function viewAdmin(root, [view], { api, go, me }) {
+  const admin = isAdmin(me), guest = isGuest(me);
+  const archivedTab = view === "archives";
+  const [all, counts, brands, trainers, skins] = await Promise.all([api.listSessions(), api.memberCounts(), api.listBrands().catch(() => []),
     api.listTrainers().catch(() => []), api.listSkins().catch(() => [])]);
+  /* Deux onglets : à venir (en cours, à venir, terminées depuis moins de 5 jours) et archivées (5 jours après le
+     dernier jour, src/lib/archive.js). Les archives, de la plus récente à la plus ancienne. */
+  const archived = all.filter((s) => isArchived(s)).sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  const sessions = archivedTab ? archived : all.filter((s) => !isArchived(s));
+  const shortFr = (d) => new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" }).replace(/^1 /, "1er ");
+  const stateHtml = (s) => isArchived(s) ? `<span class="state archived">Archivée</span>`
+    : sessionEnded(s) ? `<span class="state closed">Terminée</span>${archiveDate(s) ? `<div class="small muted">${T(`archivage le ${shortFr(archiveDate(s))}`)}</div>` : ""}`
+    : `<span class="state ${s.status}">${STATUS[s.status]}</span>`;
   const trainerName = (id) => trainers.find((t) => t.id === id)?.name || "";
   const trOptions = (sel) => `<option value="">— Non attribuée —</option>${trainers.map((t) => `<option value="${t.id}"${t.id === sel ? " selected" : ""}>${T(t.name)}${t.login_email ? "" : " (sans compte)"}</option>`).join("")}`;
   // Client : entreprise préenregistrée (brands) ou nom saisi avec « Autre »
@@ -27,8 +37,8 @@ export async function viewAdmin(root, _p, { api, go, me }) {
     return b ? { name: b.name, logo: b.logo || b.logo_light || null } : { name: s.client || "", logo: s.client_logo || null };
   };
   root.innerHTML = `
-    <div class="pagehead"><div><div class="kicker-d">${admin ? "Back-office · administration" : "Back-office formateur"}</div><h1>${admin ? "Sessions" : "Mes sessions"}</h1>
-      ${admin ? "" : `<p class="muted">${T("Les sessions qui vous sont attribuées par l'administration. Pour en obtenir une autre, contactez-la.")}</p>`}</div>
+    <div class="pagehead"><div><div class="kicker-d">${admin ? "Back-office · administration" : guest ? "Back-office · invitation" : "Back-office formateur"}</div><h1>${admin || guest ? "Sessions" : "Mes sessions"}</h1>
+      ${admin ? "" : `<p class="muted">${T(guest ? "Toutes les sessions, en lecture seule : ouvrez-en une pour voir ses réglages, son pilotage, son suivi et le côté stagiaire." : "Les sessions qui vous sont attribuées par l'administration. Pour en obtenir une autre, contactez-la.")}</p>`}</div>
       ${admin ? `<div class="head-actions"><a class="btn ghost" href="#/admin/quiz">Quiz et sondages</a><a class="btn ghost" href="#/admin/equipe">Équipe et accès</a><a class="btn ghost" href="#/admin/reglages">Réglages généraux</a><button class="btn" id="newBtn">+ Démarrer une session</button></div>` : ""}</div>
     <form class="card" id="newForm" hidden style="margin-bottom:14px">
       <h3>Nouvelle session</h3>
@@ -45,18 +55,19 @@ export async function viewAdmin(root, _p, { api, go, me }) {
       <p class="small muted">${T("Facultatif : les stagiaires entrent surtout par le lien ou le QR code de la session, avec leur prénom, leur e-mail et un code personnel reçu par e-mail.")}</p>
       <div style="display:flex;gap:8px"><button class="btn" type="submit">Créer la session</button><button class="btn ghost" type="button" id="nCancel">Annuler</button></div>
     </form>
+    <div class="phases" style="margin-bottom:12px"><a href="#/admin"${archivedTab ? "" : ' aria-current="page"'}>Sessions à venir</a><a href="#/admin/archives"${archivedTab ? ' aria-current="page"' : ""}>Sessions archivées${archived.length ? ` <span class="small muted">${archived.length}</span>` : ""}</a></div>
     <div class="card table-card">
       ${sessions.length ? `<table class="tbl"><thead><tr><th>Session</th><th>Client</th><th>Intervenant·e</th><th>État</th><th>Date</th><th>Code</th><th>Participants</th><th></th></tr></thead><tbody>
       ${sessions.map((s) => `<tr>
         <td><a href="#/admin/s/${s.id}"><b>${T(s.title)}</b></a><div class="small muted">${T(s.formation || "")}${s.format === "2" ? " · 2 jours" : " · 1 jour"}</div></td>
         <td class="client-cell">${(() => { const c = clientOf(s); return c.logo ? `<img src="${esc(c.logo)}" alt="${esc(c.name)}" title="${esc(c.name)}" class="client-logo">` : c.name ? `<span>${T(c.name)}</span>` : `<span class="muted">—</span>`; })()}</td>
         <td class="small">${admin ? `<select class="assign" data-assign="${s.id}" aria-label="Intervenant·e de la session">${trOptions(s.trainer_id)}</select>` : T(trainerName(s.trainer_id) || "—")}</td>
-        <td><span class="state ${s.status}">${STATUS[s.status]}</span></td>
+        <td>${stateHtml(s)}</td>
         <td class="small mono date-cell">${s.date || "—"}</td>
         <td class="mono">${esc(s.code)}</td>
         <td>${counts[s.id] || 0}</td>
         <td class="actions"><button class="iconbtn" data-qr="${s.id}" title="QR code" aria-label="QR code">▦</button>${admin ? `<button class="iconbtn" data-dup="${s.id}" title="Dupliquer" aria-label="Dupliquer la session">⧉</button><button class="iconbtn danger" data-del="${s.id}" title="Supprimer" aria-label="Supprimer">✕</button>` : ""}</td>
-      </tr>`).join("")}</tbody></table>` : `<p class="empty">${admin ? "Aucune session. Créez la première." : T("Aucune session ne vous est attribuée pour l'instant.")}</p>`}
+      </tr>`).join("")}</tbody></table>` : `<p class="empty">${archivedTab ? T("Aucune session archivée. Une session passe ici 5 jours après son dernier jour.") : admin ? "Aucune session. Créez la première." : T("Aucune session ne vous est attribuée pour l'instant.")}</p>`}
     </div>`;
 
   const form = $("#newForm", root);
