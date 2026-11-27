@@ -219,8 +219,20 @@ main .linkbtn,.card .linkbtn,.sheet .linkbtn{color:var(--blue);padding:2px 4px}
 .guest-band{max-width:1180px;margin:10px auto 0;background:var(--tint);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600}
 .guest-band.over{background:var(--kotint);border-color:var(--ko);color:var(--ko)}
 body.ro button:disabled,body.ro input:disabled,body.ro select:disabled,body.ro textarea:disabled{cursor:not-allowed}
-.staff-until{display:flex;gap:6px;align-items:center;margin-top:4px}
-.staff-until input{width:auto}
+/* Équipe et accès : une ligne par compte (rôle et date de fin côte à côte), aides sous le tableau */
+.staff-tbl td{vertical-align:middle;white-space:nowrap}
+.staff-card{overflow-x:auto}
+.staff-tbl td:first-child{white-space:normal}
+.staff-role{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
+.staff-role select{width:auto;min-width:0}
+.staff-role input[type=date],.staff-until input{width:auto}
+.staff-add{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.staff-add input[type=email]{flex:1;min-width:220px}
+.staff-add select{width:auto}
+.staff-until:not([hidden]){display:inline-flex;gap:6px;align-items:center}
+.staff-help{margin-top:14px;align-items:start}
+.staff-help .askrow{display:flex;gap:8px}
+.staff-help .askrow input{flex:1;min-width:0}
 main#view{max-width:1240px}
 main#view.withside{max-width:none;padding:0;display:grid;grid-template-columns:270px 1fr;min-height:calc(100vh - 70px)}
 .pagehead{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px}
@@ -301,6 +313,9 @@ select::-ms-expand{display:none}
 .end-screen .end-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px}
 .end-screen a:not(.btn){color:var(--blue)}
 .state.archived{background:var(--light);color:var(--muted)}
+.state.current{background:var(--tint);color:var(--blue);display:inline-flex;align-items:center;gap:6px}
+.tbl td.state-cell{white-space:nowrap} /* « Terminée · archivage le 1er déc. » sur une ligne */
+.tbl tr.row-ended td{background:var(--light)}
 /* Direct (stagiaire) */
 .card.live{border:2px solid var(--navy)}
 .card.live h3{font-size:20px;margin:8px 0 10px}

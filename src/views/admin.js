@@ -7,7 +7,7 @@ import { modulesFor } from "../lib/content.js";
 import { STATUS } from "./home.js";
 import { skinDark } from "../lib/skin.js";
 import { isAdmin, isGuest } from "../lib/roles.js";
-import { isArchived, archiveDate, sessionEnded, dayCount } from "../lib/archive.js";
+import { isArchived, archiveDate, sessionEnded, dayCount, trainingDates, parisToday } from "../lib/archive.js";
 
 // Lien court de la session : <site>/CODE (redirigé vers #/join/CODE par 404.html ou au démarrage).
 // VITE_SHORT_BASE permet un domaine plus court (ex. https://formation.samsa.fr/).
@@ -24,10 +24,18 @@ export async function viewAdmin(root, [view], { api, go, me }) {
   /* Deux onglets : à venir (en cours, à venir, terminées depuis moins de 5 jours) et archivées (5 jours après le
      dernier jour, src/lib/archive.js). Les archives, de la plus récente à la plus ancienne. */
   const archived = all.filter((s) => isArchived(s)).sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
-  const sessions = archivedTab ? archived : all.filter((s) => !isArchived(s));
+  /* À venir : d'abord les sessions en cours (aujourd'hui entre leur premier et leur dernier jour), puis celles à venir
+     (par date, sans date à la fin), puis les terminées en attente d'archivage (grisées, la plus récente d'abord). */
+  const today = parisToday();
+  const current = (s) => { const ds = trainingDates(s); return !sessionEnded(s) && ds.length > 0 && ds[0] <= today && today <= ds.at(-1); };
+  const group = (s) => (sessionEnded(s) ? 2 : current(s) ? 0 : 1);
+  const byDate = (a, b) => String(a.date || "9999").localeCompare(String(b.date || "9999"));
+  const sessions = archivedTab ? archived : all.filter((s) => !isArchived(s))
+    .sort((a, b) => group(a) - group(b) || (group(a) === 2 ? byDate(b, a) : byDate(a, b)));
   const shortFr = (d) => new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" }).replace(/^1 /, "1er ");
   const stateHtml = (s) => isArchived(s) ? `<span class="state archived">Archivée</span>`
-    : sessionEnded(s) ? `<span class="state closed">Terminée</span>${archiveDate(s) ? `<div class="small muted">${T(`archivage le ${shortFr(archiveDate(s))}`)}</div>` : ""}`
+    : sessionEnded(s) ? `<span class="state closed">Terminée</span>${archiveDate(s) ? ` <span class="small muted">${T(`· archivage le ${shortFr(archiveDate(s))}`)}</span>` : ""}`
+    : current(s) ? `<span class="state current">${s.status === "live" ? `<span class="dot on"></span> ` : ""}En cours</span>`
     : `<span class="state ${s.status}">${STATUS[s.status]}</span>`;
   const trainerName = (id) => trainers.find((t) => t.id === id)?.name || "";
   const trOptions = (sel) => `<option value="">— Non attribuée —</option>${trainers.map((t) => `<option value="${t.id}"${t.id === sel ? " selected" : ""}>${T(t.name)}${t.login_email ? "" : " (sans compte)"}</option>`).join("")}`;
@@ -58,11 +66,11 @@ export async function viewAdmin(root, [view], { api, go, me }) {
     <div class="phases" style="margin-bottom:12px"><a href="#/admin"${archivedTab ? "" : ' aria-current="page"'}>Sessions à venir</a><a href="#/admin/archives"${archivedTab ? ' aria-current="page"' : ""}>Sessions archivées${archived.length ? ` <span class="small muted">${archived.length}</span>` : ""}</a></div>
     <div class="card table-card">
       ${sessions.length ? `<table class="tbl"><thead><tr><th>Session</th><th>Client</th><th>Intervenant·e</th><th>État</th><th>Date</th><th>Code</th><th>Participants</th><th></th></tr></thead><tbody>
-      ${sessions.map((s) => `<tr>
+      ${sessions.map((s) => `<tr${!archivedTab && sessionEnded(s) ? ' class="row-ended"' : ""}>
         <td><a href="#/admin/s/${s.id}"><b>${T(s.title)}</b></a><div class="small muted">${T(s.formation || "")}${dayCount(s) > 1 ? ` · ${dayCount(s)} jours` : " · 1 jour"}</div></td>
         <td class="client-cell">${(() => { const c = clientOf(s); return c.logo ? `<img src="${esc(c.logo)}" alt="${esc(c.name)}" title="${esc(c.name)}" class="client-logo">` : c.name ? `<span>${T(c.name)}</span>` : `<span class="muted">—</span>`; })()}</td>
         <td class="small">${admin ? `<select class="assign" data-assign="${s.id}" aria-label="Intervenant·e de la session">${trOptions(s.trainer_id)}</select>` : T(trainerName(s.trainer_id) || "—")}</td>
-        <td>${stateHtml(s)}</td>
+        <td class="state-cell">${stateHtml(s)}</td>
         <td class="small mono date-cell">${s.date || "—"}</td>
         <td class="mono">${esc(s.code)}</td>
         <td>${counts[s.id] || 0}</td>
