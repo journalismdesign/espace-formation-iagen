@@ -188,27 +188,53 @@ export async function viewSetTrainerCode(root, _p, { api, go, refreshMe }) {
   $("#c1").focus();
 }
 
-/* Invité·es (« Équipe et accès » → Invité·e) : un lien de connexion par e-mail, sans le code de l'équipe.
-   Le message ne dit pas si l'adresse est invitée (pas d'inventaire des adresses). Le rôle invité·e, lui, vient
-   de la base : une adresse non invitée n'obtient qu'un compte stagiaire sans session. */
-export async function viewGuestLogin(root, _p, { api }) {
+/* Invité·es (« Équipe et accès » → Invité·e) : connexion par code reçu par e-mail, sans le code de l'équipe.
+   On saisit son adresse, puis le code à six chiffres de l'e-mail (si l'e-mail contient aussi un lien, il mène au
+   back-office). Le message ne dit pas si l'adresse est invitée (pas d'inventaire des adresses) ; le rôle
+   invité·e vient de la base : une adresse non invitée n'obtient qu'un compte stagiaire sans session. */
+export async function viewGuestLogin(root, _p, { api, go }) {
   root.innerHTML = `<div class="login"><div class="login-card card">
     <div class="kicker" style="color:var(--muted)">Invitation</div>
     <h1 style="color:var(--ink);margin:4px 0 6px">Découvrir l'espace formation</h1>
-    <p class="muted">${T("Vous avez été invité·e à consulter le back-office et les sessions, en lecture seule. Indiquez l'adresse qui a reçu l'invitation : un lien de connexion vous sera envoyé.")}</p>
+    <p class="muted" id="gLead">${T("Vous avez été invité·e à consulter le back-office et les sessions, en lecture seule. Indiquez l'adresse qui a reçu l'invitation : un code de connexion vous sera envoyé.")}</p>
     <form id="gF">
       <label class="f" for="gMail">Votre adresse e-mail</label>
       <input type="email" id="gMail" required autocomplete="email">
-      <button class="btn" type="submit" style="margin-top:12px;width:100%">Recevoir le lien de connexion</button>
+      <button class="btn" type="submit" style="margin-top:12px;width:100%">Recevoir le code</button>
+    </form>
+    <form id="gV" hidden>
+      <label class="f" for="gCode">Code reçu par e-mail</label>
+      <input id="gCode" required inputmode="numeric" autocomplete="one-time-code" class="mono" placeholder="123456" maxlength="12">
+      <button class="btn" type="submit" style="margin-top:12px;width:100%">Entrer</button>
+      <button class="linkbtn small" type="button" id="gBack" style="margin-top:8px">Changer d'adresse ou renvoyer un code</button>
     </form>
     <div id="gMsg" class="small" style="margin-top:10px" role="status"></div>
     <p class="small muted" style="margin-top:18px">${T("Rien de ce que vous verrez ne peut être modifié. Les identités des stagiaires sont masquées.")}</p>
   </div></div>`;
+  let email = "";
+  const msg = (h) => ($("#gMsg").innerHTML = h);
   $("#gF").onsubmit = async (e) => {
     e.preventDefault();
-    const email = $("#gMail").value.trim().toLowerCase();
-    if (await guard(() => api.signInEmail(email).then(() => true)) === undefined) return;
-    if (api.mode !== "demo") $("#gMsg").textContent = "Si cette adresse a été invitée, un lien de connexion vient de lui être envoyé. Ouvrez-le sur cet appareil.";
+    email = $("#gMail").value.trim().toLowerCase();
+    const btn = $("#gF button"); btn.disabled = true; btn.textContent = "Envoi…";
+    const r = await guard(() => api.sendGuestOtp(email));
+    btn.disabled = false; btn.textContent = "Recevoir le code";
+    if (!r?.sent) return;
+    $("#gF").hidden = true; $("#gV").hidden = false; $("#gCode").focus();
+    msg(`<div class="okbox">${T(`Si l'adresse ${esc(email)} a été invitée, un code vient d'y être envoyé : saisissez-le ci-dessus. Pensez à vérifier les indésirables.`)}</div>`
+      + (r.demoCode ? `<div class="demo-box small" style="margin-top:8px"><b>Mode démonstration.</b> Code : <b class="mono">${r.demoCode}</b></div>` : ""));
+  };
+  $("#gBack").onclick = () => { $("#gV").hidden = true; $("#gF").hidden = false; msg(""); $("#gMail").focus(); };
+  $("#gV").onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = $("#gV button[type=submit]"); btn.disabled = true; btn.textContent = "Vérification…";
+    try {
+      await api.verifyEmailOtp(email, $("#gCode").value);
+      go("#/admin"); // la connexion relance aussi le rendu ; une adresse non invitée arrive sur « Mon espace »
+    } catch {
+      btn.disabled = false; btn.textContent = "Entrer";
+      msg(`<div class="warn">Code invalide ou expiré.</div>`); $("#gCode").select();
+    }
   };
   $("#gMail").focus();
 }
