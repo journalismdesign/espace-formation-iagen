@@ -506,4 +506,28 @@ await fails(`select public.close_finished_sessions()`, "clôture automatique : p
 await su();
 }
 
+/* ---------- Trames de conducteur : lecture équipe, écriture admin ---------- */
+{
+  await as(T, "formateur@exemple.fr");
+  const tr1 = (await db.query(`insert into conducteur_templates (titre, content) values ('Une journée type', '{"nDays":1,"modules":[]}') returning id, updated_by`)).rows[0];
+  ok(tr1.updated_by === T, "trames : l'admin crée, auteur tenu par la base");
+  await db.exec(`update conducteur_templates set titre = 'Une journée type (v2)', updated_by = null where id = '${tr1.id}'`);
+  ok((await db.query(`select titre, updated_by from conducteur_templates where id = '${tr1.id}'`)).rows[0].updated_by === T, "trames : l'admin modifie, auteur non falsifiable");
+  await fails(`insert into conducteur_templates (titre, content) values ('', '{}')`, "trames : titre obligatoire");
+  await fails(`insert into conducteur_templates (titre, content) values ('Liste', '[]')`, "trames : contenu en objet");
+  await fails(`insert into conducteur_templates (titre, content) values ('Lourde', jsonb_build_object('x', repeat(md5(random()::text), 20000)))`, "trames : plus de 500 ko refusé");
+  await as(F2, "form2@exemple.fr");
+  ok((await db.query(`select count(*)::int n from conducteur_templates`)).rows[0].n === 1, "trames : un formateur les lit (pour les appliquer)");
+  await fails(`insert into conducteur_templates (titre, content) values ('Perso', '{}')`, "trames : un formateur n'en crée pas");
+  await db.exec(`update conducteur_templates set titre = 'Changée' where id = '${tr1.id}'`);
+  await db.exec(`delete from conducteur_templates where id = '${tr1.id}'`);
+  await as(B, "bob@exemple.fr");
+  ok((await db.query(`select count(*)::int n from conducteur_templates`)).rows[0].n === 0, "trames : un·e stagiaire ne lit rien");
+  await as(T, "formateur@exemple.fr");
+  ok((await db.query(`select titre from conducteur_templates where id = '${tr1.id}'`)).rows[0]?.titre === "Une journée type (v2)", "trames : un formateur ne modifie ni ne supprime");
+  await db.exec(`delete from conducteur_templates where id = '${tr1.id}'`);
+  ok((await db.query(`select count(*)::int n from conducteur_templates`)).rows[0].n === 0, "trames : l'admin supprime");
+  await su();
+}
+
 console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests SQL passent.");

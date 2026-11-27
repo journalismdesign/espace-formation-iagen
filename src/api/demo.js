@@ -233,6 +233,19 @@ export function createDemoApi({ defaultActivities }) {
       db.bank ||= bankFromData().map((b) => ({ ...b, updated_at: now() }));
       return { ready: true, items: [...db.bank].sort((a, b) => a.titre.localeCompare(b.titre)) };
     },
+    // Trames de conducteur : comme conducteur_templates (lecture équipe, écriture admin)
+    async listTrames() { need(); if (!isTrainer() || isGuest()) return { ready: true, items: [] }; return { ready: true, items: [...(db.trames ||= [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at)) }; },
+    async saveTrame({ id, titre, content }) {
+      needAdmin(); titre = String(titre || "").trim();
+      if (!titre || titre.length > 120) throw new Error("Donnez un titre à la trame (120 caractères au plus).");
+      db.trames ||= [];
+      const row = id ? db.trames.find((t) => t.id === id) : null;
+      if (id && !row) throw new Error("Trame introuvable.");
+      const out = row ? Object.assign(row, { titre, content, updated_at: now() }) : { id: uid(), titre, content, updated_at: now() };
+      if (!row) db.trames.push(out);
+      commit(); return { ...out };
+    },
+    async deleteTrame(id) { needAdmin(); db.trames = (db.trames || []).filter((t) => t.id !== id); commit(); },
     async saveBankItem(it) {
       needAdmin();
       if (!ID_RE.test(String(it.id || ""))) throw new Error("Identifiant invalide.");

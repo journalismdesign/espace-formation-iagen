@@ -139,6 +139,18 @@ export function createSupabaseApi(url, anonKey) {
       if (error) { if (NO_BANK.test(error.message)) return { ready: false, items: bankFromData() }; throw new Error(error.message); }
       return { ready: true, items: data || [] };
     },
+    // Trames de conducteur (#/admin/trames) : lues par l'équipe, modifiées par l'administration. Sans la migration : ready false
+    async listTrames() {
+      const r = await sb.from("conducteur_templates").select("id, titre, content, updated_at").order("updated_at", { ascending: false });
+      if (r.error && /conducteur_templates|schema cache|does not exist/i.test(r.error.message)) return { ready: false, items: [] };
+      return { ready: true, items: ok(r) || [] };
+    },
+    async saveTrame({ id, titre, content }) {
+      const row = { titre, content };
+      return ok(id ? await sb.from("conducteur_templates").update(row).eq("id", id).select("id, titre, content, updated_at").single()
+        : await sb.from("conducteur_templates").insert(row).select("id, titre, content, updated_at").single());
+    },
+    async deleteTrame(id) { ok(await sb.from("conducteur_templates").delete().eq("id", id)); },
     async saveBankItem(it) {
       const { data, error } = await sb.from("quiz_bank").upsert({ id: it.id, kind: it.kind, titre: it.titre, content: it.content }).select(BANK_COLS).single();
       if (error) throw new Error(NO_BANK.test(error.message) ? BANK_MIG : /row-level security/i.test(error.message) ? "Réservé à l'administration." : error.message);
