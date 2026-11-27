@@ -1087,3 +1087,17 @@ main .linkbtn.danger,.sheet .linkbtn.danger{color:var(--ko)}
 .act-add .askrow select{flex:1}
 .qe .draftbar:has(> .draft-st:empty){display:none}
 .sheet .qe-actions{bottom:-60px;padding-bottom:16px} /* le panneau a 60 px de marge basse : la barre colle au vrai bas */
+
+/* Activités placées dans le déroulé du pilotage : sous leur séquence, lancées d'un clic */
+.modrow[data-mid]{position:relative}
+.modrow[data-mid]>button[data-mod]{padding-right:44px}
+.modrow>button.modadd{position:absolute;top:6px;right:6px;width:28px;height:28px;padding:0;margin:0;justify-content:center;text-align:center;color:var(--muted);font-size:17px;line-height:1;z-index:1}
+.modrow>button.modadd:hover,.modrow>button.modadd:focus-visible{color:var(--blue)}
+.modrow.actrow{display:flex;flex-wrap:wrap;align-items:center;margin-left:26px;background:var(--light);border-left:3px solid var(--blue)}
+.modrow.actrow>button[data-a]{flex:1;min-width:0;display:flex;gap:10px;align-items:center;text-align:left;background:none;border:0;padding:7px 10px;cursor:pointer;color:var(--ink)}
+.modrow.actrow.on{border:2px solid var(--navy);border-left-width:3px;background:var(--tint)}
+.modrow.actrow>button.actout{flex:none;margin:0 6px 0 0;width:26px;height:26px;padding:0;justify-content:center;color:var(--muted)}
+.actrow .act-ctrl{flex-basis:100%;padding:2px 10px 10px}
+.actrow .act-ctrl:empty{display:none}
+.pill.actp{background:var(--blue);color:#fff}
+.act-at{max-width:220px;font-size:12px;padding:3px 6px;margin:0}

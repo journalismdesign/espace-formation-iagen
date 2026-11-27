@@ -13,7 +13,7 @@ import { joinUrl, joinUrlLabel, qr, showQr, parseEmails, openDuplicate } from ".
 import { logoPair } from "./settings.js";
 import { STEPS, SENSIB, VERIF } from "./cadrageModel.js";
 import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml, EM2_DEFAULT, evaluationQr, EVAL_TITLE, EVAL_TEXT } from "../lib/brand.js";
-import { modulesFor, baseModules, defaultModules, levelOf, daysOf, typeLabel, hasCadrage, emargementSlots } from "../lib/content.js";
+import { modulesFor, baseModules, defaultModules, levelOf, daysOf, typeLabel, hasCadrage, emargementSlots, actPlace, actsByModule } from "../lib/content.js";
 import { DAY_TITLES } from "../data.js";
 import { parseConducteur, conducteurMarkdown } from "../lib/conducteur.js";
 import { isLunch, pauseTargets, movePause, shiftPause, pauseAlert, pauseAlertText, endBounds, dayEnd } from "../lib/programme.js";
@@ -598,7 +598,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <div class="kicker-d" style="margin:16px 0 6px">Déroulé · ce que voient les stagiaires et l'écran</div>
             <div id="modules"></div>
             <div id="decksBox"></div>
-            <div class="kicker-d" style="margin:16px 0 6px">Activités en direct</div>
+            <div class="kicker-d" style="margin:16px 0 6px">Activités hors déroulé</div>
             <div class="acts" id="acts"></div>
             <div id="ctrl" style="margin:12px 0"></div>
             <details style="margin-top:14px"><summary class="small" style="cursor:pointer">Ajouter, modifier ou retirer des activités</summary><div id="actEdit"></div></details>
@@ -670,8 +670,16 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       e.preventDefault(); setLive(nl);
     };
     document.addEventListener("keydown", onKey); cleanups.push(() => document.removeEventListener("keydown", onKey));
+    /* Activité suivante : dans le déroulé, la suivante de la même séquence ; hors déroulé, la suivante de la liste */
+    const nextAct = (a) => {
+      const mid = actPlace(session, a);
+      const L = mid ? actsByModule(session).get(mid) || [] : session.activities.filter((x) => !actPlace(session, x));
+      return L[L.findIndex((x) => x.id === a.id) + 1] || null;
+    };
     const launch = async (act) => {
-      const live = { ...keep(), view: "activity", act: act.id, qi: 0, reveal: false, started_at: new Date().toISOString() };
+      const mods = modulesFor(session), mid = actPlace(session, act, mods);
+      const ahead = mid && mods.findIndex((m) => m.id === mid) > mods.findIndex((m) => m.id === session.live?.module); // jamais de retour en arrière dans le parcours
+      const live = { ...keep(), ...(ahead ? { module: mid } : {}), view: "activity", act: act.id, qi: 0, reveal: false, started_at: new Date().toISOString() };
       if (act.type === "vote") {
         const [ps, roster] = await Promise.all([api.listProjects(sid), api.roster(sid)]);
         const by = Object.fromEntries(roster.map((r) => [r.user_id, r]));
@@ -738,20 +746,28 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const skip = skipSet(session), hidden = (m) => parsePages(m.pages).filter((p) => skip.has(p)).length; // pages masquées de la séquence
       const imported = session.programme?.modules?.length && session.programme.base !== "defaut", lvl = levelOf(session);
       const lvlBar = session.format === "2" && modDay === 2 ? `<div class="lvlbar"><span class="small muted">Niveau du jour 2</span><div class="days" role="group" aria-label="Niveau du jour 2">${[["expert", "Expert", "Déroulé d'origine : assistants, jargon, paliers, S·V·E"], ["debutant", "Débutant", "R·M·C·T·F, puis ateliers en groupe sur vos tâches et vos conducteurs"]].map(([v, l, t]) => `<button type="button" data-lvl="${v}" aria-pressed="${lvl === v}" title="${esc(t)}"${imported ? " disabled" : ""}>${l}</button>`).join("")}</div>${imported ? `<span class="small muted">${T("Conducteur importé : le niveau ne s'applique pas.")}</span>` : `<span class="small muted">${T(lvl === "debutant" ? "R·M·C·T·F, puis ateliers en groupe." : "Déroulé d'origine.")}</span>`}</div>` : "";
+      const placed = actsByModule(session);
+      // Activités placées sous leur séquence : un clic lance, ✕ retire du déroulé (l'activité reste dans la session)
+      const actRows = (m) => (placed.get(m.id) || []).map((a) => {
+        const n = a.type === "quiz" ? quizFor(session, a.quiz)?.questions.length || 0 : 0, isOn = act?.id === a.id;
+        return `<div class="modrow actrow${isOn ? " on" : ""}"><button type="button" data-a="${esc(a.id)}"><span class="mono small" aria-hidden="true">↳</span><span class="pill actp">${T(ACT_TYPES[a.type] || "Activité")}</span><span class="modtxt"><b>${T(a.titre)}</b>${n ? `<small>${n} question${n > 1 ? "s" : ""}${isOn ? ` · question ${(live.qi || 0) + 1} à l'écran` : ""}</small>` : ""}</span></button><button type="button" class="iconbtn actout" data-unplace="${esc(a.id)}" title="${esc(fr("Retirer du déroulé (l'activité reste dans la session)"))}" aria-label="${esc(fr(`Retirer « ${a.titre} » du déroulé`))}">✕</button>${isOn ? `<div class="act-ctrl" data-ctrl-for="${esc(a.id)}"></div>` : ""}</div>`;
+      }).join("");
       $("#modules", box).innerHTML = `${session.format === "2" ? `<div class="days" style="margin:0 0 8px">${[1, 2].map((d) => `<button type="button" data-mday="${d}" aria-pressed="${d === modDay}">Jour ${d}</button>`).join("")}</div>` : ""}${lvlBar}
         <div class="modlist">${interleave(shown, slots.filter((x) => session.format !== "2" || x.day === modDay)).map((m) => {
           if (m.slot) return `<div class="modrow em${emDone[m.key] ? " done" : ""}${(V === "emargement" || V === "evaluation") && live.emKey === m.key ? " on" : ""}"><button type="button" data-em="${m.key}"><span class="mono small">${hhmmT(m.t)}</span><span class="pill tf">${m.kind === "evaluation" ? "Évaluation" : "Émargement"}</span><b>${T(m.label)}</b>${emDone[m.key] ? `<span class="small muted" style="margin-left:auto">✓ présenté à ${new Date(emDone[m.key]).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>` : ""}</button></div>`;
           if (m.type === "pause") return pauseRow(m);
           const on = m.id === live.module, pages = modPages(session, m);
-          return `<div class="modrow${on ? " on" : ""}" data-mid="${esc(m.id)}"><button type="button" data-mod="${m.id}"><span class="mono small">${hhmmT(m.t[0])}</span><span class="pill ${m.type}">${T(typeLabel(m.type))}</span><span class="modtxt"><b>${T(m.titre)}</b>${m.cas ? `<small>${T(m.cas)}</small>` : ""}</span></button>
+          return `<div class="modrow${on ? " on" : ""}" data-mid="${esc(m.id)}"><button type="button" class="iconbtn modadd" data-addact="${esc(m.id)}" title="${esc(fr(`Ajouter un quiz ou un sondage à « ${m.titre} »`))}" aria-label="${esc(fr(`Ajouter une activité à « ${m.titre} »`))}">+</button><button type="button" data-mod="${m.id}"><span class="mono small">${hhmmT(m.t[0])}</span><span class="pill ${m.type}">${T(typeLabel(m.type))}</span><span class="modtxt"><b>${T(m.titre)}</b>${m.cas ? `<small>${T(m.cas)}</small>` : ""}</span></button>
             ${on && pages.length && session.slides_url ? `<div class="slidebar"><button type="button" class="iconbtn" data-sl="prev" aria-label="Page précédente">←</button>${pages.map((p) => `<button type="button" class="chip${V === "slide" && live.slide === p ? " on" : ""}" data-page="${p}">${p}</button>`).join("")}<button type="button" class="iconbtn" data-sl="next" aria-label="Page suivante">→</button>${hidden(m) ? `<span class="small muted" title="Réglages → Slides projetées">${hidden(m)} masquée${hidden(m) > 1 ? "s" : ""}</span>` : ""}</div>` : ""}
-            ${on && pages.length && !session.slides_url ? `<div class="small muted" style="padding:4px 8px">Pages ${T(m.pages)} · associez la présentation dans l'onglet Réglages pour les projeter.</div>` : ""}</div>`;
+            ${on && pages.length && !session.slides_url ? `<div class="small muted" style="padding:4px 8px">Pages ${T(m.pages)} · associez la présentation dans l'onglet Réglages pour les projeter.</div>` : ""}</div>${actRows(m)}`;
         }).join("")}${endRow(shownDay)}</div>`;
       $$("[data-mday]", box).forEach((b) => (b.onclick = () => { modDay = +b.dataset.mday; draw(); }));
       $$("[data-lvl]", box).forEach((b) => (b.onclick = () => b.dataset.lvl !== lvl && setLevel(b.dataset.lvl)));
       bindPauses(base);
       bindEnds();
       $$("[data-em]", box).forEach((b) => (b.onclick = () => showEm(b.dataset.em)));
+      $$("[data-addact]", box).forEach((b) => (b.onclick = () => openAddSheet(b.dataset.addact)));
+      $$("[data-unplace]", box).forEach((b) => (b.onclick = () => placeAct(b.dataset.unplace, "")));
       $$("[data-mod]", box).forEach((b) => (b.onclick = () => setLive({ ...keep(), module: b.dataset.mod, view: "module", started_at: new Date().toISOString() })));
       const pages = modPages(session, cur);
       const goPage = (p) => setLive({ ...keep(), module: cur.id, view: "slide", slide: p, started_at: new Date().toISOString() });
@@ -771,7 +787,9 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       }).join("")}</div>` : "";
       $$("[data-deck]", box).forEach((b) => (b.onclick = () => show("deck", { deck: b.dataset.deck, page: 1 })));
       $$("[data-dp]", box).forEach((b) => (b.onclick = () => show("deck", { deck: live.deck, page: Math.max(1, (live.page || 1) + +b.dataset.dp) })));
-      $("#acts", box).innerHTML = session.activities.map((a, i) => `<button class="act${act?.id === a.id ? " on" : ""}" data-a="${esc(a.id)}"><span>${i + 1}</span>${T(a.titre)}<small>${ACT_TYPES[a.type]}</small></button>`).join("");
+      const loose = session.activities.filter((a) => !actPlace(session, a));
+      $("#acts", box).innerHTML = loose.length ? loose.map((a, i) => `<button class="act${act?.id === a.id ? " on" : ""}" data-a="${esc(a.id)}"><span>${i + 1}</span>${T(a.titre)}<small>${ACT_TYPES[a.type]}</small></button>`).join("")
+        : `<p class="small muted" style="margin:0;grid-column:1/-1">${T("Toutes les activités sont placées dans le déroulé. Le « + » d'une séquence en ajoute une.")}</p>`;
       $$("[data-a]", box).forEach((b) => (b.onclick = () => launch(session.activities.find((a) => a.id === b.dataset.a))));
       let c = "";
       if (act) {
@@ -783,14 +801,16 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <button class="btn sm" data-rev ${live.reveal ? "disabled" : ""}>Afficher la réponse</button>
             <button class="btn sm ghost" data-q="1" ${qi >= n - 1 ? "disabled" : ""}>Question suivante →</button>`;
         }
-        const i = session.activities.findIndex((a) => a.id === act.id);
-        if (session.activities[i + 1]) c += `<button class="btn sm ghost" data-next>Activité suivante : ${T(session.activities[i + 1].titre)}</button>`;
+        const nx = nextAct(act);
+        if (nx) c += `<button class="btn sm ghost" data-next>Activité suivante : ${T(nx.titre)}</button>`;
         c += `<button class="btn sm ghost" data-stop>Arrêter l'activité</button></div>`;
       }
-      $("#ctrl", box).innerHTML = c;
+      const slot = act ? $(`[data-ctrl-for="${CSS.escape(act.id)}"]`, box) : null; // activité placée : ses commandes sous sa ligne
+      if (slot) slot.innerHTML = c;
+      $("#ctrl", box).innerHTML = slot ? "" : c;
       $$("[data-q]", box).forEach((b) => (b.onclick = () => setLive({ ...live, qi: (live.qi || 0) + +b.dataset.q, reveal: false })));
       $("[data-rev]", box)?.addEventListener("click", () => setLive({ ...live, reveal: true }));
-      $("[data-next]", box)?.addEventListener("click", () => launch(session.activities[session.activities.findIndex((a) => a.id === act.id) + 1]));
+      $("[data-next]", box)?.addEventListener("click", () => { const nx = nextAct(act); if (nx) launch(nx); });
       $("[data-stop]", box)?.addEventListener("click", () => setLive({ ...keep(), view: live.module ? "module" : null }));
       const sd = await loadScreenData(api, session);
       morph($("#preview", box), screenHtml({ ...sd, session, qrUrl, joinLabel: joinUrlLabel(session.code) }, true)); // sans clignotement
@@ -982,29 +1002,60 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       if (a.type === "quiz") await saveSession({ quizzes: { ...(session.quizzes || {}), [a.quiz]: copyOf(it) } }, "Quiz mis à jour depuis la bibliothèque.");
       else await saveSession({ activities: session.activities.map((x) => (x.id === a.id ? { ...x, q: it.content.q, ...(it.kind === "poll" ? { o: [...it.content.o] } : {}), from: it.id } : x)) }, "Activité mise à jour depuis la bibliothèque.");
     };
-    const addFromBank = async (id) => {
+    const addFromBank = async (id, at) => {
       const it = bank.items.find((b) => b.id === id); if (!it) return;
+      const pl = at ? { at } : {};
       if (it.kind === "quiz") {
-        const a = { id: uniqueActId(), type: "quiz", titre: quizActTitle(it.titre), quiz: it.id };
+        const a = { id: uniqueActId(), type: "quiz", titre: quizActTitle(it.titre), quiz: it.id, ...pl };
         await saveSession({ activities: [...session.activities, a], ...(bank.ready ? { quizzes: snapshotQuizzes(session.quizzes, [it.id], bank.items) } : {}) }, "Quiz ajouté.");
-      } else await saveSession({ activities: [...session.activities, pollActivity(it, uniqueActId(it.id))] }, "Activité ajoutée.");
+      } else await saveSession({ activities: [...session.activities, { ...pollActivity(it, uniqueActId(it.id)), ...pl }] }, at ? "Activité ajoutée au déroulé." : "Activité ajoutée.");
     };
-    const createAct = (kind) => {
+    const createAct = (kind, at) => {
+      const pl = at ? { at } : {};
       if (kind === "quiz" && !needBank()) return;
       editSheet(`Nouveau ${kind === "quiz" ? "quiz" : kind === "poll" ? "sondage" : "nuage de mots"} pour cette session`, kind, blankValue(kind), `act:${sid}:nouveau-${kind}`, (v) => {
         const id = uniqueActId();
         if (kind === "quiz") {
           const key = newItemId(v.titre, "s-");
-          return saveSession({ quizzes: { ...(session.quizzes || {}), [key]: { titre: v.titre, questions: v.questions, from: null } }, activities: [...session.activities, { id, type: "quiz", titre: quizActTitle(v.titre), quiz: key }] }, "Quiz créé pour cette session.");
+          return saveSession({ quizzes: { ...(session.quizzes || {}), [key]: { titre: v.titre, questions: v.questions, from: null } }, activities: [...session.activities, { id, type: "quiz", titre: quizActTitle(v.titre), quiz: key, ...pl }] }, at ? "Quiz créé et placé dans le déroulé." : "Quiz créé pour cette session.");
         }
-        return saveSession({ activities: [...session.activities, { id, type: kind, titre: v.titre, q: v.q, ...(kind === "poll" ? { o: v.o } : {}) }] }, "Activité créée pour cette session.");
+        return saveSession({ activities: [...session.activities, { id, type: kind, titre: v.titre, q: v.q, ...(kind === "poll" ? { o: v.o } : {}), ...pl }] }, at ? "Activité créée et placée dans le déroulé." : "Activité créée pour cette session.");
       });
+    };
+    /* Placer une activité dans une séquence du déroulé ("" : hors déroulé). Rien d'autre ne change : ni ses
+       réponses, ni sa place dans la liste. */
+    const placeAct = (id, at) => {
+      const a = session.activities.find((x) => x.id === id); if (!a) return;
+      const m = at ? modulesFor(session).find((x) => x.id === at) : null;
+      return saveSession({ activities: session.activities.map((x) => (x.id === id ? { ...x, at } : x)) }, m ? `« ${a.titre} » placé dans « ${m.titre} ».` : `« ${a.titre} » retiré du déroulé. Il reste dans les activités hors déroulé.`);
+    };
+    const modLabel = (m) => `${session.format === "2" ? `J${m.day || 1} · ` : ""}${hhmmT(m.t[0])} · ${m.titre}`;
+    // « + » d'une séquence : placer une activité de la session, en ajouter une de la bibliothèque, ou en créer une
+    const openAddSheet = (mid) => {
+      const mods = modulesFor(session), m = mods.find((x) => x.id === mid); if (!m) return;
+      const grp = (k, label) => { const L = bank.items.filter((b) => b.kind === k); return L.length ? `<optgroup label="${label}">${L.map((b) => `<option value="${esc(b.id)}">${T(b.titre)}</option>`).join("")}</optgroup>` : ""; };
+      const rows = session.activities.filter((a) => a.type !== "welcome").map((a) => {
+        const at = actPlace(session, a, mods), where = at ? mods.find((x) => x.id === at) : null;
+        return `<div class="prow act-row"><span>${T(a.titre)} <small class="muted">${ACT_TYPES[a.type]}${where ? ` · ${at === mid ? "déjà ici" : T(`dans « ${where.titre} »`)}` : " · hors déroulé"}</small></span>${at === mid ? "" : `<button class="btn sm ghost" type="button" data-placehere="${esc(a.id)}">${where ? "Déplacer ici" : "Placer ici"}</button>`}</div>`;
+      }).join("");
+      openSheet(`<span class="pill">Déroulé</span><h2>Ajouter une activité</h2><p class="muted" style="margin-top:0">${T(`À « ${m.titre} », ${session.format === "2" ? `jour ${m.day || 1}, ` : ""}${hhmmT(m.t[0])}. Elle s'affichera sous la séquence, dans le pilotage : un clic la lance, les flèches y passent après les pages de la séquence.`)}</p>
+        <h3 style="margin-top:16px">Créer pour cette séquence</h3>
+        <div class="chips"><button class="btn sm" type="button" data-createat="quiz">Quiz</button><button class="btn sm" type="button" data-createat="poll">Sondage</button><button class="btn sm" type="button" data-createat="cloud">Nuage de mots</button></div>
+        <h3 style="margin-top:16px">Depuis la bibliothèque</h3>
+        ${bank.items.length ? `<div class="askrow"><select id="shBank" aria-label="Élément de la bibliothèque">${grp("quiz", "Quiz")}${grp("poll", "Sondages")}${grp("cloud", "Nuages de mots")}</select><button class="btn sm" type="button" id="shBankAdd">Ajouter ici</button></div>` : `<p class="small muted">${T("Bibliothèque en cours de chargement, ou vide.")}</p>`}
+        <h3 style="margin-top:16px">Activités de la session</h3>
+        ${rows || `<p class="small muted">Aucune activité.</p>`}`);
+      $$("[data-createat]").forEach((b) => (b.onclick = () => createAct(b.dataset.createat, mid)));
+      $("#shBankAdd")?.addEventListener("click", async () => { const v = $("#shBank").value; closeSheet(); await addFromBank(v, mid); });
+      $$("[data-placehere]").forEach((b) => (b.onclick = async () => { closeSheet(); await placeAct(b.dataset.placehere, mid); }));
     };
     const drawEdit = () => {
       const grp = (k, label) => { const L = bank.items.filter((b) => b.kind === k); return L.length ? `<optgroup label="${label}">${L.map((b) => `<option value="${esc(b.id)}">${T(b.titre)}</option>`).join("")}</optgroup>` : ""; };
+      const seqMods = modulesFor(session), seqList = seqMods.filter((m) => m.type !== "pause");
+      const seqOpts = (cur) => seqList.map((m) => `<option value="${esc(m.id)}"${m.id === cur ? " selected" : ""}>${T(modLabel(m).slice(0, 70))}</option>`).join("");
       $("#actEdit", box).innerHTML = `
         ${session.activities.map((a, i) => `<div class="prow act-row"><span>${i + 1}. ${T(a.titre)} <small class="muted">${ACT_TYPES[a.type]}${a.type === "quiz" ? ` · ${quizFor(session, a.quiz)?.questions.length || 0} q.` : ""}</small>${isOutdated(a) ? ` <button class="linkbtn small" data-upd="${i}" title="${esc(fr("La bibliothèque a une version différente de cette activité"))}">Mettre à jour depuis la bibliothèque</button>` : ""}</span>
-          <span class="act-tools">${actKind(a) ? `<button class="linkbtn small" data-edit="${i}">Modifier</button>` : ""}<button class="iconbtn" data-up="${i}" ${i === 0 ? "disabled" : ""} aria-label="Monter « ${esc(a.titre)} »">↑</button><button class="iconbtn danger" data-drop="${i}" aria-label="Retirer « ${esc(a.titre)} »">✕</button></span></div>`).join("")}
+          <span class="act-tools">${a.type !== "welcome" ? `<select class="act-at" data-at="${i}" aria-label="${esc(fr(`Séquence de « ${a.titre} »`))}"><option value="">Hors déroulé</option>${seqOpts(actPlace(session, a, seqMods))}</select>` : ""}${actKind(a) ? `<button class="linkbtn small" data-edit="${i}">Modifier</button>` : ""}<button class="iconbtn" data-up="${i}" ${i === 0 ? "disabled" : ""} aria-label="Monter « ${esc(a.titre)} »">↑</button><button class="iconbtn danger" data-drop="${i}" aria-label="Retirer « ${esc(a.titre)} »">✕</button></span></div>`).join("")}
         <div class="card act-add">
           <label class="f" for="aBank">Ajouter depuis la bibliothèque</label>
           <div class="askrow"><select id="aBank">${grp("quiz", "Quiz")}${grp("poll", "Sondages")}${grp("cloud", "Nuages de mots")}</select><button class="btn sm" type="button" id="aBankAdd"${bank.items.length ? "" : " disabled"}>Ajouter</button></div>
@@ -1017,6 +1068,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       $$("[data-up]", box).forEach((b) => (b.onclick = () => { const L = [...session.activities], i = +b.dataset.up; [L[i - 1], L[i]] = [L[i], L[i - 1]]; saveActs(L); }));
       $$("[data-drop]", box).forEach((b) => (b.onclick = () => saveActs(session.activities.filter((_, i) => i !== +b.dataset.drop))));
       $$("[data-edit]", box).forEach((b) => (b.onclick = () => editAct(session.activities[+b.dataset.edit])));
+      $$("[data-at]", box).forEach((sel) => (sel.onchange = () => placeAct(session.activities[+sel.dataset.at].id, sel.value)));
       $$("[data-upd]", box).forEach((b) => (b.onclick = () => updateFromBank(session.activities[+b.dataset.upd])));
       $$("[data-create]", box).forEach((b) => (b.onclick = () => createAct(b.dataset.create)));
       $("#aBankAdd", box).onclick = () => addFromBank($("#aBank", box).value);

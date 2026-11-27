@@ -249,8 +249,11 @@ function detail(m, progress, session = null) {
   const QZ = m.quiz ? quizFor(session, m.quiz) : null;
   if (QZ) h += `<div class="blk"><h4>Quiz · ${T(QZ.titre)}</h4><div data-quiz="${esc(m.quiz)}"><button class="btn sm ghost" data-startquiz="${esc(m.quiz)}">Faire le quiz (${QZ.questions.length} question${QZ.questions.length > 1 ? "s" : ""})${progress.quiz?.[m.quiz] != null ? ` · meilleur score ${progress.quiz[m.quiz]}/${QZ.questions.length}` : ""}</button></div></div>`;
   if (m.fiches) h += `<div class="blk"><h4>Dans le glossaire</h4><div class="chips">${m.fiches.map((f) => (ficheById(f) ? `<button class="chip" data-fiche="${f}">${T(ficheById(f).titre)}</button>` : "")).join("")}</div></div>`;
-  const LV = m.live ? pollFor(session, m.live) : null;
-  if (LV) h += `<p class="small muted" style="margin:0">Activité en salle prévue : « ${T(LV.q)} ».</p>`;
+  // Activités en salle placées dans cette séquence (pilotage), sinon celle que cite le déroulé
+  const PL = session?.activities ? actsByModule(session).get(m.id) || [] : [];
+  const LV = !PL.length && m.live ? pollFor(session, m.live) : null;
+  if (PL.length) h += `<p class="small muted" style="margin:0">${PL.length > 1 ? "Activités en salle" : "Activité en salle"} : ${PL.map((a) => `« ${T(a.titre)} »`).join(", ")}.</p>`;
+  else if (LV) h += `<p class="small muted" style="margin:0">Activité en salle prévue : « ${T(LV.q)} ».</p>`;
   return h;
 }
 // Séquences déjà passées dans le déroulé piloté par le formateur
@@ -259,6 +262,26 @@ export const hasCadrage = (session) => daysOf(session).n > 1;
 
 /* Outils d'exercice : ils apparaissent côté stagiaire quand le formateur lance (ou dépasse) la séquence
    qui les propose, puis restent disponibles. Après la session (close), tous restent accessibles. */
+/* Activités placées dans le déroulé (quiz, sondages, nuages…). a.at : séquence choisie dans le pilotage
+   ("" = hors déroulé, choix explicite). Sans a.at, ou si sa séquence n'existe plus : la séquence dont la ligne
+   `activité:` cite l'activité (m.live), ou dont le quiz en autonomie (m.quiz) est celui de l'activité.
+   Une activité n'est placée qu'à un seul endroit ; plusieurs activités d'une séquence gardent l'ordre de la liste. */
+export function actPlace(session, a, mods = modulesFor(session)) {
+  if (!a) return null;
+  if (a.at === "") return null;
+  if (a.at && mods.some((m) => m.id === a.at)) return a.at;
+  const m = mods.find((x) => x.type !== "pause" && ((x.live && (x.live === a.id || x.live === a.from)) || (a.type === "quiz" && x.quiz && x.quiz === a.quiz)));
+  return m ? m.id : null;
+}
+export function actsByModule(session) {
+  const mods = modulesFor(session), map = new Map();
+  for (const a of session?.activities || []) {
+    const id = actPlace(session, a, mods);
+    if (id) { if (!map.has(id)) map.set(id, []); map.get(id).push(a); }
+  }
+  return map;
+}
+
 export const TOOL_IDS = ["toolRmctf", "toolSve", "toolCc"];
 export const TOOL_LABELS = { toolRmctf: "Constructeur R·M·C·T·F", toolSve: "Kit S·V·E", toolCc: "Jeu du code couleur" };
 /* Outils visibles des stagiaires : ceux des séquences qui portent `outil`, une fois lancées ou dépassées dans le

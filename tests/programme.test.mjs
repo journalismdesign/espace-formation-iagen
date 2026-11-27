@@ -114,4 +114,31 @@ ok(toolsAt({ format: "1" }, "j1-assistants") === "" && toolsAt({ format: "1" }, 
 const cc = parseConducteur("## 09:30–10:00 · Vos données\ntype: pratique\noutil: code couleur\n").programme;
 ok(cc.modules?.[0]?.outil === "toolCc" && conducteurMarkdown(cc.modules).includes("outil: code couleur"), "conducteur : « outil: code couleur » lu et réécrit");
 
-console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests des pauses, de la fin de journée, du niveau du jour 2 et des outils passent.");
+// Activités placées dans le déroulé : placement (choisi ou déduit du déroulé) et flèches du pilotage
+{
+const { actPlace, actsByModule } = await import("../src/lib/content.js");
+const { stepLive, nextPage, modPages } = await import("../src/lib/steps.js");
+const { defaultActivities } = await import("../src/lib/activities.js");
+const SA = { format: "2", status: "live", slides_url: "https://docs.google.com/presentation/d/X/edit", activities: defaultActivities("2") };
+const modQ = (k) => D2.find((m) => m.quiz === k), modL = (k) => D2.find((m) => m.live === k);
+const qa = SA.activities.find((a) => a.id === "quiz-llm"), na = SA.activities.find((a) => a.id === "niveau");
+ok(actPlace(SA, qa) === modQ("llm").id && actPlace(SA, na) === modL("niveau").id && actPlace(SA, SA.activities.find((a) => a.type === "welcome")) === null, "placement déduit : quiz sous la séquence de son quiz, sondage sous la séquence qui le cite, accueil hors déroulé");
+ok(actPlace(SA, { ...qa, at: "a-presse" }) === "a-presse" && actPlace(SA, { ...qa, at: "" }) === null && actPlace(SA, { ...qa, at: "disparue" }) === modQ("llm").id, "placement choisi : prioritaire, \"\" = hors déroulé, séquence disparue = placement déduit");
+const M = modQ("llm"), pg = modPages(SA, M), nxt = D2[D2.findIndex((m) => m.id === M.id) + 1];
+const S1 = { ...SA, activities: [...SA.activities.map((a) => (a.id === "quiz-llm" ? a : a.id === "niveau" ? { ...a, at: M.id } : a)), { id: "v1", type: "vote", titre: "Vote", at: M.id }] };
+const inM = (actsByModule(S1).get(M.id) || []).map((a) => a.id);
+ok(inM.join() === "niveau,quiz-llm,v1", "activités d'une séquence dans l'ordre de la liste");
+const go = (live, dir) => stepLive({ ...S1, live }, dir);
+const a1 = go({ module: M.id, view: "slide", slide: pg[pg.length - 1] }, 1);
+ok(pg.length > 0 && a1?.view === "activity" && a1.act === "niveau" && a1.module === M.id, "après la dernière page d'une séquence : sa première activité placée");
+const a2 = go(a1, 1), nq = 4;
+ok(a2?.act === "quiz-llm" && a2.qi === 0 && go({ ...a2, qi: 1, reveal: true }, 1)?.qi === 2 && go({ ...a2, qi: 1, reveal: true }, 1)?.reveal === false, "puis le quiz, question par question (réponse masquée à chaque question)");
+const out = go({ ...a2, qi: nq - 1 }, 1);
+ok(out?.view === "slide" && out.module === nxt.id && out.slide === modPages(SA, nxt)[0] && out.act === undefined, "après la dernière question (le vote est sauté) : première page de la séquence suivante, sans l'activité");
+const back = go(out, -1);
+ok(back?.view === "activity" && back.act === "quiz-llm" && back.module === M.id && go(go(back, -1), -1)?.view === "slide" && go(go(back, -1), -1)?.slide === pg[pg.length - 1], "en reculant : dernière activité de la séquence, puis la précédente, puis sa dernière page");
+ok(go({ module: M.id, view: "activity", act: "accueil", qi: 0 }, 1) === null, "activité hors déroulé : les flèches ne font rien");
+ok(nextPage({ ...S1, live: { module: M.id, view: "slide", slide: pg[pg.length - 1] } })?.label === "Activité : Sondage d'entrée" && nextPage({ ...S1, live: a2 })?.label === `Activité : question 2 sur ${nq}`, "« À suivre » annonce l'activité ou la question suivante");
+}
+
+console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests des pauses, de la fin de journée, du niveau du jour 2, des outils et des activités du déroulé passent.");
