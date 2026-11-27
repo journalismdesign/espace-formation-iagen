@@ -543,7 +543,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <h3>Invitations par e-mail</h3>
             <p class="small muted" style="margin-top:0">${T("La personne invitée retrouve la session dès sa première connexion avec cette adresse. Aucun e-mail n'est envoyé par la plateforme : transmettez le lien de connexion vous-même.")}</p>
             <form id="invF"><textarea id="invT" placeholder="Une adresse par ligne"></textarea><button class="btn sm" type="submit" style="margin-top:8px">Ajouter</button></form>
-            <div class="chips" style="margin-top:10px">${invites.map((i) => `<span class="chip">${esc(i.email)} ${joined.has(i.email) ? "✓" : ""}<button class="linkbtn" data-uninv="${esc(i.email)}" aria-label="Retirer l'invitation">✕</button></span>`).join("") || `<span class="small muted">${ctx.readOnly ? "Adresses masquées en mode invitation." : "Aucune invitation."}</span>`}</div>
+            <div class="chips" style="margin-top:10px">${invites.map((i) => `<span class="chip">${esc(i.email)} ${joined.has(i.email) ? "✓" : ""}<button class="linkbtn" data-uninv="${esc(i.email)}" aria-label="Retirer l'invitation">✕</button></span>`).join("") || `<span class="small muted">Aucune invitation.</span>`}</div>
           </div>
         </div>
         <div>
@@ -627,7 +627,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         ? "Session close : les stagiaires n'y ont plus accès. L'historique reste dans l'onglet Après."
         : "Fermée aux stagiaires pendant une formation en salle. Elle s'ouvre quand vous activez « Formation en ligne ».");
       off.hidden = on; c.hidden = !on;
-      if (on && !chatStop) chatStop = mountChat(c, { api, sid, me: ctx.me, staff: !ctx.readOnly, compact: true, readOnly: ctx.readOnly });
+      if (on && !chatStop) chatStop = mountChat(c, { api, sid, me: ctx.me, staff: true, compact: true });
     };
     drawChat(); cleanups.push(() => chatStop && chatStop());
     afterOnline = drawChat;
@@ -680,7 +680,6 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     let modDay = 1;
     // Flèches du clavier (et télécommandes de présentation) : page suivante / précédente
     const onKey = (e) => {
-      if (ctx.readOnly) return; // invité·e : les flèches ne changent pas l'écran projeté
       const dir = pageKey(e); if (!dir) return;
       const nl = stepLive(session, dir); if (!nl) return;
       e.preventDefault(); setLive(nl);
@@ -1127,13 +1126,12 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
           <form id="resF" class="askrow" style="margin-top:10px"><input type="text" id="rT" placeholder="Titre" required><input type="url" id="rU" placeholder="https://" required><button class="btn sm" type="submit">Ajouter</button></form></div>
         <div class="card"><h3>Codes et accès des exercices</h3><p class="small muted" style="margin-top:0">${T("Comptes de démonstration, clés d'API de test… Les stagiaires les copient depuis « Ressources du jour ». N'y mettez jamais d'identifiant personnel.")}</p>
           ${secrets.map((s) => `<div class="secret-edit"><div class="small"><b>${T(s.label)}</b> <span class="muted">${s.value ? "renseigné" : "aucune valeur"}</span> <button class="linkbtn small" data-rsec="${s.id}">Retirer</button></div><form class="askrow" data-sec="${s.id}"><input type="text" placeholder="Coller la valeur" value="${esc(s.value)}"><button class="btn sm" type="submit">Enregistrer</button></form></div>`).join("")}
-          ${ctx.readOnly ? `<p class="small muted">Valeurs masquées en mode invitation.</p>` : ""}
           <form id="secF" class="askrow" style="margin-top:10px"><input type="text" id="sL" placeholder="Intitulé (ex. Compte Gemini de démo)" required><button class="btn sm" type="submit">Ajouter</button></form></div>
       </div>`;
     const reload = () => go(location.hash);
     $$("[data-att]", box).forEach((c) => (c.onchange = () => guard(() => api.setAttended(sid, c.dataset.att, c.checked))));
     if ($("#dup", box)) $("#dup", box).onclick = () => openDuplicate(api, session, go);
-    cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: !ctx.readOnly, compact: true, readOnly: ctx.readOnly }));
+    cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: true, compact: true }));
     $("#csv", box).onclick = () => {
       const quizzes = [...new Set([...quizKeysOf(session.activities, modulesFor(session)), ...Object.keys(session.quizzes || {})])].filter((k) => quizFor(session, k));
       const head = ["Nom", "E-mail", "Présent", "Métier", "Niveau IA", "Cadrage", "Cas d'usage", "Retour formateur", "Déroulé (séquences cochées)", ...quizzes.map((q) => "Quiz " + quizFor(session, q).titre)];

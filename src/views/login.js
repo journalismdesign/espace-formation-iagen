@@ -147,7 +147,7 @@ function otpFlow(root, { api, go }, first) {
 
 /* Choix du code d'accès, après connexion par code temporaire */
 export async function viewSetTrainerCode(root, _p, { api, go, refreshMe }) {
-  // Invité·e passé·e par « Code oublié ? » : pas de code d'équipe à choisir, direction le back-office en lecture seule
+  // Invité·e passé·e par « Code oublié ? » : pas de code d'équipe à choisir, direction ses sessions de démo
   if ((await api.me(true).catch(() => null))?.role === "guest") { try { localStorage.removeItem(RESET); } catch {} go("#/admin"); return; }
   const isTrainer = await api.claimTrainer().catch(() => false);
   if (!isTrainer) {
@@ -196,7 +196,7 @@ export async function viewGuestLogin(root, _p, { api, go }) {
   root.innerHTML = `<div class="login"><div class="login-card card">
     <div class="kicker" style="color:var(--muted)">Invitation</div>
     <h1 style="color:var(--ink);margin:4px 0 6px">Découvrir l'espace formation</h1>
-    <p class="muted" id="gLead">${T("Vous avez été invité·e à consulter le back-office et les sessions, en lecture seule. Indiquez l'adresse qui a reçu l'invitation : un code de connexion vous sera envoyé.")}</p>
+    <p class="muted" id="gLead">${T("Vous avez été invité·e à essayer l'espace formation sur deux sessions de démonstration. Indiquez l'adresse qui a reçu l'invitation : un code de connexion vous sera envoyé.")}</p>
     <form id="gF">
       <label class="f" for="gMail">Votre adresse e-mail</label>
       <input type="email" id="gMail" required autocomplete="email">
@@ -209,7 +209,7 @@ export async function viewGuestLogin(root, _p, { api, go }) {
       <button class="linkbtn small" type="button" id="gBack" style="margin-top:8px">Changer d'adresse ou renvoyer un code</button>
     </form>
     <div id="gMsg" class="small" style="margin-top:10px" role="status"></div>
-    <p class="small muted" style="margin-top:18px">${T("Rien de ce que vous verrez ne peut être modifié. Les identités des stagiaires sont masquées.")}</p>
+    <p class="small muted" style="margin-top:18px">${T("Vos essais ne touchent aucune vraie session.")}</p>
   </div></div>`;
   let email = "";
   const msg = (h) => ($("#gMsg").innerHTML = h);

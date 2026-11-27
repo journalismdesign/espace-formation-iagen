@@ -127,7 +127,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
       <div id="sideExtra"></div>
       <div class="side-label">Ressources</div>
       <nav class="side-nav">${shownTabs.filter(([k]) => !["direct", "cadrage", "emargement"].includes(k)).map(([k, l]) => `<a href="#/s/${sid}/${k}"${k === tab ? ' aria-current="page"' : ""}${k === "outils" ? ` id="navOutils"${toolsVisible() ? "" : " hidden"}` : ""}${k === "discussion" ? ` id="navChat"${chatVisible() ? "" : " hidden"}` : ""}>${l}<span>›</span></a>`).join("")}</nav>
-      ${trainerPreview ? `<p class="small muted" style="margin-top:14px">${ctx.readOnly ? "Aperçu en lecture seule (invitation) : rien n'est enregistré." : "Aperçu formateur : vos clics ne sont pas enregistrés."}${isArchived(session) ? " Session archivée : les stagiaires n'y ont plus accès." : sessionEnded(session, { endOf }) ? T(` Formation terminée : les stagiaires voient le message de fin${left == null ? "" : ` (encore ${joursTxt(left)} avant l'archivage)`}.`) : ""} <a href="#/admin/s/${sid}/jour">Retour au back-office</a></p>` : ""}
+      ${trainerPreview ? `<p class="small muted" style="margin-top:14px">Aperçu formateur : vos clics ne sont pas enregistrés.${isArchived(session) ? " Session archivée : les stagiaires n'y ont plus accès." : sessionEnded(session, { endOf }) ? T(` Formation terminée : les stagiaires voient le message de fin${left == null ? "" : ` (encore ${joursTxt(left)} avant l'archivage)`}.`) : ""} <a href="#/admin/s/${sid}/jour">Retour au back-office</a></p>` : ""}
     </aside>
     <section class="sidemain" id="tabBody"></section>`;
   const body = $("#tabBody", root);
@@ -457,7 +457,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   /* ---------------- Discussion (messagerie) ---------------- */
   async function tabDiscussion() {
     body.innerHTML = `<div class="pagehead"><div><div class="kicker-d">${T(session.title)}</div><h1>Discussion</h1><div id="chatNote"></div></div></div><div id="chatBox"></div>`;
-    tabCleanups.push(mountChat($("#chatBox", body), { api, sid, me, staff: trainerPreview && !ctx.readOnly, readOnly: ctx.readOnly }));
+    tabCleanups.push(mountChat($("#chatBox", body), { api, sid, me, staff: trainerPreview }));
     // aperçu formateur : dire quand les stagiaires ne voient pas cet onglet
     const note = () => {
       const n = $("#chatNote", body); if (!n) return;

@@ -9,8 +9,6 @@ import "./style.css";
 
 import { api } from "./api/index.js";
 import { $, esc, toast, dateFr } from "./lib/dom.js";
-import { readOnlyApi } from "./api/readonly.js";
-import { freezeControls } from "./lib/freeze.js";
 import { samsaHtml } from "./lib/brand.js";
 import { closeSheet } from "./lib/content.js";
 import { viewLogin, viewTrainerLogin, viewSetTrainerCode, viewGuestLogin, RESET } from "./views/login.js";
@@ -29,7 +27,7 @@ import { viewQuizBank } from "./views/quizBank.js";
 import { skinFooter, skinForRoute, applySkin, currentSkin } from "./lib/skin.js";
 
 const app = $("#app");
-let cleanup = null, me = null, booted = false, renderTok = 0, currentRoute = null, unfreeze = null;
+let cleanup = null, me = null, booted = false, renderTok = 0, currentRoute = null;
 
 export const go = (h) => { if (location.hash === h) render(); else location.hash = h; };
 
@@ -37,7 +35,7 @@ const ROUTES = [
   [/^#\/login$/, viewLogin, { public: true }],
   [/^#\/formateur$/, viewTrainerLogin, { public: true }],
   [/^#\/formateur\/code$/, viewSetTrainerCode, {}],
-  [/^#\/invitation$/, viewGuestLogin, { public: true }], // invité·es : lien de connexion, lecture seule
+  [/^#\/invitation$/, viewGuestLogin, { public: true }], // invité·es : code par e-mail, puis leurs sessions de démo
   [/^#\/join\/([A-Za-z0-9]+)$/, viewEntry, { any: true, bare: true }],
   [/^#\/profil$/, viewProfile],
   [/^#\/s\/([\w-]+)(?:\/([\w-]+))?(?:\/([\w-]+))?$/, viewSession],
@@ -70,12 +68,12 @@ function header(route) {
   </header>`;
 }
 
-// Bandeau de l'invité·e : lecture seule, date de fin (ou accès terminé)
+// Bandeau de l'invité·e : sessions de démonstration, date de fin (ou accès terminé)
 function guestBand(me) {
   const until = me.guest_until ? dateFr(me.guest_until, { day: "numeric", month: "long", year: "numeric" }).replace(/^1 /, "1er ") : "";
   const txt = me.guest_active === false
     ? `Votre accès invité a pris fin${until ? ` le ${until}` : ""}. Demandez à l'équipe de le prolonger.`
-    : `Invitation · lecture seule${until ? ` jusqu'au ${until}` : ""} : vous pouvez tout consulter, rien n'est enregistré. Les identités des stagiaires sont masquées.`;
+    : `Invitation · démonstration${until ? ` jusqu'au ${until}` : ""} : manipulez librement vos deux sessions de démo, aucune vraie session n'est concernée.`;
   return `<div class="guest-band${me.guest_active === false ? " over" : ""}" role="status">${esc(txt)}</div>`;
 }
 
@@ -92,7 +90,6 @@ async function render() {
     try { if (await cleanup.retab(m.slice(1))) { if (tok === renderTok) window.scrollTo(0, 0); return; } } catch (e) { console.error(e); }
   }
   if (cleanup) { try { cleanup(); } catch {} cleanup = null; }
-  if (unfreeze) { unfreeze(); unfreeze = null; }
   currentRoute = route;
 
   const user = await api.currentUser();
@@ -113,15 +110,11 @@ async function render() {
   if (tok !== renderTok) return;
   applySkin(skin);
   document.body.classList.toggle("bare", !!route.bare);
-  // Invité·e : tout le back-office en lecture seule (l'aperçu côté stagiaire, lui, n'enregistre déjà rien)
-  const guest = isGuest(me), frozen = guest && !h.startsWith("#/s/");
-  document.body.classList.toggle("ro", frozen);
   app.innerHTML = header(route) + `<main id="view"></main>`;
   $("#logout")?.addEventListener("click", async () => { await api.signOut(); me = null; booted = false; go("#/login"); });
   $("#demoReset")?.addEventListener("click", () => confirm("Effacer toutes les données de démonstration ?") && api.reset());
-  const ctx = { api: guest ? readOnlyApi(api) : api, me, go, readOnly: guest, refreshMe: async () => (me = await api.me(true)) };
+  const ctx = { api, me, go, refreshMe: async () => (me = await api.me(true)) };
   ctx.me = me || {};
-  if (frozen) unfreeze = freezeControls(document.body);
   try {
     cleanup = (await route.view($("#view"), m.slice(1), ctx)) || null;
   } catch (e) {

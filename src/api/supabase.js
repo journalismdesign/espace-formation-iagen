@@ -85,7 +85,7 @@ export function createSupabaseApi(url, anonKey) {
       if (!r.error) return r.data || [];
       return (ok(await sb.rpc("list_staff")) || []).map((s) => ({ ...s, role: s.is_admin ? "admin" : "trainer", guest_until: null }));
     },
-    // role : trainer, admin ou guest (invité·e en lecture seule, jusqu'à `until`). L'ancienne signature sert pour
+    // role : trainer, admin ou guest (invité·e : ses sessions de démo, jusqu'à `until`). L'ancienne signature sert pour
     // formateur·ice et admin, ce qui marche avant comme après la migration.
     async saveStaff(email, role, until = null) {
       if (role === "guest") {
@@ -279,8 +279,6 @@ export function createSupabaseApi(url, anonKey) {
     // Efface toute la discussion d'une session (équipe) : les messages partent avec leurs conversations (on delete cascade)
     async clearDiscussion(sid) { ok(await sb.from("threads").delete().eq("session_id", sid)); },
     async deletePost(id) { ok(await sb.from("posts").delete().eq("id", id)); },
-    // Invité·e : la discussion avec les auteurs masqués (« Stagiaire N », « Équipe »)
-    async guestDiscussion(sid) { return ok(await sb.rpc("guest_discussion", { p_session: sid })) || []; },
 
     /* ---------- Temps réel ---------- */
     // tables : limiter l'abonnement (côté stagiaire, la session seule) — chaque table suivie coûte au serveur

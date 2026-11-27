@@ -7,7 +7,7 @@ import { modulesFor } from "../lib/content.js";
 import { STATUS } from "./home.js";
 import { skinDark } from "../lib/skin.js";
 import { isAdmin, isGuest } from "../lib/roles.js";
-import { isArchived, archiveDate, sessionEnded, trainingDates, parisToday } from "../lib/archive.js";
+import { isArchived, archiveDate, sessionEnded, trainingDates, parisToday, addDays } from "../lib/archive.js";
 
 // Lien court de la session : <site>/CODE (redirigé vers #/join/CODE par 404.html ou au démarrage).
 // VITE_SHORT_BASE permet un domaine plus court (ex. https://formation.samsa.fr/).
@@ -18,9 +18,11 @@ export const qr = (text, size = 320) => QRCode.toDataURL(text, { width: size, ma
 
 export async function viewAdmin(root, [view], { api, go, me }) {
   const admin = isAdmin(me), guest = isGuest(me);
+  if (guest) return viewGuestDemos(root, { api, go, me }); // invité·e : ses deux sessions de démo, rien d'autre
   const archivedTab = view === "archives";
-  const [all, counts, brands, trainers, skins] = await Promise.all([api.listSessions(), api.memberCounts(), api.listBrands().catch(() => []),
+  const [listed, counts, brands, trainers, skins] = await Promise.all([api.listSessions(), api.memberCounts(), api.listBrands().catch(() => []),
     api.listTrainers().catch(() => []), api.listSkins().catch(() => [])]);
+  const all = listed.filter((s) => !s.demo_owner); // les sessions de démo des invité·es n'apparaissent pas ici
   /* Deux onglets : à venir (en cours, à venir, terminées depuis moins de 5 jours) et archivées (5 jours après le
      dernier jour, src/lib/archive.js). Les archives, de la plus récente à la plus ancienne. */
   const archived = all.filter((s) => isArchived(s)).sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
@@ -45,8 +47,8 @@ export async function viewAdmin(root, [view], { api, go, me }) {
     return b ? { name: b.name, logo: b.logo || b.logo_light || null } : { name: s.client || "", logo: s.client_logo || null };
   };
   root.innerHTML = `
-    <div class="pagehead"><div><div class="kicker-d">${admin ? "Back-office · administration" : guest ? "Back-office · invitation" : "Back-office formateur"}</div><h1>${admin || guest ? "Sessions" : "Mes sessions"}</h1>
-      ${admin ? "" : `<p class="muted">${T(guest ? "Toutes les sessions, en lecture seule : ouvrez-en une pour voir ses réglages, son pilotage, son suivi et le côté stagiaire." : "Les sessions qui vous sont attribuées par l'administration. Pour en obtenir une autre, contactez-la.")}</p>`}</div>
+    <div class="pagehead"><div><div class="kicker-d">${admin ? "Back-office · administration" : "Back-office formateur"}</div><h1>${admin ? "Sessions" : "Mes sessions"}</h1>
+      ${admin ? "" : `<p class="muted">${T("Les sessions qui vous sont attribuées par l'administration. Pour en obtenir une autre, contactez-la.")}</p>`}</div>
       ${admin ? `<div class="head-actions"><a class="btn ghost" href="#/admin/quiz">Quiz et sondages</a><a class="btn ghost" href="#/admin/equipe">Équipe et accès</a><a class="btn ghost" href="#/admin/reglages">Réglages généraux</a><button class="btn" id="newBtn">+ Démarrer une session</button></div>` : ""}</div>
     <form class="card" id="newForm" hidden style="margin-bottom:14px">
       <h3>Nouvelle session</h3>
@@ -168,5 +170,52 @@ export function openDuplicate(api, s, go) {
     }), "Session dupliquée : vérifiez ses réglages.");
     btn.disabled = false;
     if (id) { close(); go(`#/admin/s/${id}/reglages`); }
+  };
+}
+
+/* ---------- Invité·e : deux sessions de démonstration ----------
+   Une formation d'une journée et une de deux journées, créées à la première visite (deux au plus, côté base :
+   migration …_invites_demo.sql), datées du jour. L'invité·e les pilote comme un·e formateur·ice ; elles
+   n'apparaissent pas dans la liste de l'équipe. « Remettre les démos à zéro » les supprime puis les recrée. */
+const DEMOS = [["1", "Démo · une journée"], ["2", "Démo · deux journées"]];
+async function ensureDemos(api, me) {
+  const mine = async () => (await api.listSessions()).filter((s) => s.demo_owner === me.id);
+  let list = await mine();
+  const missing = DEMOS.filter(([f]) => !list.some((s) => s.format === f));
+  if (missing.length) {
+    const bank = await api.listBank().catch(() => ({ ready: false, items: [] }));
+    const today = parisToday();
+    for (const [format, title] of missing) {
+      const activities = defaultActivities(format, bank.items);
+      await api.createSession({
+        title, client: "Démonstration", date: today, ...(format === "2" ? { date2: addDays(today, 1) } : {}), format, activities, demo_owner: me.id,
+        ...(bank.ready ? { quizzes: snapshotQuizzes({}, quizKeysOf(activities, modulesFor(format)), bank.items) } : {}),
+      });
+    }
+    list = await mine();
+  }
+  return list.sort((a, b) => String(a.format).localeCompare(String(b.format)));
+}
+async function viewGuestDemos(root, { api, go, me }) {
+  if (me.guest_active === false) {
+    root.innerHTML = `<div class="card"><h2>Invitation terminée</h2><p class="muted">${T("Votre accès de démonstration a pris fin. Pour le prolonger, écrivez à formations@journalism.design.")}</p></div>`;
+    return;
+  }
+  const demos = await guard(() => ensureDemos(api, me));
+  if (!demos) { root.innerHTML = `<div class="card"><h2>Sessions de démonstration indisponibles</h2><p class="muted">${T("Elles n'ont pas pu être préparées. Réessayez dans un instant, ou écrivez à formations@journalism.design.")}</p></div>`; return; }
+  root.innerHTML = `
+    <div class="pagehead"><div><div class="kicker-d">Invitation · démonstration</div><h1>Vos sessions de démonstration</h1>
+      <p class="muted">${T("Deux sessions rien que pour vous : une formation d'une journée et une de deux journées. Réglez-les, pilotez le déroulé, lancez les sondages et les quiz, projetez l'écran, regardez le côté stagiaire : vos essais ne touchent aucune vraie session.")}</p></div>
+      <div class="head-actions"><button class="btn ghost" id="gReset" type="button">Remettre les démos à zéro</button></div></div>
+    <div class="grid g2">${demos.map((s) => `<a class="card demo-card" href="#/admin/s/${s.id}/jour">
+      <div class="kicker-d">${s.format === "2" ? "Deux journées" : "Une journée"} · code <span class="mono">${esc(s.code)}</span></div>
+      <h2>${T(s.title)}</h2>
+      <p class="small muted" style="margin:0">${T(s.status === "live" ? "Salle ouverte" : "Salle fermée")}</p>
+      <span class="btn sm">Ouvrir le pilotage →</span></a>`).join("")}</div>
+    <p class="small muted" style="margin-top:14px">${T("Pour voir l'expérience des stagiaires, ouvrez une session puis « Voir côté stagiaire », ou rejoignez-la avec son code depuis un autre appareil et une autre adresse e-mail.")}</p>`;
+  $("#gReset", root).onclick = async () => {
+    if (!confirm("Remettre les deux sessions de démonstration à zéro ?\n\nRéglages, activités, participant·es, réponses et discussion seront effacés, puis deux sessions neuves recréées.")) return;
+    const ok = await guard(async () => { for (const s of demos) await api.deleteSession(s.id); return true; });
+    if (ok) go(location.hash);
   };
 }

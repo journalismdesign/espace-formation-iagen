@@ -69,8 +69,8 @@ export function createDemoApi({ defaultActivities }) {
   let authCb = () => {};
   const need = () => { const u = user(); if (!u) throw new Error("Connectez-vous d'abord."); return u; };
   const prof = (id) => db.profiles.find((p) => p.id === id);
-  // Équipe : admin (gère tout), formateur·ices (seulement les sessions attribuées à leur fiche) et invité·es
-  // (tout en lecture seule, identités des stagiaires masquées, jusqu'à guest_until) — comme …_invites_lecture.sql
+  // Équipe : admin (gère tout), formateur·ices (seulement les sessions attribuées à leur fiche) et invité·es (leurs
+  // deux sessions de démo, rien d'autre, jusqu'à guest_until) — comme …_invites_lecture.sql et …_invites_demo.sql
   const S = () => (db.staff ||= [{ email: DEMO_TRAINER, is_admin: true, created_at: now() }]);
   const staffOf = (email) => S().find((x) => x.email === String(email || "").toLowerCase());
   const roleOf = (email) => { const t = staffOf(email); return t ? (t.guest ? "guest" : t.is_admin ? "admin" : "trainer") : null; };
@@ -78,21 +78,27 @@ export function createDemoApi({ defaultActivities }) {
   const parisToday = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
   const isGuest = () => myProf()?.role === "guest";
   const guestActive = () => { if (!isGuest()) return false; const t = staffOf(myProf().email); return !!t?.guest && (!t.guest_until || t.guest_until >= parisToday()); };
-  // Numéro d'arrivée d'un·e participant·e (« Stagiaire N » pour l'invité·e)
-  const aliasOf = (sid, uidv) => { const n = db.members.filter((m) => m.session_id === sid).sort((a, b) => String(a.joined_at).localeCompare(String(b.joined_at)) || String(a.user_id).localeCompare(String(b.user_id))).findIndex((m) => m.user_id === uidv); return n >= 0 ? n + 1 : null; };
   const myProf = () => syncRole(prof(user()?.id));
-  const isTrainer = () => ["trainer", "admin"].includes(myProf()?.role);
+  const isTrainer = () => ["trainer", "admin"].includes(myProf()?.role) || guestActive(); // l'invité·e pilote ses démos
   const isAdmin = () => myProf()?.role === "admin";
   const needTrainer = () => { if (!isTrainer()) throw new Error("Réservé aux formateur·ices."); };
   const needAdmin = () => { if (!isAdmin()) throw new Error("Réservé à l'administration."); };
   const isMember = (sid) => !isGuest() && db.members.some((m) => m.session_id === sid && m.user_id === user()?.id);
   const manages = (sid) => {
     if (isAdmin()) return true;
+    const x = db.sessions.find((y) => y.id === sid);
+    if (isGuest()) return guestActive() && !!x && x.demo_owner === user()?.id; // ses sessions de démo
     if (!isTrainer()) return false;
-    const x = db.sessions.find((y) => y.id === sid), t = x && (db.trainers || []).find((y) => y.id === x.trainer_id);
+    const t = x && (db.trainers || []).find((y) => y.id === x.trainer_id);
     return !!(t?.login_email && t.login_email === myProf()?.email);
   };
-  const canSee = (sid) => manages(sid) || isMember(sid) || guestActive();
+  const canSee = (sid) => manages(sid) || isMember(sid);
+  // Sessions de démo d'un compte (supprimées quand son accès invité·e est retiré ou change)
+  const dropDemos = (email) => { const p = db.profiles.find((y) => y.email === email); if (p) db.sessions.filter((x) => x.demo_owner === p.id).forEach((x) => removeSession(x.id)); };
+  const removeSession = (id) => {
+    db.sessions = db.sessions.filter((x) => x.id !== id);
+    ["members", "invites", "resources", "secrets", "projects", "responses", "threads", "posts"].forEach((t) => (db[t] = db[t].filter((r) => r.session_id !== id)));
+  };
   // Discussion : l'équipe garde la main, les stagiaires jusqu'à la clôture
   // Session archivée (5 jours après la fin) : ses contenus sont fermés aux participant·es (comme …_archives.sql)
   const memberLocked = (sid) => isMember(sid) && !manages(sid) && isArchived(db.sessions.find((x) => x.id === sid));
@@ -316,18 +322,21 @@ export function createDemoApi({ defaultActivities }) {
       const v = { is_admin: role === "admin", guest: role === "guest", guest_until: role === "guest" ? until || null : null };
       const t = S().find((x) => x.email === email);
       if (t) Object.assign(t, v); else S().push({ email, ...v, created_at: now() });
+      if (role !== "guest") dropDemos(email);
       commit();
     },
     async removeStaff(email) {
       needAdmin(); email = String(email || "").trim().toLowerCase();
       if (email === myProf()?.email) throw new Error("Vous ne pouvez pas retirer votre propre accès.");
-      db.staff = S().filter((x) => x.email !== email); commit();
+      db.staff = S().filter((x) => x.email !== email); dropDemos(email); commit();
     },
 
     async listSessions() { return db.sessions.filter((s) => canSee(s.id)).sort((a, b) => (a.date || "9").localeCompare(b.date || "9")); },
     async getSession(id) { return canSee(id) ? db.sessions.find((s) => s.id === id) || null : null; },
     async createSession(s) {
-      needAdmin();
+      // invité·e : ses deux sessions de démo, pas plus ; sinon l'administration
+      if (s.demo_owner) { if (!guestActive() || s.demo_owner !== user()?.id || db.sessions.filter((x) => x.demo_owner === s.demo_owner).length >= 2) throw new Error("Deux sessions de démonstration au plus."); }
+      else needAdmin();
       const row = { ...SESSION_DEFAULTS, id: uid(), formation: "Prendre en main les IA génératives", client: "", date: null, format: "1", code: code6(), status: "draft", activities: [], quizzes: {}, live: {}, created_at: now(), ...s };
       db.sessions.push(row); commit(); return row;
     },
@@ -335,6 +344,7 @@ export function createDemoApi({ defaultActivities }) {
       needTrainer(); if (!manages(id)) throw new Error("Session non attribuée.");
       const s = db.sessions.find((x) => x.id === id);
       if (!isAdmin() && ((patch.trainer_id !== undefined && patch.trainer_id !== s.trainer_id) || (patch.skin_id !== undefined && patch.skin_id !== s.skin_id))) throw new Error("Seule l'administration attribue une session et choisit son habillage.");
+      if (!isAdmin() && patch.demo_owner !== undefined && patch.demo_owner !== s.demo_owner) throw new Error("Une session de démonstration ne change pas de propriétaire.");
       Object.assign(s, patch);
       if (s.status === "closed") { // codes et accès directs détruits à la clôture
         db.codes = db.codes.filter((c) => c.session_id !== id);
@@ -343,10 +353,9 @@ export function createDemoApi({ defaultActivities }) {
       commit(); return s;
     },
     async deleteSession(id) {
-      needAdmin();
-      db.sessions = db.sessions.filter((s) => s.id !== id);
-      ["members", "invites", "resources", "secrets", "projects", "responses", "threads", "posts"].forEach((t) => (db[t] = db[t].filter((r) => r.session_id !== id)));
-      commit();
+      const x = db.sessions.find((y) => y.id === id);
+      if (!isAdmin() && !(guestActive() && x?.demo_owner === user()?.id)) throw new Error("Réservé à l'administration.");
+      removeSession(id); commit();
     },
     // Même périmètre que duplicate_session : tout sauf participant·es, réponses, cadrages, discussion et direct
     async duplicateSession(id, o = {}) {
@@ -374,7 +383,7 @@ export function createDemoApi({ defaultActivities }) {
     },
     async memberCounts() { return db.members.reduce((a, r) => ((a[r.session_id] = (a[r.session_id] || 0) + 1), a), {}); },
 
-    async listInvites(sid) { needTrainer(); return db.invites.filter((i) => i.session_id === sid); },
+    async listInvites(sid) { needTrainer(); return manages(sid) ? db.invites.filter((i) => i.session_id === sid) : []; },
     async addInvites(sid, emails) {
       needTrainer();
       emails.forEach((email) => { if (!db.invites.some((i) => i.session_id === sid && i.email === email)) db.invites.push({ session_id: sid, email, created_at: now() }); });
@@ -382,11 +391,10 @@ export function createDemoApi({ defaultActivities }) {
     },
     async removeInvite(sid, email) { needTrainer(); db.invites = db.invites.filter((i) => !(i.session_id === sid && i.email === email)); commit(); },
     async roster(sid) {
-      const g = !manages(sid) && guestActive(); // invité·e : identités masquées
-      if (!manages(sid) && !g) throw new Error("Réservé au formateur de la session.");
+      if (!manages(sid)) throw new Error("Réservé au formateur de la session.");
       return db.members.filter((m) => m.session_id === sid).map((m) => {
         const p = prof(m.user_id), pr = db.projects.find((x) => x.session_id === sid && x.user_id === m.user_id);
-        return { user_id: m.user_id, email: g ? null : p.email, full_name: g ? `Stagiaire ${aliasOf(sid, m.user_id)}` : p.full_name, metier: p.metier, niveau: p.niveau, attended: m.attended, joined_at: m.joined_at, progress: m.progress,
+        return { user_id: m.user_id, email: p.email, full_name: p.full_name, metier: p.metier, niveau: p.niveau, attended: m.attended, joined_at: m.joined_at, progress: m.progress,
           project_id: pr?.id ?? null, project_status: pr?.status ?? null, project_title: pr?.data?.retenu?.titre ?? null, project_steps: pr?.data?.steps?.length ?? 0 };
       });
     },
@@ -404,7 +412,7 @@ export function createDemoApi({ defaultActivities }) {
       ["data", "status", "validated_at", "question"].forEach((k) => patch[k] !== undefined && (p[k] = patch[k]));
       p.updated_at = now(); commit(); return { ...p };
     },
-    async listProjects(sid) { if (!guestActive()) needTrainer(); return db.projects.filter((p) => p.session_id === sid); },
+    async listProjects(sid) { needTrainer(); return manages(sid) ? db.projects.filter((p) => p.session_id === sid) : []; },
     async commentProject(pid, text) { needTrainer(); const p = db.projects.find((x) => x.id === pid); p.trainer_comment = text; commit(); },
 
     async respond(sid, activity_id, value) {
@@ -455,13 +463,6 @@ export function createDemoApi({ defaultActivities }) {
       db.threads = db.threads.filter((t) => t.session_id !== sid); db.posts = db.posts.filter((p) => p.session_id !== sid); commit();
     },
     async deletePost(id) { db.posts = db.posts.filter((p) => p.id !== id); commit(); },
-    // Invité·e : discussion avec les auteurs masqués (comme guest_discussion côté base)
-    async guestDiscussion(sid) {
-      if (!manages(sid) && !guestActive()) throw new Error("Lecture réservée à l'équipe.");
-      const who = (x) => (x.staff ? ["equipe", "Équipe"] : (() => { const n = aliasOf(sid, x.author); return n ? ["s" + n, "Stagiaire " + n] : ["autre", "Participant·e"]; })());
-      return [...db.threads.filter((t) => t.session_id === sid).map((t) => { const [a, n] = who(t); return { kind: "thread", id: t.id, thread_id: t.id, title: t.title, body: t.body || "", created_at: t.created_at, staff: !!t.staff, author: a, author_name: n }; }),
-        ...db.posts.filter((p) => p.session_id === sid).map((p) => { const [a, n] = who(p); return { kind: "post", id: p.id, thread_id: p.thread_id, title: null, body: p.body, created_at: p.created_at, staff: !!p.staff, author: a, author_name: n }; })];
-    },
 
     warmAccess() {},
     watch(_sid, cb) { const f = () => cb({ table: "*" }); listeners.add(f); return () => listeners.delete(f); },

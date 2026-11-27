@@ -2,8 +2,8 @@
    - « Comptes et accès » (#/admin/equipe) : qui peut entrer dans le back-office, avec quel rôle.
      Admin : gère tout (réglages, habillages, fiches, comptes) et attribue les sessions.
      Formateur·ice : ne voit que les sessions attribuées à sa fiche intervenant·e (adresse de connexion).
-     Invité·e : voit tout le back-office et toutes les sessions en lecture seule, identités des stagiaires masquées,
-     jusqu'à sa date de fin ; se connecte par la page d'invitation (#/invitation), sans le code de l'équipe.
+     Invité·e : deux sessions de démonstration (une et deux journées) à piloter librement, rien d'autre, jusqu'à sa
+     date de fin ; se connecte par la page d'invitation (#/invitation), avec un code reçu par e-mail.
    - « Fiches intervenant·es » (#/admin/equipe/fiches[/<id>|/nouveau]) : la présentation de chaque intervenant·e
      (slide « L'intervenant ») et l'adresse de connexion qui relie la fiche à un compte.
    La liste des comptes est tenue côté base (trainer_emails) ; ces écrans passent par des fonctions réservées à l'admin. */
@@ -12,7 +12,7 @@ import { trainersListHtml, renderTrainerEditor } from "./trainers.js";
 
 const TABS = [["comptes", "Comptes et accès"], ["fiches", "Fiches intervenant·es"]];
 let pendingLogin = null; // adresse à reporter dans une nouvelle fiche ouverte depuis la liste des comptes
-const ROLES = [["trainer", "Formateur·ice"], ["admin", "Admin"], ["guest", "Invité·e (lecture seule)"]];
+const ROLES = [["trainer", "Formateur·ice"], ["admin", "Admin"], ["guest", "Invité·e (démo)"]];
 const roleOf = (s) => s.role || (s.is_admin ? "admin" : "trainer");
 const parisDay = (plus = 0) => new Date(Date.now() + plus * 864e5).toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
 const longDate = (d) => dateFr(d, { day: "numeric", month: "long", year: "numeric" }).replace(/^1 /, "1er ");
@@ -61,7 +61,7 @@ export async function viewStaff(root, [tab = "comptes", id], { api, me, go }) {
               ${ROLES.map(([v, l]) => `<option value="${v}"${roleOf(s) === v ? " selected" : ""}>${l}</option>`).join("")}</select>
               ${roleOf(s) === "guest" ? `<span class="small">jusqu'au</span><input type="date" data-until="${esc(s.email)}" value="${esc(s.guest_until || "")}" min="${parisDay()}" aria-label="Fin de l'invitation de ${esc(s.email)}">` : ""}</div></td>
             <td class="small">${f ? `<a href="#/admin/equipe/fiches/${f.id}">${T(f.name)}</a>`
-              : roleOf(s) === "guest" ? (s.guest_until && s.guest_until < parisDay() ? `<span class="tc-access ko">${T(`Invitation terminée le ${longDate(s.guest_until)}`)}</span>` : `<span class="muted">Lecture seule</span>`)
+              : roleOf(s) === "guest" ? (s.guest_until && s.guest_until < parisDay() ? `<span class="tc-access ko">${T(`Invitation terminée le ${longDate(s.guest_until)}`)}</span>` : `<span class="muted">Sessions de démo</span>`)
               : roleOf(s) === "admin" ? `<span class="muted">—</span>` : `<span class="tc-access ko" title="${T("Sans fiche, ce compte ne verra aucune session")}">${T("Aucune fiche, aucune session")}</span> · <button type="button" class="linkbtn small" data-newfiche="${esc(s.email)}">Créer sa fiche</button>`}</td>
             <td class="actions">${s.email === me.email ? `<span class="small muted">vous</span>` : `<button class="iconbtn danger" data-rm="${esc(s.email)}" aria-label="Retirer ${esc(s.email)}" title="Retirer l'accès">✕</button>`}</td>
           </tr>`; }).join("")}
@@ -76,8 +76,8 @@ export async function viewStaff(root, [tab = "comptes", id], { api, me, go }) {
     </div>
     <div class="grid g2 staff-help">
       <div class="card">
-        <h3>Inviter quelqu'un en lecture seule</h3>
-        <p class="small">${T("Ajoutez son adresse avec le rôle « Invité·e », puis envoyez-lui ce lien. Il ou elle y saisit son adresse, reçoit un code par e-mail et voit le back-office, les sessions et le côté stagiaire sans rien pouvoir modifier. Noms et adresses des stagiaires restent masqués, l'export CSV et les codes d'exercice aussi. À la date de fin, la base ne lui montre plus rien.")}</p>
+        <h3>Inviter quelqu'un à essayer l'outil</h3>
+        <p class="small">${T("Ajoutez son adresse avec le rôle « Invité·e (démo) », puis envoyez-lui ce lien. Il ou elle y saisit son adresse, reçoit un code par e-mail et trouve deux sessions de démonstration rien que pour lui ou elle, une d'une journée et une de deux journées : réglages, pilotage, écran projeté, côté stagiaire, tout se manipule. Il ou elle ne voit aucune vraie session et ne peut pas en créer. Ces démos n'apparaissent pas dans votre liste et partent quand vous retirez l'accès. À la date de fin, plus rien n'est visible.")}</p>
         <div class="askrow"><input type="text" readonly value="${esc(inviteUrl())}" aria-label="Lien d'invitation"><button type="button" class="btn sm" id="cpInv">Copier le lien</button></div>
       </div>
       <div class="card">

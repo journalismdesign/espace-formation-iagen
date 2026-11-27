@@ -5,7 +5,7 @@ import { morph } from "../lib/morph.js";
 import { joinUrl, joinUrlLabel, qr } from "./admin.js";
 import { loadScreenData } from "./adminSession.js";
 
-export async function viewScreen(root, [sid], { api, readOnly }) {
+export async function viewScreen(root, [sid], { api }) {
   let session = await api.getSession(sid);
   if (!session) { root.innerHTML = `<p class="empty">Session introuvable.</p>`; return; }
   const qrUrl = await qr(joinUrl(session.code), 480);
@@ -26,7 +26,6 @@ export async function viewScreen(root, [sid], { api, readOnly }) {
   await draw();
   // Flèches du clavier ou télécommande branchée sur l'ordinateur de l'écran projeté
   const onKey = async (e) => {
-    if (readOnly) return; // invité·e : l'écran suit le pilotage, sans pouvoir le changer
     const dir = pageKey(e); if (!dir) return;
     const nl = stepLive(session, dir); if (!nl) return;
     e.preventDefault();
