@@ -242,6 +242,10 @@ async def main():
         assert "100" in await st.inner_text(".prep-square")
         await st.goto(URL + f"#/s/{sid}/fiches"); await st.wait_for_selector(".fcard"); await shot(st, "12-fiches")
         await st.click(".fcard >> nth=0"); await st.wait_for_selector("article");
+        # Discussion : fermée aux stagiaires en salle, ouverte par l'interrupteur « Formation en ligne » du Jour J
+        assert await st.locator(".side-nav a[href$='/discussion']:visible").count() == 0, "discussion masquée en salle"
+        await tr.goto(URL + f"#/admin/s/{sid}/jour"); await tr.wait_for_selector("#chatOff:visible")
+        await tr.check("#onlineMode"); await tr.wait_for_selector("#chatAdm:visible", timeout=5000)
         # Messagerie : premier message → conversation « Général » créée, bulle à droite
         await st.goto(URL + f"#/s/{sid}/discussion"); await st.wait_for_selector(".chat .chat-compose textarea")
         await st.fill(".chat-compose textarea", "Gemini garde-t-il mes documents ?"); await st.press(".chat-compose textarea", "Enter")

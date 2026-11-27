@@ -5,6 +5,7 @@ import { $, $$, T, esc, dateFr, guard, NB } from "../lib/dom.js";
 import { preparation } from "./cadrageModel.js";
 import { datesFr } from "../lib/brand.js";
 import { hasCadrage } from "../lib/content.js";
+import { chatOn } from "../lib/chat.js";
 
 export const STATUS = { draft: "À venir", live: "En direct", closed: "Terminée" };
 
@@ -16,7 +17,9 @@ export async function viewHome(root, _p, { api, me, go }) {
   const cad = next ? hasCadrage(next) : false; // pas de cadrage pour une formation d'une journée
   const project = next && cad ? await api.myProject(next.id).catch(() => null) : null;
   const prep = preparation(me, project, cad);
-  const threads = next ? (await api.listThreads(next.id)).slice(0, 3) : [];
+  // Discussion : en formation en ligne seulement ; en salle, le glossaire prend toute la largeur
+  const chat = !!next && chatOn(next);
+  const threads = chat ? (await api.listThreads(next.id)).slice(0, 3) : [];
 
   const todo = next ? `
     <div class="card todo">
@@ -56,12 +59,12 @@ export async function viewHome(root, _p, { api, me, go }) {
         <a class="step-card" href="#/s/${next.id}/direct"><span class="ring">${cad ? "2" : "✓"}</span><div><div class="kicker-d">Le jour J</div><b>Je suis la formation en direct</b><div class="small muted">Sondages, quiz et déroulé s'affichent au bon moment.</div><span class="small">Ouvrir →</span></div></a>
       </div>
     </div>
-    <div class="grid home-mid" style="margin-top:14px">
-      <div class="card">
+    <div class="grid home-mid${chat ? "" : " solo"}" style="margin-top:14px">
+      ${chat ? `<div class="card">
         <div style="display:flex;justify-content:space-between"><div class="kicker-d">Discussions</div><a class="small" href="#/s/${next.id}/discussion">Voir tout</a></div>
         ${threads.length ? threads.map((t) => `<a class="res" style="display:block" href="#/s/${next.id}/discussion/${t.id}"><b>${T(t.title)}</b><div class="small muted">${T(t.author_name)} · ${t.count} réponse${t.count > 1 ? "s" : ""}</div></a>`).join("") : `<p class="small muted">Aucune discussion pour le moment.</p>`}
         <a class="small" href="#/s/${next.id}/discussion/new">Lancer une discussion →</a>
-      </div>
+      </div>` : ""}
       <a class="card dark" href="#/s/${next.id}/fiches"><div><h2>Glossaire</h2><p class="small">Fiches, termes, prompts et exemples de rédactions, réservés aux stagiaires.</p></div><span class="roundico" aria-hidden="true">|||</span></a>
     </div>` : ""}
     <div class="card" style="margin-top:14px">
@@ -71,7 +74,7 @@ export async function viewHome(root, _p, { api, me, go }) {
           <div class="kicker-d">${s.status === "live" ? `<span class="live-tag"><span class="dot on"></span>En direct</span>` : STATUS[s.status]} · ${T(dateFr(s.date, { day: "numeric", month: "long" }))}</div>
           <b>${T(s.title)}</b>
           <div class="small muted">${T(s.formation)}${s.format === "2" ? " · 2 jours" : ""}</div>
-          <div style="display:flex;gap:6px;margin-top:10px"><a class="btn sm" href="#/s/${s.id}">${s.status === "closed" ? "Revoir" : "Rejoindre"}</a><a class="btn sm ghost" href="#/s/${s.id}/discussion">Discussion</a></div>
+          <div style="display:flex;gap:6px;margin-top:10px"><a class="btn sm" href="#/s/${s.id}">${s.status === "closed" ? "Revoir" : "Rejoindre"}</a>${chatOn(s) ? `<a class="btn sm ghost" href="#/s/${s.id}/discussion">Discussion</a>` : ""}</div>
         </div>`).join("") : `<p class="small muted">Aucune session pour l'instant.</p>`}
       </div>
       ${next ? `<details style="margin-top:12px"><summary class="small" style="cursor:pointer">Rejoindre une autre session avec un code</summary>${joinForm()}</details>` : ""}

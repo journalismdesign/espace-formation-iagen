@@ -43,7 +43,7 @@ const s = await db.query(`insert into sessions (title) values ('Libération · 2
 const sid = s.rows[0].id, code = s.rows[0].code;
 ok(/^[ABCDEFGHJKMNPQRSTUVWXYZ2-9]{8}$/.test(code), "code de session généré, 8 caractères sans ambiguïté : " + code);
 await db.exec(`insert into session_invites values ('${sid}','alice@exemple.fr'); insert into resources (session_id,title,url) values ('${sid}','Charte','https://exemple.fr')`);
-await db.exec(`update sessions set status='live' where id='${sid}'`);
+await db.exec(`update sessions set status='live', online = true where id='${sid}'`); // en ligne : discussion ouverte aux stagiaires
 
 // Alice : réclame son invitation, cadre son projet, répond
 await as(A, "alice@exemple.fr");
@@ -140,13 +140,27 @@ await as(B, "bob@exemple.fr");
 await db.exec(`update sessions set skip_pages = '' where id = '${sid}'`);
 await as(T, "formateur@exemple.fr");
 ok((await db.query(`select skip_pages from sessions where id='${sid}'`)).rows[0].skip_pages === "5, 12 à 14", "le stagiaire ne change pas les pages masquées");
+// Formation en salle (online = false) : la discussion est fermée aux stagiaires, l'équipe la garde
+await db.exec(`update sessions set online = false where id = '${sid}'`);
+await as(B, "bob@exemple.fr");
+ok((await db.query(`select count(*)::int n from threads`)).rows[0].n === 0, "formation en salle : le stagiaire ne lit pas la discussion");
+ok((await db.query(`select count(*)::int n from posts`)).rows[0].n === 0, "formation en salle : le stagiaire ne lit pas les messages");
+await fails(`insert into posts (thread_id, session_id, body) values ('${tid}', '${sid}', 'en salle')`, "formation en salle : le stagiaire n'écrit pas");
+await fails(`insert into threads (session_id, title) values ('${sid}', 'Nouvelle conversation')`, "formation en salle : le stagiaire n'ouvre pas de conversation");
+await as(T, "formateur@exemple.fr");
+ok((await db.query(`select count(*)::int n from posts where session_id='${sid}'`)).rows[0].n === 2, "formation en salle : l'équipe lit la discussion");
+await db.exec(`insert into posts (thread_id, session_id, body) values ('${tid}', '${sid}', 'Note de l''équipe')`);
+await db.exec(`update sessions set online = true where id = '${sid}'`);
+await as(B, "bob@exemple.fr");
+ok((await db.query(`select count(*)::int n from posts`)).rows[0].n === 3, "formation en ligne réactivée : le stagiaire relit tous les messages");
+await as(T, "formateur@exemple.fr");
 await db.exec(`update sessions set status = 'closed' where id = '${sid}'`);
 await as(B, "bob@exemple.fr");
 ok((await db.query(`select count(*)::int n from threads`)).rows[0].n === 0, "session close : le stagiaire ne lit plus la discussion");
 ok((await db.query(`select count(*)::int n from resources`)).rows[0].n === 1, "session close : le stagiaire garde les ressources");
 await fails(`insert into posts (thread_id, session_id, body) values ('${tid}', '${sid}', 'encore là')`, "session close : le stagiaire n'écrit plus");
 await as(T, "formateur@exemple.fr");
-ok((await db.query(`select count(*)::int n from posts where session_id='${sid}'`)).rows[0].n === 2, "session close : l'équipe relit la discussion");
+ok((await db.query(`select count(*)::int n from posts where session_id='${sid}'`)).rows[0].n === 3, "session close : l'équipe relit la discussion");
 await as(B, "bob@exemple.fr");
 await db.exec(`delete from threads where session_id = '${sid}'`);
 await as(T, "formateur@exemple.fr");
@@ -288,7 +302,7 @@ ok((await db.query(`select public.join_session('ZZZZZZZZ') r`)).rows[0].r === nu
 // Réponses : seulement salle ouverte, seulement par submit_response
 await fails(`select public.submit_response('${S3.id}', 'niveau', '1'::jsonb)`, "salle fermée : pas de réponse");
 await as(T, "formateur@exemple.fr");
-await db.exec(`update sessions set status = 'live' where id = '${S3.id}'`);
+await db.exec(`update sessions set status = 'live', online = true where id = '${S3.id}'`);
 await db.exec(`insert into session_secrets (session_id, label, value) values ('${S3.id}', 'Compte test', 'secret-42')`);
 await as(B, "bob@exemple.fr");
 await db.exec(`select public.submit_response('${S3.id}', 'niveau', '1'::jsonb)`);

@@ -11,7 +11,7 @@ import { STATUS } from "./home.js";
 import { modulesFor, emargementOpen } from "../lib/content.js";
 import { resolveBranding, logosHtml, datesFr, emargementQr, emargementLabels, emargementStepsHtml, evaluationQr, evaluationHtml } from "../lib/brand.js";
 import { supportBlock } from "./entry.js";
-import { mountChat } from "../lib/chat.js";
+import { mountChat, chatOn } from "../lib/chat.js";
 import { screenHtml } from "../lib/screen.js";
 import pauseGif from "../assets/pause.gif";
 import { morph } from "../lib/morph.js";
@@ -75,6 +75,8 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   // Outils d'exercice : visibles dès que le formateur a lancé l'exercice qui les utilise (toujours visibles en aperçu formateur)
   const toolsVisible = () => trainerPreview || session.status === "closed" || unlockedTools(session).size > 0;
   const openTools = () => (session.status === "closed" ? new Set(TOOL_IDS) : unlockedTools(session)); // après clôture : tous les exercices
+  // Discussion : ouverte aux stagiaires en formation en ligne seulement (chatOn, comme chat_open côté base) ; toujours en aperçu formateur
+  const chatVisible = () => trainerPreview || chatOn(session);
 
   root.classList.add("withside");
   root.classList.toggle("wait-mode", isWaiting); // (pas « waiting » : classe déjà prise par les activités, en italique)
@@ -91,7 +93,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
       </div>`}
       <div id="sideExtra"></div>
       <div class="side-label">Ressources</div>
-      <nav class="side-nav">${shownTabs.filter(([k]) => !["direct", "cadrage", "emargement"].includes(k)).map(([k, l]) => `<a href="#/s/${sid}/${k}"${k === tab ? ' aria-current="page"' : ""}${k === "outils" ? ` id="navOutils"${toolsVisible() ? "" : " hidden"}` : ""}>${l}<span>›</span></a>`).join("")}</nav>
+      <nav class="side-nav">${shownTabs.filter(([k]) => !["direct", "cadrage", "emargement"].includes(k)).map(([k, l]) => `<a href="#/s/${sid}/${k}"${k === tab ? ' aria-current="page"' : ""}${k === "outils" ? ` id="navOutils"${toolsVisible() ? "" : " hidden"}` : ""}${k === "discussion" ? ` id="navChat"${chatVisible() ? "" : " hidden"}` : ""}>${l}<span>›</span></a>`).join("")}</nav>
       ${trainerPreview ? `<p class="small muted" style="margin-top:14px">Aperçu formateur : vos clics ne sont pas enregistrés. <a href="#/admin/s/${sid}/jour">Retour au back-office</a></p>` : ""}
     </aside>
     <section class="sidemain" id="tabBody"></section>`;
@@ -129,6 +131,11 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   }, 150);
   const onSession = new Set();
   onSession.add(() => { const n = $("#navOutils", root); if (n) n.hidden = !toolsVisible(); });
+  // Formation en ligne coupée pendant la lecture de la discussion : l'onglet disparaît, retour au jour J
+  onSession.add(() => {
+    const n = $("#navChat", root); if (n) n.hidden = !chatVisible();
+    if (tab === "discussion" && !chatVisible() && !fullRender) ctx.go(`#/s/${sid}/direct`);
+  });
   // Clôture ou réouverture pendant la consultation : on redessine avec les bons onglets
   const status0 = session.status;
   onSession.add(() => { if (!trainerPreview && (session.status === "closed") !== (status0 === "closed")) { fullRender = true; ctx.go(location.hash); } });
@@ -217,6 +224,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
     drawTools();
     tabHandlers.add(drawTools);
   }
+  else if (tab === "discussion" && !chatVisible()) ctx.go(`#/s/${sid}/direct`); // formation en salle : pas de discussion
   else if (tab === "discussion") await tabDiscussion();
   else if (tab === "assistant") ctx.go(`#/s/${sid}/ressources`); // assistant IA retiré
   else if (tab === "support") await tabSupport();
@@ -411,8 +419,18 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
 
   /* ---------------- Discussion (messagerie) ---------------- */
   async function tabDiscussion() {
-    body.innerHTML = `<div class="pagehead"><div><div class="kicker-d">${T(session.title)}</div><h1>Discussion</h1></div></div><div id="chatBox"></div>`;
+    body.innerHTML = `<div class="pagehead"><div><div class="kicker-d">${T(session.title)}</div><h1>Discussion</h1><div id="chatNote"></div></div></div><div id="chatBox"></div>`;
     tabCleanups.push(mountChat($("#chatBox", body), { api, sid, me, staff: trainerPreview }));
+    // aperçu formateur : dire quand les stagiaires ne voient pas cet onglet
+    const note = () => {
+      const n = $("#chatNote", body); if (!n) return;
+      const txt = !trainerPreview || chatOn(session) ? ""
+        : session.status === "closed" ? "Aperçu formateur : la session est close, les stagiaires n'ont plus accès à la discussion."
+        : "Aperçu formateur : les stagiaires ne voient pas la discussion. Elle s'ouvre quand vous activez « Formation en ligne » dans le Jour J.";
+      const html = txt ? `<p class="small muted">${T(txt)}</p>` : "";
+      if (n.innerHTML !== html) n.innerHTML = html;
+    };
+    note(); tabHandlers.add(note);
   }
 
   /* ---------------- Support ---------------- */

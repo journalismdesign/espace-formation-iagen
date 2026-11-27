@@ -1,7 +1,7 @@
 /* Back-office d'une session, en trois temps :
    Avant (accès, invitations, cadrages), Jour J (animation en direct),
    Après (projets, émargement, bilan, duplication, résultats, ressources). */
-import { mountChat } from "../lib/chat.js";
+import { mountChat, chatOn } from "../lib/chat.js";
 import { keepDraft } from "../lib/draft.js";
 import { $, $$, T, esc, fr, NB, guard, toast, debounce, dateFr, download, copyText } from "../lib/dom.js";
 import { ACT_TYPES, currentAct, respKey, renderResults, defaultActivities, countOf, P as presetAct } from "../lib/activities.js";
@@ -36,7 +36,7 @@ function interleave(mods, slots) {
 }
 const parisDay = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
 // Seconde ligne de l'interrupteur « Formation en ligne » de l'en-tête
-const onlineSub = (on) => (on ? "écran visible par les stagiaires" : "désactivée");
+const onlineSub = (on) => (on ? "écran et discussion ouverts aux stagiaires" : "désactivée");
 // Première ouverture de la salle du jour : point de départ du chronomètre du pilotage
 const stamp = (live) => (live?.started?.day === parisDay() ? live.started : { day: parisDay(), at: new Date().toISOString() });
 const firstName = (r) => (r.full_name || r.email.split("@")[0]).split(" ")[0];
@@ -169,7 +169,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     <div class="phases">${PHASES.map(([k, l]) => `<a href="#/admin/s/${sid}/${k}"${k === phase ? ' aria-current="page"' : ""}>${phaseLabel(k, l, session)}</a>`).join("")}</div>
     ${phase === "jour" ? `<div class="head-live"><div class="clock" id="clock" aria-live="off"></div>
         <div class="joinbox"><img src="${qrUrl}" alt="QR code de la session"><span class="jb-txt"><span class="small">Rejoindre la session</span><b class="mono">${esc(session.code)}</b></span><button class="btn sm ghost" id="pjQ" title="Afficher le QR code sur l'écran projeté (salle ouverte ou non)">Projeter le QR code</button></div>
-        <label class="onlinebox${session.online ? " on" : ""}" id="onlineLbl" title="${esc(fr("Formation à distance : les stagiaires voient dans leur espace ce que montre l'écran projeté (pages du support, présentations, séquences, émargement)."))}"><input type="checkbox" role="switch" id="onlineMode"${session.online ? " checked" : ""}><span class="ob-txt"><b>Formation en ligne</b><span class="small" id="onlineSub">${onlineSub(session.online)}</span></span></label></div>` : ""}
+        <label class="onlinebox${session.online ? " on" : ""}" id="onlineLbl" title="${esc(fr("Formation à distance : les stagiaires voient dans leur espace ce que montre l'écran projeté (pages du support, présentations, séquences, émargement) et peuvent écrire dans la discussion. En salle, la discussion leur reste fermée."))}"><input type="checkbox" role="switch" id="onlineMode"${session.online ? " checked" : ""}><span class="ob-txt"><b>Formation en ligne</b><span class="small" id="onlineSub">${onlineSub(session.online)}</span></span></label></div>` : ""}
     <div id="phase"></div>`;
   $$("[data-status]", root).forEach((b) => (b.onclick = async () => {
     const st = b.dataset.status;
@@ -220,10 +220,11 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
   // Interrupteur « Formation en ligne » du bandeau du Jour J : l'écran projeté s'affiche dans l'espace des stagiaires
   if ($("#onlineMode", root)) $("#onlineMode", root).onchange = async (e) => {
     const on = e.target.checked;
-    const s2 = await guard(() => api.updateSession(sid, { online: on }), on ? "Mode en ligne : les stagiaires voient l'écran dans leur espace." : "Mode en ligne désactivé.");
+    const s2 = await guard(() => api.updateSession(sid, { online: on }), on ? "Mode en ligne : les stagiaires voient l'écran dans leur espace, la discussion leur est ouverte." : "Mode en ligne désactivé : écran et discussion fermés aux stagiaires.");
     if (s2) session = s2; else e.target.checked = !on;
     $("#onlineLbl", root).classList.toggle("on", !!session.online);
     $("#onlineSub", root).textContent = onlineSub(session.online);
+    afterOnline();
   };
   /* Écrans en bascule, salle ouverte ou non : « Projeter le QR code » du bandeau du Jour J (pour un·e retardataire),
      et les écrans d'ouverture, de pause et de clôture du pilotage (OPENING_VIEWS). Projeter un de ces écrans garde
@@ -238,6 +239,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
   const stash = (l) => trimPrev(pick(l || {}, (k) => !KEEP.includes(k) && (k !== "prev" || OPENING_VIEWS.has(l.view))));
   const unstash = (l) => ({ ...pick(l, (k) => KEEP.includes(k)), ...(l.prev || {}) }); // l'écran précédent revient
   let afterLive = () => {}; // le pilotage du Jour J redessine l'aperçu
+  let afterOnline = () => {}; // le Jour J ouvre ou ferme le widget de la discussion
   function qrBtn() {
     const b = $("#pjQ", root); if (!b) return;
     const on = session.live?.view === "qr", label = on ? "QR code projeté" : "Projeter le QR code";
@@ -612,10 +614,23 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="kicker-d live-tag"><span class="dot on"></span>Écran projeté · en direct</div><button class="btn sm" id="openScr">Ouvrir l'écran projeté</button></div>
           <div id="preview" class="preview"></div>
           <div id="nextBox" class="next-box" hidden><div class="kicker-d">À suivre · <span id="nextLbl"></span></div><div id="nextPrev" class="preview"></div></div>
-          <div class="card chat-card" style="margin-top:14px"><h3>Discussion des stagiaires</h3><div id="chatAdm"></div></div>
+          <div class="card chat-card" style="margin-top:14px"><h3>Discussion des stagiaires</h3><p class="small muted" id="chatOff" style="margin:0" hidden></p><div id="chatAdm"></div></div>
         </aside>
       </div>`;
-    cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: true, compact: true }));
+    /* Discussion : ouverte aux stagiaires en formation en ligne seulement (chat_open côté base). En salle, le widget
+       laisse la place à une ligne d'explication ; il se monte quand on active « Formation en ligne ». */
+    let chatStop = null;
+    const drawChat = () => {
+      const on = chatOn(session), off = $("#chatOff", box), c = $("#chatAdm", box);
+      if (!off || !c) return;
+      off.textContent = on ? "" : fr(session.status === "closed"
+        ? "Session close : les stagiaires n'y ont plus accès. L'historique reste dans l'onglet Après."
+        : "Fermée aux stagiaires pendant une formation en salle. Elle s'ouvre quand vous activez « Formation en ligne ».");
+      off.hidden = on; c.hidden = !on;
+      if (on && !chatStop) chatStop = mountChat(c, { api, sid, me: ctx.me, staff: true, compact: true });
+    };
+    drawChat(); cleanups.push(() => chatStop && chatStop());
+    afterOnline = drawChat;
     $("#openScr", box).onclick = () => window.open(`#/ecran/${sid}`, "ecran-" + sid, "popup=yes,width=1280,height=760");
     afterLive = () => draw(); // bascule du QR code de l'en-tête : l'aperçu suit
     // Remise à zéro du direct (après des essais) : salle fermée, état diffusé vidé ; rien d'autre n'est touché
@@ -624,7 +639,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       session = await guard(() => api.updateSession(sid, { status: "draft", live: {} }), "Direct remis à zéro : salle fermée.") || session;
       go(location.hash); // l'en-tête (horloge, bouton de la salle) suit
     };
-    $("#closeDay", box).onchange = async (e) => { session = await guard(() => api.updateSession(sid, e.target.checked ? { status: "closed", live: {} } : { status: "live", live: { ...(session.live || {}), started: stamp(session.live) } }), e.target.checked ? "Journée close." : "Session rouverte.") || session; draw(); };
+    $("#closeDay", box).onchange = async (e) => { session = await guard(() => api.updateSession(sid, e.target.checked ? { status: "closed", live: {} } : { status: "live", live: { ...(session.live || {}), started: stamp(session.live) } }), e.target.checked ? "Journée close." : "Session rouverte.") || session; draw(); drawChat(); };
 
     // Outils d'exercice débloqués : on ajoute celui de la séquence lancée, sans jamais en retirer
     const withTools = (live) => {
@@ -1101,7 +1116,7 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
         <div class="chips" style="margin-top:12px"><button class="btn sm" id="csv">Exporter le bilan (CSV)</button>${admin ? `<button class="btn sm ghost" id="dup">Dupliquer la session</button>` : ""}</div>
         <p class="small muted">${T("Le bilan reprend présence, profil, état du cadrage, progression dans le déroulé et scores aux quiz. La duplication reprend la séquence, les ressources et les intitulés des accès (sans les valeurs), sans participant·es.")}</p></div>
 
-      <div class="card chat-card" id="discussion" style="margin-top:14px"><h3>Discussion des stagiaires</h3><p class="small muted" style="margin-top:0">${T("Après la clôture, les stagiaires n'y ont plus accès ; vous gardez l'historique.")}</p><div id="chatAdm"></div></div>
+      <div class="card chat-card" id="discussion" style="margin-top:14px"><h3>Discussion des stagiaires</h3><p class="small muted" style="margin-top:0">${T("Ouverte aux stagiaires en formation en ligne, jusqu'à la clôture. Vous gardez l'historique.")}</p><div id="chatAdm"></div></div>
 
       <div class="card" id="resultats" style="margin-top:14px"><h3>Résultats des activités</h3><div id="resBox" class="grid g2"><p class="small muted">Chargement…</p></div></div>
 

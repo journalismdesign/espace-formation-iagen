@@ -86,7 +86,8 @@ export function createDemoApi({ defaultActivities }) {
   };
   const canSee = (sid) => manages(sid) || isMember(sid);
   // Discussion : l'équipe garde la main, les stagiaires jusqu'à la clôture
-  const chatOpen = (sid) => manages(sid) || (isMember(sid) && db.sessions.find((s) => s.id === sid)?.status !== "closed");
+  // Comme chat_open côté base : l'équipe toujours, les stagiaires en formation en ligne et jusqu'à la clôture
+  const chatOpen = (sid) => { const s = db.sessions.find((x) => x.id === sid); return manages(sid) || (isMember(sid) && !!s?.online && s.status !== "closed"); };
   const nameOf = (id) => { const p = prof(id); return p ? (p.full_name || p.email.split("@")[0]) : "?"; };
 
   const lastDay = (x) => (x.format === "2" && x.date2) || x.date;
