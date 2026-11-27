@@ -52,33 +52,33 @@ export async function viewStaff(root, [tab = "comptes", id], { api, me, go }) {
 
   box.innerHTML = `
     <p class="muted" style="margin-top:0">${T("Les adresses autorisées à entrer dans le back-office. Formateur·ices et admins se connectent sur l'espace formateur avec leur adresse (code reçu par e-mail ou Google), les invité·es par la page d'invitation.")}</p>
-    <div class="grid g2 staff-grid">
-      <div class="card">
+    <div class="card staff-card">
         <h3>Comptes</h3>
-        <table class="tbl"><thead><tr><th>Adresse</th><th>Rôle</th><th>Fiche intervenant·e</th><th></th></tr></thead><tbody>
+        <table class="tbl staff-tbl"><thead><tr><th>Adresse</th><th>Rôle</th><th>Fiche intervenant·e</th><th></th></tr></thead><tbody>
           ${staff.map((s) => { const f = ficheOf(s.email); return `<tr>
-            <td><b>${esc(s.email)}</b><div class="small muted">${s.has_account ? "Compte créé" : "Jamais connecté·e"}</div></td>
-            <td><select data-role="${esc(s.email)}" aria-label="Rôle de ${esc(s.email)}"${s.email === me.email ? " disabled" : ""}>
+            <td><b>${esc(s.email)}</b> <span class="small muted">· ${s.has_account ? "compte créé" : "jamais connecté·e"}</span></td>
+            <td><div class="staff-role"><select data-role="${esc(s.email)}" aria-label="Rôle de ${esc(s.email)}"${s.email === me.email ? " disabled" : ""}>
               ${ROLES.map(([v, l]) => `<option value="${v}"${roleOf(s) === v ? " selected" : ""}>${l}</option>`).join("")}</select>
-              ${roleOf(s) === "guest" ? `<label class="staff-until small">jusqu'au <input type="date" data-until="${esc(s.email)}" value="${esc(s.guest_until || "")}" min="${parisDay()}" aria-label="Fin de l'invitation de ${esc(s.email)}"></label>` : ""}</td>
+              ${roleOf(s) === "guest" ? `<span class="small">jusqu'au</span><input type="date" data-until="${esc(s.email)}" value="${esc(s.guest_until || "")}" min="${parisDay()}" aria-label="Fin de l'invitation de ${esc(s.email)}">` : ""}</div></td>
             <td class="small">${f ? `<a href="#/admin/equipe/fiches/${f.id}">${T(f.name)}</a>`
-              : roleOf(s) === "guest" ? (s.guest_until && s.guest_until < parisDay() ? `<span class="tc-access ko">${T(`Invitation terminée le ${longDate(s.guest_until)}`)}</span>` : `<span class="muted">${T(s.guest_until ? `Lecture seule jusqu'au ${longDate(s.guest_until)}` : "Lecture seule, sans date de fin")}</span>`)
-              : roleOf(s) === "admin" ? `<span class="muted">—</span>` : `<span class="tc-access ko">${T("Aucune : ne verra aucune session")}</span><br><button type="button" class="linkbtn small" data-newfiche="${esc(s.email)}">Créer sa fiche</button>`}</td>
+              : roleOf(s) === "guest" ? (s.guest_until && s.guest_until < parisDay() ? `<span class="tc-access ko">${T(`Invitation terminée le ${longDate(s.guest_until)}`)}</span>` : `<span class="muted">Lecture seule</span>`)
+              : roleOf(s) === "admin" ? `<span class="muted">—</span>` : `<span class="tc-access ko" title="${T("Sans fiche, ce compte ne verra aucune session")}">${T("Aucune fiche, aucune session")}</span> · <button type="button" class="linkbtn small" data-newfiche="${esc(s.email)}">Créer sa fiche</button>`}</td>
             <td class="actions">${s.email === me.email ? `<span class="small muted">vous</span>` : `<button class="iconbtn danger" data-rm="${esc(s.email)}" aria-label="Retirer ${esc(s.email)}" title="Retirer l'accès">✕</button>`}</td>
           </tr>`; }).join("")}
         </tbody></table>
         <form id="addF" style="margin-top:14px">
           <label class="f" for="aMail">Ajouter une adresse</label>
-          <div class="askrow"><input type="email" id="aMail" required placeholder="prenom.nom@exemple.fr">
+          <div class="staff-add"><input type="email" id="aMail" required placeholder="prenom.nom@exemple.fr">
             <select id="aRole" aria-label="Rôle">${ROLES.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select>
+            <span class="staff-until small" id="aUntilL" hidden>jusqu'au <input type="date" id="aUntil" value="${parisDay(30)}" min="${parisDay()}" aria-label="Fin de l'invitation"></span>
             <button class="btn" type="submit">Ajouter</button></div>
-          <label class="staff-until small" id="aUntilL" hidden>Invitation valable jusqu'au <input type="date" id="aUntil" value="${parisDay(30)}" min="${parisDay()}"></label>
         </form>
-        <div class="card" style="margin-top:14px;background:var(--light)">
-          <h3 style="margin-top:0">Inviter quelqu'un en lecture seule</h3>
-          <p class="small">${T("Ajoutez son adresse avec le rôle « Invité·e », puis envoyez-lui ce lien. Il ou elle reçoit un lien de connexion par e-mail et voit le back-office, les sessions et le côté stagiaire sans rien pouvoir modifier. Noms et adresses des stagiaires restent masqués, l'export CSV et les codes d'exercice aussi. À la date de fin, la base ne lui montre plus rien.")}</p>
-          <div class="askrow"><input type="text" readonly value="${esc(inviteUrl())}" aria-label="Lien d'invitation"><button type="button" class="btn sm" id="cpInv">Copier le lien</button></div>
-        </div>
+    </div>
+    <div class="grid g2 staff-help">
+      <div class="card">
+        <h3>Inviter quelqu'un en lecture seule</h3>
+        <p class="small">${T("Ajoutez son adresse avec le rôle « Invité·e », puis envoyez-lui ce lien. Il ou elle y saisit son adresse, reçoit un code par e-mail et voit le back-office, les sessions et le côté stagiaire sans rien pouvoir modifier. Noms et adresses des stagiaires restent masqués, l'export CSV et les codes d'exercice aussi. À la date de fin, la base ne lui montre plus rien.")}</p>
+        <div class="askrow"><input type="text" readonly value="${esc(inviteUrl())}" aria-label="Lien d'invitation"><button type="button" class="btn sm" id="cpInv">Copier le lien</button></div>
       </div>
       <div class="card">
         <h3>Attribuer une session à un·e formateur·ice</h3>
@@ -88,7 +88,7 @@ export async function viewStaff(root, [tab = "comptes", id], { api, me, go }) {
           <li>${T("Choisissez cette fiche comme intervenant·e de la session : dans la liste des sessions, ou dans les réglages de la session.")}</li>
         </ol>
         <p class="small muted">${T("Le formateur ou la formatrice ne voit alors que ses sessions : réglages de la session, inscriptions, pilotage et suivi. L'attribution, l'habillage, les réglages généraux et les comptes restent à l'administration.")}</p>
-        ${notAllowed.length ? `<div class="warn small" style="margin-top:12px"><b>${T(notAllowed.length > 1 ? "Fiches sans compte autorisé :" : "Fiche sans compte autorisé :")}</b> ${notAllowed.map((t) => `<a href="#/admin/equipe/fiches/${t.id}">${T(t.name)}</a> (${esc(t.login_email)})`).join(", ")}. ${T("Ajoutez l'adresse ci-contre pour lui ouvrir ses sessions.")}</div>` : ""}
+        ${notAllowed.length ? `<div class="warn small" style="margin-top:12px"><b>${T(notAllowed.length > 1 ? "Fiches sans compte autorisé :" : "Fiche sans compte autorisé :")}</b> ${notAllowed.map((t) => `<a href="#/admin/equipe/fiches/${t.id}">${T(t.name)}</a> (${esc(t.login_email)})`).join(", ")}. ${T("Ajoutez l'adresse dans « Comptes » pour lui ouvrir ses sessions.")}</div>` : ""}
       </div>
     </div>`;
 
