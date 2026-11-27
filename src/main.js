@@ -24,6 +24,7 @@ import { isAdmin, isGuest, canView } from "./lib/roles.js";
 import { viewSettings } from "./views/settings.js";
 import { viewTrainers } from "./views/trainers.js";
 import { viewQuizBank } from "./views/quizBank.js";
+import { viewTrames } from "./views/trames.js";
 import { skinFooter, skinForRoute, applySkin, currentSkin } from "./lib/skin.js";
 
 const app = $("#app");
@@ -43,6 +44,7 @@ const ROUTES = [
   [/^#\/admin\/reglages(?:\/(\w+))?$/, viewSettings, { trainer: true, admin: true }],
   [/^#\/admin\/formateurs(?:\/([\w-]+))?$/, viewTrainers, { trainer: true, admin: true }],
   [/^#\/admin\/quiz(?:\/([\w-]+))?$/, viewQuizBank, { trainer: true, admin: true }],
+  [/^#\/admin\/trames(?:\/([\w-]+))?$/, viewTrames, { trainer: true, admin: true }], // trames de conducteur (éditeur)
   [/^#\/admin\/equipe(?:\/(comptes|fiches))?(?:\/([\w-]+))?$/, viewStaff, { trainer: true, admin: true }],
   [/^#\/admin\/s\/([\w-]+)(?:\/(\w+))?$/, viewAdminSession, { trainer: true }],
   [/^#\/ecran\/([\w-]+)$/, viewScreen, { trainer: true, bare: true }],

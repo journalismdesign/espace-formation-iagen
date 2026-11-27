@@ -43,3 +43,11 @@ Fichiers fournis :
 - `conducteur-1-jour.md` et `conducteur-2-jours.md` : les déroulés actuels, exportés tels quels (un import ne change rien, sert de modèle à modifier) ;
 - `conducteur-libe-1-jour.md` : la journée Libération, même déroulé qu’une journée avec les pages du deck Libé (positions dans le deck ; voir le commentaire en tête du fichier) ;
 - `conducteur-test-atelier.md` : une matinée-atelier plus courte, pour vérifier qu'un import modifie bien le parcours.
+
+## Ajouts (éditeur de trames)
+
+- `id: j1-accueil` : identifiant de la séquence, écrit à l'export pour qu'il survive à un aller-retour (activités placées, progression des stagiaires).
+- `activité: niveau, llm` : plusieurs quiz, sondages ou nuages joués en salle dans la séquence, dans l'ordre (clés de la bibliothèque « Quiz et sondages »).
+- `idées: oui` : affiche les pastilles d'aide (tâches pénibles, conducteurs assistés) dans la séquence.
+- En-tête : `slides: <lien Google Slides>` et `nombre de slides: 141`, pour l'aperçu et les tuiles de l'éditeur.
+- Jusqu'à cinq journées (`# Jour 1` à `# Jour 5`).

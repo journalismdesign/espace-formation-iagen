@@ -50,7 +50,7 @@ export async function viewAdmin(root, [view], { api, go, me }) {
   root.innerHTML = `
     <div class="pagehead"><div><div class="kicker-d">${admin ? "Back-office · administration" : "Back-office formateur"}</div><h1>${admin ? "Sessions" : "Mes sessions"}</h1>
       ${admin ? "" : `<p class="muted">${T("Les sessions qui vous sont attribuées par l'administration. Pour en obtenir une autre, contactez-la.")}</p>`}</div>
-      ${admin ? `<div class="head-actions"><a class="btn ghost" href="#/admin/quiz">Quiz et sondages</a><a class="btn ghost" href="#/admin/equipe">Équipe et accès</a><a class="btn ghost" href="#/admin/reglages">Réglages généraux</a><button class="btn" id="newBtn">+ Démarrer une session</button></div>` : ""}</div>
+      ${admin ? `<div class="head-actions"><a class="btn ghost" href="#/admin/trames">Trames de conducteur</a><a class="btn ghost" href="#/admin/quiz">Quiz et sondages</a><a class="btn ghost" href="#/admin/equipe">Équipe et accès</a><a class="btn ghost" href="#/admin/reglages">Réglages généraux</a><button class="btn" id="newBtn">+ Démarrer une session</button></div>` : ""}</div>
     <form class="card" id="newForm" hidden style="margin-bottom:14px">
       <h3>Nouvelle session</h3>
       <div class="grid g2">

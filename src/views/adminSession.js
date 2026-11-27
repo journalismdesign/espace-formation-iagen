@@ -16,6 +16,7 @@ import { datesFr, hhmm, emargementQr, fileToDataUrl, resolveBranding, logosHtml,
 import { modulesFor, baseModules, defaultModules, levelOf, daysOf, typeLabel, hasCadrage, emargementSlots, actPlace, actsByModule } from "../lib/content.js";
 import { DAY_TITLES } from "../data.js";
 import { parseConducteur, conducteurMarkdown } from "../lib/conducteur.js";
+import { applyPatch, trameFromSession } from "../lib/applyProgramme.js";
 import { isLunch, pauseTargets, movePause, shiftPause, pauseAlert, pauseAlertText, endBounds, dayEnd } from "../lib/programme.js";
 import { loadSkins, skinFor, applySkin, currentSkin } from "../lib/skin.js";
 import { samsaHtml } from "../lib/brand.js";
@@ -299,6 +300,10 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <button type="button" class="btn sm ghost" id="condExport">Télécharger le conducteur actuel (.md)</button>
             <button type="button" class="linkbtn" id="condReset"${session.programme?.modules?.length ? "" : " hidden"}>Revenir au déroulé par défaut</button>
           </div>
+          <div class="cond-actions" id="condTrames" hidden>
+            <select id="condTrame" aria-label="Appliquer une trame"><option value="">Appliquer une trame…</option></select>
+            ${admin ? `<button type="button" class="btn sm ghost" id="condSaveTrame">Enregistrer comme trame</button>` : ""}
+          </div>
           <div id="condPrev"></div>
         </div>
         <div class="card" style="margin-top:14px"><h3>Intervenant·e</h3>
@@ -500,32 +505,51 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         live: [...new Set([...bank.items.filter((b) => b.kind !== "quiz").map((b) => b.id), ...session.activities.filter((a) => a.type === "poll" || a.type === "cloud").map((a) => a.from || a.id)])],
       };
       const { programme, warnings, errors } = parseConducteur(await f.text(), known);
-      programme.name = f.name;
-      const rows = programme.modules.map((m) => `<tr><td class="mono small">${programme.nDays > 1 ? `J${m.day} · ` : ""}${m.t[0]}–${m.t[1]}</td><td><span class="pill ${m.type}">${typeLabel(m.type)}</span></td><td>${T(m.titre)}${m.cas ? `<div class="small muted">${T(m.cas)}</div>` : ""}</td><td class="small muted">${[m.obj && "objectifs", m.pts && "points clés", m.disc && "discussion", m.exo && `exercice ${m.exo.duree} min`, m.quiz && "quiz", m.live && "activité"].filter(Boolean).join(" · ")}</td></tr>`).join("");
-      $("#condPrev", box).innerHTML = `<div class="cond-prev">
-        <h4>Aperçu de « ${esc(f.name)} »</h4>
-        ${errors.length ? `<div class="warn small"><b>${errors.length} erreur${errors.length > 1 ? "s" : ""} à corriger avant d'appliquer :</b><ul>${errors.map((x) => `<li>${T(x)}</li>`).join("")}</ul></div>` : ""}
-        ${warnings.length ? `<details class="small cond-warn"><summary>${warnings.length} remarque${warnings.length > 1 ? "s" : ""} (sans blocage)</summary><ul>${warnings.map((x) => `<li>${T(x)}</li>`).join("")}</ul></details>` : ""}
-        ${programme.modules.length ? `<div class="cond-table"><table class="tbl small"><thead><tr><th>Horaires</th><th>Type</th><th>Séquence</th><th>Contenu</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
-        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-          <button type="button" class="btn sm" id="condApply"${errors.length ? " disabled" : ""}>Appliquer ce conducteur (${programme.nDays} journée${programme.nDays > 1 ? "s" : ""})</button>
-          <button type="button" class="btn sm ghost" id="condCancel">Annuler</button>
-        </div></div>`;
-      $("#condCancel", box).onclick = () => ($("#condPrev", box).innerHTML = "");
-      $("#condApply", box).onclick = async () => {
-        const format = String(programme.nDays);
-        if (programme.nDays > 2 && !("dates" in session)) return toast("Plus de deux journées : exécutez d'abord la migration 20261129000000_journees.sql dans Supabase.", "ko");
-        if (programme.nDays > 1 && Array.from({ length: programme.nDays }, (_, i) => dateOfDay({ ...session, format }, i + 1)).some((d) => !d)) toast("Pensez à indiquer la date de chaque journée dans les réglages.", "info");
-        const patch = { programme: session.programme?.ends ? { ...programme, ends: session.programme.ends } : programme, format };
-        // sondages et nuages cités par « activité: » : ajoutés aux activités de la session s'ils n'y sont pas
-        const missing = [...new Set(programme.modules.map((m) => m.live).filter(Boolean))].filter((k) => !session.activities.some((a) => a.id === k || a.from === k));
-        const add = missing.map((k) => bank.items.find((b) => b.id === k && b.kind !== "quiz")).filter(Boolean).map((it) => pollActivity(it));
-        if (add.length) patch.activities = [...session.activities, ...add];
-        if (bank.ready) patch.quizzes = snapshotQuizzes(session.quizzes, quizKeysOf(patch.activities || session.activities, programme.modules), bank.items);
-        if (session.live?.module && !programme.modules.some((m) => m.id === session.live.module)) patch.live = { ...session.live, module: null };
-        if (await guard(() => api.updateSession(sid, patch), "Conducteur appliqué : déroulé, parcours stagiaire et pilotage sont à jour.")) go(location.hash);
-      };
-    };
+  programme.name = f.name;
+  showPreview(programme, { title: f.name, errors, warnings, bank });
+};
+/* Aperçu d'un déroulé (fichier .md ou trame), puis application à la session (applyPatch : déroulé, format,
+   quiz et sondages joués en salle ajoutés et placés, copie des quiz, lien du support sur demande) */
+function showPreview(programme, { title, errors = [], warnings = [], bank }) {
+  const rows = programme.modules.map((m) => `<tr><td class="mono small">${programme.nDays > 1 ? `J${m.day} · ` : ""}${m.t[0]}–${m.t[1]}</td><td><span class="pill ${m.type}">${typeLabel(m.type)}</span></td><td>${T(m.titre)}${m.cas ? `<div class="small muted">${T(m.cas)}</div>` : ""}</td><td class="small muted">${[m.obj && "objectifs", m.pts && "points clés", m.disc && "discussion", m.exo && `exercice ${m.exo.duree} min`, m.quiz && "quiz", (m.acts?.length || m.live) && `${(m.acts || [m.live]).length} activité(s) en salle`, m.pages && `p. ${m.pages}`].filter(Boolean).join(" · ")}</td></tr>`).join("");
+  const slidesOpt = programme.slides_url && programme.slides_url !== session.slides_url;
+  $("#condPrev", box).innerHTML = `<div class="cond-prev">
+    <h4>Aperçu de « ${esc(title)} »</h4>
+    ${errors.length ? `<div class="warn small"><b>${errors.length} erreur${errors.length > 1 ? "s" : ""} à corriger avant d'appliquer :</b><ul>${errors.map((x) => `<li>${T(x)}</li>`).join("")}</ul></div>` : ""}
+    ${warnings.length ? `<details class="small cond-warn"><summary>${warnings.length} remarque${warnings.length > 1 ? "s" : ""} (sans blocage)</summary><ul>${warnings.map((x) => `<li>${T(x)}</li>`).join("")}</ul></details>` : ""}
+    ${programme.modules.length ? `<div class="cond-table"><table class="tbl small"><thead><tr><th>Horaires</th><th>Type</th><th>Séquence</th><th>Contenu</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+    ${slidesOpt ? `<label class="f inline small"><input type="checkbox" id="condSlides"${session.slides_url ? "" : " checked"}> ${T("Utiliser aussi le support de la trame (lien Google Slides) pour cette session")}</label>` : ""}
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button type="button" class="btn sm" id="condApply"${errors.length ? " disabled" : ""}>Appliquer (${programme.nDays} journée${programme.nDays > 1 ? "s" : ""})</button>
+      <button type="button" class="btn sm ghost" id="condCancel">Annuler</button>
+    </div></div>`;
+  $("#condCancel", box).onclick = () => { $("#condPrev", box).innerHTML = ""; if ($("#condTrame", box)) $("#condTrame", box).value = ""; };
+  $("#condApply", box).onclick = async () => {
+    const format = String(programme.nDays);
+    if (programme.nDays > 2 && !("dates" in session)) return toast("Plus de deux journées : exécutez d'abord la migration 20261129000000_journees.sql dans Supabase.", "ko");
+    if (programme.nDays > 1 && Array.from({ length: programme.nDays }, (_, i) => dateOfDay({ ...session, format }, i + 1)).some((d) => !d)) toast("Pensez à indiquer la date de chaque journée dans les réglages.", "info");
+    const patch = applyPatch(session, programme, bank, { slides: !!$("#condSlides", box)?.checked });
+    if (await guard(() => api.updateSession(sid, patch), "Déroulé appliqué : parcours stagiaire, pilotage et activités sont à jour.")) go(location.hash);
+  };
+}
+// Trames de conducteur (éditeur #/admin/trames) : appliquer une trame, ou enregistrer le déroulé de la session comme trame
+api.listTrames().then((tl) => {
+  if (!tl.ready || !$("#condTrames", box)) return;
+  $("#condTrames", box).hidden = false;
+  const sel = $("#condTrame", box);
+  sel.insertAdjacentHTML("beforeend", tl.items.map((t) => `<option value="${t.id}">${T(t.titre)} · ${t.content?.nDays || 1} j.</option>`).join("") || `<option value="" disabled>Aucune trame : créez-en dans « Trames de conducteur »</option>`);
+  sel.onchange = async () => {
+    const t = tl.items.find((x) => x.id === sel.value); if (!t) return ($("#condPrev", box).innerHTML = "");
+    const bank = await api.listBank().catch(() => ({ ready: false, items: [] }));
+    showPreview({ ...t.content, name: t.titre, trame: t.id }, { title: t.titre, bank });
+  };
+}).catch(() => {});
+$("#condSaveTrame", box)?.addEventListener("click", async () => {
+  const titre = prompt("Titre de la nouvelle trame :", `${session.title}`.slice(0, 120));
+  if (!titre?.trim()) return;
+  const row = await guard(() => api.saveTrame({ titre: titre.trim(), content: trameFromSession(session) }), "Trame enregistrée : retrouvez-la dans « Trames de conducteur ».");
+  if (row) go(`#/admin/trames/${row.id}`);
+});
   }
 
   /* =================================================================

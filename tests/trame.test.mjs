@@ -1,6 +1,9 @@
 // Modèle de l'éditeur de trames (src/lib/trame.js)
 import { D1, D2 } from "../src/data.js";
 import { parsePages } from "../src/deck.js";
+import { applyPatch, trameFromSession } from "../src/lib/applyProgramme.js";
+import { bankFromData } from "../src/lib/quizzes.js";
+import { defaultActivities } from "../src/lib/activities.js";
 import { fromProgramme, toProgramme, timeline, moveItem, addItem, updateItem, removeItem, duplicateItem, updateDay, addDay, removeDay, find, pagesUsage, trameKeys, blankTrame, MAX_DAYS, toMin } from "../src/lib/trame.js";
 
 const ok = (c, m) => { if (!c) { console.error("ÉCHEC :", m); process.exitCode = 1; } else console.log("ok ·", m); };
@@ -89,5 +92,34 @@ for (const [name, D] of [["une journée", D1], ["deux journées", D2]]) {
   ok(k.acts.includes("niveau") && k.acts.includes("llm") && k.quizzes.includes("jargon"), "clés citées : activités en salle et quiz en autonomie");
   const p = toProgramme({ ...m, slides_url: "https://docs.google.com/presentation/d/abc/edit", slides_n: 120 });
   ok(p.slides_url && p.slides_n === 120 && p.modules.find((x) => x.id === id).acts.length === 2, "lien du support, nombre de slides et activités gardés");
+}
+// Appliquer une trame à une session, et enregistrer une session comme trame
+{
+  const bank = { ready: true, items: bankFromData() };
+  const usedLive = new Set(D1.map((x) => x.live).filter(Boolean)); // un sondage que le déroulé par défaut ne cite pas déjà
+  const poll = bank.items.find((b) => b.kind !== "quiz" && !usedLive.has(b.id)), quiz = bank.items.find((b) => b.kind === "quiz");
+  let m = fromProgramme(prog(D1, { slides_url: "https://docs.google.com/presentation/d/abcdefghijklmnopqrstuvwxyz/edit", slides_n: 40 }));
+  const a = m.days[0].am[1].id, b = m.days[0].pm[0].id;
+  m = updateItem(m, a, { acts: [poll.id, quiz.id] });
+  m = updateItem(m, b, { acts: [poll.id] });
+  const trame = { ...toProgramme(m), name: "Ma trame" };
+  const session = { format: "1", activities: [], quizzes: {}, live: { module: "disparue" }, programme: { ends: { 1: "16:30" } }, slides_url: "" };
+  const p = applyPatch(session, trame, bank, { slides: true });
+  ok(p.format === "1" && p.programme.ends?.[1] === "16:30" && p.programme.name === "Ma trame", "trame appliquée : déroulé, format, heures de fin gardées");
+  const pa = p.activities.find((x) => x.from === poll.id), qa = p.activities.find((x) => x.type === "quiz" && x.quiz === quiz.id);
+  ok(pa && qa && pa.at === a && qa.at === a, "quiz et sondage ajoutés à la session et placés dans leur séquence");
+  ok(p.activities.filter((x) => x.from === poll.id).length === 1, "une activité citée deux fois n'est ajoutée qu'une fois (à sa première séquence)");
+  ok(p.quizzes[quiz.id]?.questions?.length > 0, "le quiz est copié dans la session");
+  ok(p.live.module === null && p.slides_url === trame.slides_url, "séquence lancée disparue oubliée, lien du support repris sur demande");
+  ok(!("slides_url" in applyPatch(session, trame, bank)), "sans demande, le lien du support ne change pas");
+  const placedElsewhere = { ...session, activities: [{ ...pa, id: "deja", at: "ancienne-sequence" }] };
+  const p2 = applyPatch(placedElsewhere, trame, bank);
+  ok(p2.activities.find((x) => x.id === "deja").at === a && p2.activities.filter((x) => x.from === poll.id).length === 1, "une activité déjà dans la session est réutilisée et replacée");
+  const s1 = { format: "1", activities: defaultActivities("1"), quizzes: {}, programme: null, slides_url: "https://docs.google.com/presentation/d/zz/edit" };
+  const t1 = trameFromSession(s1);
+  ok(t1.nDays === 1 && t1.modules.length === D1.length && t1.slides_url === s1.slides_url, "session enregistrée comme trame : déroulé et support");
+  ok(t1.modules.some((x) => x.live), "les activités placées de la session deviennent des activités de la trame");
+  const back = applyPatch({ ...s1, activities: [] }, t1, bank);
+  ok((back.activities || []).length >= t1.modules.filter((x) => x.live).length, "aller-retour session → trame → session : les activités reviennent");
 }
 console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests des trames passent.");
