@@ -6,7 +6,7 @@ import { quizKeysOf, snapshotQuizzes } from "../lib/quizzes.js";
 import { modulesFor } from "../lib/content.js";
 import { STATUS } from "./home.js";
 import { skinDark } from "../lib/skin.js";
-import { isAdmin } from "../lib/roles.js";
+import { isAdmin, isGuest } from "../lib/roles.js";
 
 // Lien court de la session : <site>/CODE (redirigé vers #/join/CODE par 404.html ou au démarrage).
 // VITE_SHORT_BASE permet un domaine plus court (ex. https://formation.samsa.fr/).
@@ -16,7 +16,7 @@ export const joinUrlLabel = (code) => joinUrl(code).replace(/^https?:\/\//, "");
 export const qr = (text, size = 320) => QRCode.toDataURL(text, { width: size, margin: 1, color: { dark: skinDark(), light: "#ffffff" } });
 
 export async function viewAdmin(root, _p, { api, go, me }) {
-  const admin = isAdmin(me);
+  const admin = isAdmin(me), guest = isGuest(me);
   const [sessions, counts, brands, trainers, skins] = await Promise.all([api.listSessions(), api.memberCounts(), api.listBrands().catch(() => []),
     api.listTrainers().catch(() => []), api.listSkins().catch(() => [])]);
   const trainerName = (id) => trainers.find((t) => t.id === id)?.name || "";
@@ -27,8 +27,8 @@ export async function viewAdmin(root, _p, { api, go, me }) {
     return b ? { name: b.name, logo: b.logo || b.logo_light || null } : { name: s.client || "", logo: s.client_logo || null };
   };
   root.innerHTML = `
-    <div class="pagehead"><div><div class="kicker-d">${admin ? "Back-office · administration" : "Back-office formateur"}</div><h1>${admin ? "Sessions" : "Mes sessions"}</h1>
-      ${admin ? "" : `<p class="muted">${T("Les sessions qui vous sont attribuées par l'administration. Pour en obtenir une autre, contactez-la.")}</p>`}</div>
+    <div class="pagehead"><div><div class="kicker-d">${admin ? "Back-office · administration" : guest ? "Back-office · invitation" : "Back-office formateur"}</div><h1>${admin || guest ? "Sessions" : "Mes sessions"}</h1>
+      ${admin ? "" : `<p class="muted">${T(guest ? "Toutes les sessions, en lecture seule : ouvrez-en une pour voir ses réglages, son pilotage, son suivi et le côté stagiaire." : "Les sessions qui vous sont attribuées par l'administration. Pour en obtenir une autre, contactez-la.")}</p>`}</div>
       ${admin ? `<div class="head-actions"><a class="btn ghost" href="#/admin/quiz">Quiz et sondages</a><a class="btn ghost" href="#/admin/equipe">Équipe et accès</a><a class="btn ghost" href="#/admin/reglages">Réglages généraux</a><button class="btn" id="newBtn">+ Démarrer une session</button></div>` : ""}</div>
     <form class="card" id="newForm" hidden style="margin-bottom:14px">
       <h3>Nouvelle session</h3>

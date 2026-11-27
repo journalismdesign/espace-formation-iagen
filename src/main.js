@@ -8,10 +8,12 @@ import "@fontsource/ibm-plex-mono/500.css";
 import "./style.css";
 
 import { api } from "./api/index.js";
-import { $, esc, toast } from "./lib/dom.js";
+import { $, esc, toast, dateFr } from "./lib/dom.js";
+import { readOnlyApi } from "./api/readonly.js";
+import { freezeControls } from "./lib/freeze.js";
 import { samsaHtml } from "./lib/brand.js";
 import { closeSheet } from "./lib/content.js";
-import { viewLogin, viewTrainerLogin, viewSetTrainerCode, RESET } from "./views/login.js";
+import { viewLogin, viewTrainerLogin, viewSetTrainerCode, viewGuestLogin, RESET } from "./views/login.js";
 import { viewEntry } from "./views/entry.js";
 import { viewHome } from "./views/home.js";
 import { viewProfile } from "./views/profile.js";
@@ -20,14 +22,14 @@ import { viewAdmin } from "./views/admin.js";
 import { viewAdminSession } from "./views/adminSession.js";
 import { viewScreen } from "./views/screen.js";
 import { viewStaff } from "./views/staff.js";
-import { isStaff, isAdmin } from "./lib/roles.js";
+import { isAdmin, isGuest, canView } from "./lib/roles.js";
 import { viewSettings } from "./views/settings.js";
 import { viewTrainers } from "./views/trainers.js";
 import { viewQuizBank } from "./views/quizBank.js";
 import { skinFooter, skinForRoute, applySkin, currentSkin } from "./lib/skin.js";
 
 const app = $("#app");
-let cleanup = null, me = null, booted = false, renderTok = 0, currentRoute = null;
+let cleanup = null, me = null, booted = false, renderTok = 0, currentRoute = null, unfreeze = null;
 
 export const go = (h) => { if (location.hash === h) render(); else location.hash = h; };
 
@@ -35,6 +37,7 @@ const ROUTES = [
   [/^#\/login$/, viewLogin, { public: true }],
   [/^#\/formateur$/, viewTrainerLogin, { public: true }],
   [/^#\/formateur\/code$/, viewSetTrainerCode, {}],
+  [/^#\/invitation$/, viewGuestLogin, { public: true }], // invité·es : lien de connexion, lecture seule
   [/^#\/join\/([A-Za-z0-9]+)$/, viewEntry, { any: true, bare: true }],
   [/^#\/profil$/, viewProfile],
   [/^#\/s\/([\w-]+)(?:\/([\w-]+))?(?:\/([\w-]+))?$/, viewSession],
@@ -50,7 +53,7 @@ const ROUTES = [
 
 function header(route) {
   if (route?.bare || !me) return "";
-  const trainer = isStaff(me);
+  const trainer = canView(me); // équipe et invité·es : lien vers le back-office
   const h = location.hash;
   const link = (href, label, on) => `<a href="${href}"${on ? ' aria-current="page"' : ""}>${label}</a>`;
   // Vue stagiaire d'une session (aperçu formateur) : « Back-office » ramène au Jour J de cette session
@@ -62,8 +65,18 @@ function header(route) {
       ${link("#/profil", esc(me.full_name || me.email.split("@")[0]), h === "#/profil")}
       <button class="linkbtn" id="logout">Se déconnecter</button>
     </nav></div>
-    ${api.mode === "demo" ? `<div class="demo-band">Mode démonstration : données stockées dans ce navigateur uniquement. <button class="linkbtn" id="demoReset">Réinitialiser</button></div>` : ""}
+    ${api.mode === "demo" ? `<div class="demo-band">Mode démonstration : données stockées dans ce navigateur uniquement.${isGuest(me) ? "" : ` <button class="linkbtn" id="demoReset">Réinitialiser</button>`}</div>` : ""}
+    ${isGuest(me) ? guestBand(me) : ""}
   </header>`;
+}
+
+// Bandeau de l'invité·e : lecture seule, date de fin (ou accès terminé)
+function guestBand(me) {
+  const until = me.guest_until ? dateFr(me.guest_until, { day: "numeric", month: "long", year: "numeric" }).replace(/^1 /, "1er ") : "";
+  const txt = me.guest_active === false
+    ? `Votre accès invité a pris fin${until ? ` le ${until}` : ""}. Demandez à l'équipe de le prolonger.`
+    : `Invitation · lecture seule${until ? ` jusqu'au ${until}` : ""} : vous pouvez tout consulter, rien n'est enregistré. Les identités des stagiaires sont masquées.`;
+  return `<div class="guest-band${me.guest_active === false ? " over" : ""}" role="status">${esc(txt)}</div>`;
 }
 
 async function render() {
@@ -79,6 +92,7 @@ async function render() {
     try { if (await cleanup.retab(m.slice(1))) { if (tok === renderTok) window.scrollTo(0, 0); return; } } catch (e) { console.error(e); }
   }
   if (cleanup) { try { cleanup(); } catch {} cleanup = null; }
+  if (unfreeze) { unfreeze(); unfreeze = null; }
   currentRoute = route;
 
   const user = await api.currentUser();
@@ -89,8 +103,8 @@ async function render() {
   if (user && route.public) { go("#/"); return; }
   me = user ? await api.me() : null;
   if (tok !== renderTok) return;
-  if (user && !booted) { booted = true; try { await api.claimInvites(); } catch (e) { console.warn(e); } }
-  if (route.trainer && !isStaff(me)) { go("#/"); return; }
+  if (user && !booted) { booted = true; if (!isGuest(me)) { try { await api.claimInvites(); } catch (e) { console.warn(e); } } }
+  if (route.trainer && !canView(me)) { go("#/"); return; }
   if (route.admin && !isAdmin(me)) { go("#/admin"); return; } // pages réservées à l'administration
   if (tok !== renderTok) return;
 
@@ -99,11 +113,15 @@ async function render() {
   if (tok !== renderTok) return;
   applySkin(skin);
   document.body.classList.toggle("bare", !!route.bare);
+  // Invité·e : tout le back-office en lecture seule (l'aperçu côté stagiaire, lui, n'enregistre déjà rien)
+  const guest = isGuest(me), frozen = guest && !h.startsWith("#/s/");
+  document.body.classList.toggle("ro", frozen);
   app.innerHTML = header(route) + `<main id="view"></main>`;
   $("#logout")?.addEventListener("click", async () => { await api.signOut(); me = null; booted = false; go("#/login"); });
   $("#demoReset")?.addEventListener("click", () => confirm("Effacer toutes les données de démonstration ?") && api.reset());
-  const ctx = { api, me, go, refreshMe: async () => (me = await api.me(true)) };
+  const ctx = { api: guest ? readOnlyApi(api) : api, me, go, readOnly: guest, refreshMe: async () => (me = await api.me(true)) };
   ctx.me = me || {};
+  if (frozen) unfreeze = freezeControls(document.body);
   try {
     cleanup = (await route.view($("#view"), m.slice(1), ctx)) || null;
   } catch (e) {

@@ -532,7 +532,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <h3>Participant·es (${roster.length})</h3>
             ${hasCadrage(session) ? `<p class="small muted" style="margin-top:0">${roster.filter((r) => r.project_status === "validated").length} cadrage(s) validé(s) · ${roster.filter((r) => r.project_id && r.project_status !== "validated").length} en cours</p>` : `<p class="small muted" style="margin-top:0">${T("Formation d'une journée : pas de cadrage de cas d'usage en amont.")}</p>`}
             ${roster.length ? `<table class="tbl"><thead><tr><th>Nom</th><th>Profil</th>${hasCadrage(session) ? "<th>Cadrage</th>" : ""}<th></th></tr></thead><tbody>${roster.map((r) => `<tr>
-              <td><b>${T(r.full_name || "—")}</b><div class="small muted">${esc(r.email)}</div></td>
+              <td><b>${T(r.full_name || "—")}</b><div class="small muted">${esc(r.email || "")}</div></td>
               <td class="small">${T(r.metier || "—")}<div class="muted">${T(r.niveau || "")}</div></td>
               ${hasCadrage(session) ? `<td>${r.project_status === "validated" ? `<span class="tag ok">✓ Validé</span>` : r.project_id ? `<span class="tag">${r.project_steps}/${STEPS.length} · commencé</span>` : `<span class="small muted">Pas commencé</span>`}${r.project_title ? `<div class="small">${T(r.project_title)}</div>` : ""}</td>` : ""}
               <td class="actions">${r.project_id && hasCadrage(session) ? `<button class="btn sm ghost" data-proj="${r.project_id}">Voir et commenter</button>` : ""}<button class="iconbtn danger" data-rm="${r.user_id}" title="Retirer de la session" aria-label="Retirer">✕</button></td></tr>`).join("")}</tbody></table>` : `<p class="empty">Personne n'a encore rejoint la session.</p>`}
@@ -541,7 +541,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <h3>Invitations par e-mail</h3>
             <p class="small muted" style="margin-top:0">${T("La personne invitée retrouve la session dès sa première connexion avec cette adresse. Aucun e-mail n'est envoyé par la plateforme : transmettez le lien de connexion vous-même.")}</p>
             <form id="invF"><textarea id="invT" placeholder="Une adresse par ligne"></textarea><button class="btn sm" type="submit" style="margin-top:8px">Ajouter</button></form>
-            <div class="chips" style="margin-top:10px">${invites.map((i) => `<span class="chip">${esc(i.email)} ${joined.has(i.email) ? "✓" : ""}<button class="linkbtn" data-uninv="${esc(i.email)}" aria-label="Retirer l'invitation">✕</button></span>`).join("") || `<span class="small muted">Aucune invitation.</span>`}</div>
+            <div class="chips" style="margin-top:10px">${invites.map((i) => `<span class="chip">${esc(i.email)} ${joined.has(i.email) ? "✓" : ""}<button class="linkbtn" data-uninv="${esc(i.email)}" aria-label="Retirer l'invitation">✕</button></span>`).join("") || `<span class="small muted">${ctx.readOnly ? "Adresses masquées en mode invitation." : "Aucune invitation."}</span>`}</div>
           </div>
         </div>
         <div>
@@ -615,7 +615,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
           <div class="card chat-card" style="margin-top:14px"><h3>Discussion des stagiaires</h3><div id="chatAdm"></div></div>
         </aside>
       </div>`;
-    cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: true, compact: true }));
+    cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: !ctx.readOnly, compact: true, readOnly: ctx.readOnly }));
     $("#openScr", box).onclick = () => window.open(`#/ecran/${sid}`, "ecran-" + sid, "popup=yes,width=1280,height=760");
     afterLive = () => draw(); // bascule du QR code de l'en-tête : l'aperçu suit
     // Remise à zéro du direct (après des essais) : salle fermée, état diffusé vidé ; rien d'autre n'est touché
@@ -665,6 +665,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     let modDay = 1;
     // Flèches du clavier (et télécommandes de présentation) : page suivante / précédente
     const onKey = (e) => {
+      if (ctx.readOnly) return; // invité·e : les flèches ne changent pas l'écran projeté
       const dir = pageKey(e); if (!dir) return;
       const nl = stepLive(session, dir); if (!nl) return;
       e.preventDefault(); setLive(nl);
@@ -1097,7 +1098,7 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
         ${projects.length ? `<div class="grid g2">${projects.map((p) => `<div class="proj-card"><span class="tag${p.status === "validated" ? " ok" : ""}">${p.status === "validated" ? "✓ Validé" : "En cours"}</span><b>${T(p.data?.retenu?.titre || "Sans titre")}</b><div class="small muted">${T(by[p.user_id]?.full_name || by[p.user_id]?.email || "")}</div><p class="small">${T((p.data?.retenu?.description || "").slice(0, 260))}</p>${p.trainer_comment ? `<p class="small"><b>Votre retour :</b> ${T(p.trainer_comment)}</p>` : ""}</div>`).join("")}</div>` : `<p class="empty">Aucun cadrage.</p>`}</div>` : ""}
 
       <div class="card" id="emarg" style="margin-top:14px"><h3>Émargement</h3>
-        ${roster.length ? `<table class="tbl"><thead><tr><th>Présent·e</th><th>Nom</th><th>E-mail</th><th>Cadrage</th></tr></thead><tbody>${roster.map((r) => `<tr><td><input type="checkbox" data-att="${r.user_id}"${r.attended ? " checked" : ""} aria-label="Présence de ${esc(r.full_name || r.email)}"></td><td>${T(r.full_name || "—")}</td><td class="small">${esc(r.email)}</td><td class="small">${r.project_status === "validated" ? "Validé" : r.project_id ? `${r.project_steps}/${STEPS.length}` : "—"}</td></tr>`).join("")}</tbody></table>` : `<p class="empty">Aucun participant.</p>`}
+        ${roster.length ? `<table class="tbl"><thead><tr><th>Présent·e</th><th>Nom</th><th>E-mail</th><th>Cadrage</th></tr></thead><tbody>${roster.map((r) => `<tr><td><input type="checkbox" data-att="${r.user_id}"${r.attended ? " checked" : ""} aria-label="Présence de ${esc(r.full_name || r.email)}"></td><td>${T(r.full_name || "—")}</td><td class="small">${esc(r.email || "—")}</td><td class="small">${r.project_status === "validated" ? "Validé" : r.project_id ? `${r.project_steps}/${STEPS.length}` : "—"}</td></tr>`).join("")}</tbody></table>` : `<p class="empty">Aucun participant.</p>`}
         <div class="chips" style="margin-top:12px"><button class="btn sm" id="csv">Exporter le bilan (CSV)</button>${admin ? `<button class="btn sm ghost" id="dup">Dupliquer la session</button>` : ""}</div>
         <p class="small muted">${T("Le bilan reprend présence, profil, état du cadrage, progression dans le déroulé et scores aux quiz. La duplication reprend la séquence, les ressources et les intitulés des accès (sans les valeurs), sans participant·es.")}</p></div>
 
@@ -1111,12 +1112,13 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
           <form id="resF" class="askrow" style="margin-top:10px"><input type="text" id="rT" placeholder="Titre" required><input type="url" id="rU" placeholder="https://" required><button class="btn sm" type="submit">Ajouter</button></form></div>
         <div class="card"><h3>Codes et accès des exercices</h3><p class="small muted" style="margin-top:0">${T("Comptes de démonstration, clés d'API de test… Les stagiaires les copient depuis « Ressources du jour ». N'y mettez jamais d'identifiant personnel.")}</p>
           ${secrets.map((s) => `<div class="secret-edit"><div class="small"><b>${T(s.label)}</b> <span class="muted">${s.value ? "renseigné" : "aucune valeur"}</span> <button class="linkbtn small" data-rsec="${s.id}">Retirer</button></div><form class="askrow" data-sec="${s.id}"><input type="text" placeholder="Coller la valeur" value="${esc(s.value)}"><button class="btn sm" type="submit">Enregistrer</button></form></div>`).join("")}
+          ${ctx.readOnly ? `<p class="small muted">Valeurs masquées en mode invitation.</p>` : ""}
           <form id="secF" class="askrow" style="margin-top:10px"><input type="text" id="sL" placeholder="Intitulé (ex. Compte Gemini de démo)" required><button class="btn sm" type="submit">Ajouter</button></form></div>
       </div>`;
     const reload = () => go(location.hash);
     $$("[data-att]", box).forEach((c) => (c.onchange = () => guard(() => api.setAttended(sid, c.dataset.att, c.checked))));
     if ($("#dup", box)) $("#dup", box).onclick = () => openDuplicate(api, session, go);
-    cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: true, compact: true }));
+    cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: !ctx.readOnly, compact: true, readOnly: ctx.readOnly }));
     $("#csv", box).onclick = () => {
       const quizzes = [...new Set([...quizKeysOf(session.activities, modulesFor(session)), ...Object.keys(session.quizzes || {})])].filter((k) => quizFor(session, k));
       const head = ["Nom", "E-mail", "Présent", "Métier", "Niveau IA", "Cadrage", "Cas d'usage", "Retour formateur", "Déroulé (séquences cochées)", ...quizzes.map((q) => "Quiz " + quizFor(session, q).titre)];

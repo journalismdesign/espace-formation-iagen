@@ -147,6 +147,8 @@ function otpFlow(root, { api, go }, first) {
 
 /* Choix du code d'accès, après connexion par code temporaire */
 export async function viewSetTrainerCode(root, _p, { api, go, refreshMe }) {
+  // Invité·e passé·e par « Code oublié ? » : pas de code d'équipe à choisir, direction le back-office en lecture seule
+  if ((await api.me(true).catch(() => null))?.role === "guest") { try { localStorage.removeItem(RESET); } catch {} go("#/admin"); return; }
   const isTrainer = await api.claimTrainer().catch(() => false);
   if (!isTrainer) {
     try { localStorage.removeItem(RESET); } catch {}
@@ -184,6 +186,31 @@ export async function viewSetTrainerCode(root, _p, { api, go, refreshMe }) {
     go("#/admin");
   };
   $("#c1").focus();
+}
+
+/* Invité·es (« Équipe et accès » → Invité·e) : un lien de connexion par e-mail, sans le code de l'équipe.
+   Le message ne dit pas si l'adresse est invitée (pas d'inventaire des adresses). Le rôle invité·e, lui, vient
+   de la base : une adresse non invitée n'obtient qu'un compte stagiaire sans session. */
+export async function viewGuestLogin(root, _p, { api }) {
+  root.innerHTML = `<div class="login"><div class="login-card card">
+    <div class="kicker" style="color:var(--muted)">Invitation</div>
+    <h1 style="color:var(--ink);margin:4px 0 6px">Découvrir l'espace formation</h1>
+    <p class="muted">${T("Vous avez été invité·e à consulter le back-office et les sessions, en lecture seule. Indiquez l'adresse qui a reçu l'invitation : un lien de connexion vous sera envoyé.")}</p>
+    <form id="gF">
+      <label class="f" for="gMail">Votre adresse e-mail</label>
+      <input type="email" id="gMail" required autocomplete="email">
+      <button class="btn" type="submit" style="margin-top:12px;width:100%">Recevoir le lien de connexion</button>
+    </form>
+    <div id="gMsg" class="small" style="margin-top:10px" role="status"></div>
+    <p class="small muted" style="margin-top:18px">${T("Rien de ce que vous verrez ne peut être modifié. Les identités des stagiaires sont masquées.")}</p>
+  </div></div>`;
+  $("#gF").onsubmit = async (e) => {
+    e.preventDefault();
+    const email = $("#gMail").value.trim().toLowerCase();
+    if (await guard(() => api.signInEmail(email).then(() => true)) === undefined) return;
+    if (api.mode !== "demo") $("#gMsg").textContent = "Si cette adresse a été invitée, un lien de connexion vient de lui être envoyé. Ouvrez-le sur cet appareil.";
+  };
+  $("#gMail").focus();
 }
 
 export async function viewLogin(root, _p, { go }) {

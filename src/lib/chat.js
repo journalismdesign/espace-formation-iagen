@@ -24,23 +24,26 @@ const hueOf = (id = "") => HUES[[...String(id)].reduce((a, c) => a + c.charCodeA
 
 /**
  * Monte la messagerie dans `el`.
- * opts : { api, sid, me, staff (droits de modération), compact (widget), title }
+ * opts : { api, sid, me, staff (droits de modération), compact (widget), title, readOnly (invité·e : lecture seule,
+ *         auteurs masqués par l'API, sans saisie ni suppression, relu toutes les 20 s faute de temps réel) }
  * Renvoie une fonction de nettoyage.
  */
-export function mountChat(el, { api, sid, me, staff = false, compact = false }) {
+export function mountChat(el, { api, sid, me, staff = false, compact = false, readOnly = false }) {
   let threads = [], cur = null, posts = [], dead = false, mobileList = true;
+  if (readOnly) staff = false;
   el.classList.add("chat");
+  el.classList.toggle("chat-ro", readOnly);
   el.classList.toggle("compact", compact);
   el.innerHTML = `
     <div class="chat-list">
-      <div class="chat-list-head"><b>Conversations</b><button class="chat-new" type="button" title="Nouvelle conversation" aria-label="Nouvelle conversation">+</button></div>
+      <div class="chat-list-head"><b>Conversations</b>${readOnly ? "" : `<button class="chat-new" type="button" title="Nouvelle conversation" aria-label="Nouvelle conversation">+</button>`}</div>
       <form class="chat-newf" hidden><input type="text" maxlength="160" placeholder="Nom de la conversation" required><button class="btn sm" type="submit">Créer</button></form>
       <div class="chat-convs" role="list"></div>
     </div>
     <div class="chat-pane">
       <div class="chat-head"><button class="chat-back" type="button" aria-label="Retour aux conversations">‹</button><div class="chat-title"></div>${staff ? `<button class="chat-clear" type="button" title="Supprimer tous les messages de la session">Tout effacer</button>` : ""}</div>
       <div class="chat-msgs" aria-live="polite"></div>
-      <form class="chat-compose">
+      <form class="chat-compose"${readOnly ? " hidden" : ""}>
         <textarea rows="1" maxlength="4000" placeholder="Votre message" aria-label="Votre message"></textarea>
         <button class="chat-send" type="submit" aria-label="Envoyer" title="Envoyer (Entrée)"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg></button>
       </form>
@@ -52,7 +55,7 @@ export function mountChat(el, { api, sid, me, staff = false, compact = false }) 
   const toBottom = () => { msgs.scrollTop = msgs.scrollHeight; };
 
   function drawList() {
-    if (!threads.length) { list.innerHTML = `<p class="chat-empty small">Aucune conversation. Écrivez le premier message : la conversation « ${GENERAL} » sera créée.</p>`; return; }
+    if (!threads.length) { list.innerHTML = `<p class="chat-empty small">${readOnly ? "Aucune conversation pour l'instant." : `Aucune conversation. Écrivez le premier message : la conversation « ${GENERAL} » sera créée.`}</p>`; return; }
     list.innerHTML = threads.map((t) => `<button type="button" role="listitem" class="chat-conv${cur?.id === t.id ? " cur" : ""}" data-t="${t.id}">
       <span class="chat-av sq" style="background:${hueOf(t.id)}">#</span>
       <span class="chat-conv-txt"><b>${T(t.title)}</b><span class="small">${t.count} message${t.count > 1 ? "s" : ""}</span></span>
@@ -126,7 +129,7 @@ export function mountChat(el, { api, sid, me, staff = false, compact = false }) 
       if (ok) { ta.value = ""; grow(); await loadThreads(); drawList(); await refreshMsgs(true); toBottom(); }
     } finally { ta.disabled = false; if (!compact) ta.focus(); }
   };
-  $(".chat-new", el).onclick = () => { const f = $(".chat-newf", el); f.hidden = !f.hidden; if (!f.hidden) $("input", f).focus(); };
+  if (!readOnly) $(".chat-new", el).onclick = () => { const f = $(".chat-newf", el); f.hidden = !f.hidden; if (!f.hidden) $("input", f).focus(); };
   $(".chat-newf", el).onsubmit = async (e) => {
     e.preventDefault();
     const name = $(".chat-newf input", el).value.trim(); if (!name) return;
@@ -162,7 +165,9 @@ export function mountChat(el, { api, sid, me, staff = false, compact = false }) 
     toBottom();
   })();
 
-  return () => { dead = true; unwatch && unwatch(); };
+  // Lecture seule : pas de temps réel sur la discussion pour l'invité·e (la base ne le lui envoie pas), on relit
+  const poll = readOnly ? setInterval(() => onChange({ table: "posts" }), 20000) : null;
+  return () => { dead = true; unwatch && unwatch(); if (poll) clearInterval(poll); };
 }
 
 // Liens cliquables, le reste échappé et typographié

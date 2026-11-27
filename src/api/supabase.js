@@ -79,8 +79,22 @@ export function createSupabaseApi(url, anonKey) {
     },
     async deleteTrainer(id) { ok(await sb.from("trainers").delete().eq("id", id)); },
     /* ---------- Équipe (admin) ---------- */
-    async listStaff() { return ok(await sb.rpc("list_staff")) || []; },
-    async saveStaff(email, isAdmin) { ok(await sb.rpc("save_staff", { p_email: email, p_admin: !!isAdmin })); },
+    // Liste avec rôle et date de fin d'invitation (list_team) ; avant la migration …_invites_lecture : list_staff
+    async listStaff() {
+      const r = await sb.rpc("list_team");
+      if (!r.error) return r.data || [];
+      return (ok(await sb.rpc("list_staff")) || []).map((s) => ({ ...s, role: s.is_admin ? "admin" : "trainer", guest_until: null }));
+    },
+    // role : trainer, admin ou guest (invité·e en lecture seule, jusqu'à `until`). L'ancienne signature sert pour
+    // formateur·ice et admin, ce qui marche avant comme après la migration.
+    async saveStaff(email, role, until = null) {
+      if (role === "guest") {
+        const r = await sb.rpc("save_staff", { p_email: email, p_role: "guest", p_until: until || null });
+        if (r.error && /function|schema cache/i.test(r.error.message)) throw new Error("Invité·es : exécutez d'abord la migration 20261128000000_invites_lecture.sql dans Supabase.");
+        ok(r); return;
+      }
+      ok(await sb.rpc("save_staff", { p_email: email, p_admin: role === "admin" }));
+    },
     async removeStaff(email) { ok(await sb.rpc("remove_staff", { p_email: email })); },
 
     /* ---------- Code d'accès formateur ---------- */
@@ -158,6 +172,11 @@ export function createSupabaseApi(url, anonKey) {
       if (profileCache && !force) return profileCache;
       const u = await api.currentUser(); if (!u) return null;
       profileCache = ok(await sb.from("profiles").select("*").eq("id", u.id).single());
+      // Invité·e : date de fin et accès en cours (le bandeau l'affiche ; la base, elle, ferme tout à la date dite)
+      if (profileCache?.role === "guest") {
+        const g = (await sb.rpc("guest_status")).data?.[0];
+        profileCache = { ...profileCache, guest_until: g?.until || null, guest_active: !!g?.active };
+      }
       return profileCache;
     },
     async updateMe(patch) {
@@ -255,6 +274,8 @@ export function createSupabaseApi(url, anonKey) {
     // Efface toute la discussion d'une session (équipe) : les messages partent avec leurs conversations (on delete cascade)
     async clearDiscussion(sid) { ok(await sb.from("threads").delete().eq("session_id", sid)); },
     async deletePost(id) { ok(await sb.from("posts").delete().eq("id", id)); },
+    // Invité·e : la discussion avec les auteurs masqués (« Stagiaire N », « Équipe »)
+    async guestDiscussion(sid) { return ok(await sb.rpc("guest_discussion", { p_session: sid })) || []; },
 
     /* ---------- Temps réel ---------- */
     // tables : limiter l'abonnement (côté stagiaire, la session seule) — chaque table suivie coûte au serveur
