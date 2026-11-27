@@ -36,7 +36,7 @@ export async function viewAdmin(root, [view], { api, go, me }) {
     .sort((a, b) => group(a) - group(b) || (group(a) === 2 ? byDate(b, a) : byDate(a, b)));
   const shortFr = (d) => new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" }).replace(/^1 /, "1er ");
   const stateHtml = (s) => isArchived(s) ? `<span class="state archived">Archivée</span>`
-    : sessionEnded(s) ? `<span class="state closed">Terminée</span>${archiveDate(s) ? ` <span class="small muted">${T(`· archivage le ${shortFr(archiveDate(s))}`)}</span>` : ""}`
+    : sessionEnded(s) ? `<span class="state closed">Terminée</span>${archiveDate(s) ? `<div class="small muted archive-on">${T(`archivage le ${shortFr(archiveDate(s))}`)}</div>` : ""}`
     : current(s) ? `<span class="state current">${s.status === "live" ? `<span class="dot on"></span> ` : ""}En cours</span>`
     : `<span class="state ${s.status}">${STATUS[s.status]}</span>`;
   const trainerName = (id) => trainers.find((t) => t.id === id)?.name || "";
@@ -67,10 +67,10 @@ export async function viewAdmin(root, [view], { api, go, me }) {
     </form>
     <div class="phases" style="margin-bottom:12px"><a href="#/admin"${archivedTab ? "" : ' aria-current="page"'}>Sessions à venir</a><a href="#/admin/archives"${archivedTab ? ' aria-current="page"' : ""}>Sessions archivées${archived.length ? ` <span class="small muted">${archived.length}</span>` : ""}</a></div>
     <div class="card table-card">
-      ${sessions.length ? `<table class="tbl"><thead><tr><th>Session</th><th>Client</th><th>Intervenant·e</th><th>État</th><th>Date</th><th>Code</th><th>Participants</th><th></th></tr></thead><tbody>
+      ${sessions.length ? `<table class="tbl"><thead><tr><th>Client</th><th>Session</th><th>Intervenant·e</th><th>État</th><th>Date</th><th>Code</th><th>Participants</th><th></th></tr></thead><tbody>
       ${sessions.map((s) => `<tr${!archivedTab && sessionEnded(s) ? ' class="row-ended"' : ""}>
-        <td><a href="#/admin/s/${s.id}"><b>${T(s.title)}</b></a><div class="small muted">${T(s.formation || "")}${s.format === "2" ? " · 2 jours" : " · 1 jour"}</div></td>
         <td class="client-cell">${(() => { const c = clientOf(s); return c.logo ? `<img src="${esc(c.logo)}" alt="${esc(c.name)}" title="${esc(c.name)}" class="client-logo">` : c.name ? `<span>${T(c.name)}</span>` : `<span class="muted">—</span>`; })()}</td>
+        <td><a href="#/admin/s/${s.id}"><b>${T(s.title)}</b></a><div class="small muted">${T(s.formation || "")}${s.format === "2" ? " · 2 jours" : " · 1 jour"}</div></td>
         <td class="small">${admin ? `<select class="assign" data-assign="${s.id}" aria-label="Intervenant·e de la session">${trOptions(s.trainer_id)}</select>` : T(trainerName(s.trainer_id) || "—")}</td>
         <td class="state-cell">${stateHtml(s)}</td>
         <td class="small mono date-cell">${s.date || "—"}</td>
