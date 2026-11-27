@@ -4,6 +4,7 @@
    stagiaire pour tester le direct. Aucune donnée ne quitte la machine. */
 
 import { DIRECT_PASS_HOURS } from "../lib/accessRules.js";
+import { isArchived } from "../lib/archive.js";
 import { bankFromData, ID_RE } from "../lib/quizzes.js";
 
 const KEY = "iagen-demo-db-v9";
@@ -93,7 +94,9 @@ export function createDemoApi({ defaultActivities }) {
   };
   const canSee = (sid) => manages(sid) || isMember(sid) || guestActive();
   // Discussion : l'équipe garde la main, les stagiaires jusqu'à la clôture
-  const chatOpen = (sid) => manages(sid) || (isMember(sid) && db.sessions.find((s) => s.id === sid)?.status !== "closed");
+  // Session archivée (5 jours après la fin) : ses contenus sont fermés aux participant·es (comme …_archives.sql)
+  const memberLocked = (sid) => isMember(sid) && !manages(sid) && isArchived(db.sessions.find((x) => x.id === sid));
+  const chatOpen = (sid) => manages(sid) || (isMember(sid) && !memberLocked(sid) && db.sessions.find((s) => s.id === sid)?.status !== "closed");
   const nameOf = (id) => { const p = prof(id); return p ? (p.full_name || p.email.split("@")[0]) : "?"; };
 
   const lastDay = (x) => (x.format === "2" && x.date2) || x.date;
@@ -256,7 +259,7 @@ export function createDemoApi({ defaultActivities }) {
       const at = d ? new Date(new Date(`${d}T${x.end_time || "17:30"}:00`).getTime() - 3600000).toISOString() : null;
       const unlocked = !!x.support_unlocked || (!!at && Date.now() >= new Date(at).getTime());
       const url = db.support[sid] || null;
-      return { unlocked, unlock_at: at, url: unlocked || isTrainer() ? url : null, configured: !!url };
+      return { unlocked, unlock_at: at, url: manages(sid) || (unlocked && !memberLocked(sid)) ? url : null, configured: !!url };
     },
     async setSupport(sid, url) { needTrainer(); if (url) db.support[sid] = url; else delete db.support[sid]; commit(); },
 
@@ -390,7 +393,7 @@ export function createDemoApi({ defaultActivities }) {
     async myMembership(sid) { const u = need(); return db.members.find((m) => m.session_id === sid && m.user_id === u.id) || null; },
     async saveProgress(sid, progress) { const m = await api.myMembership(sid); if (m) { m.progress = progress; commit(); } },
 
-    async myProject(sid) { const u = need(); return db.projects.find((p) => p.session_id === sid && p.user_id === u.id) || null; },
+    async myProject(sid) { const u = need(); if (memberLocked(sid)) return null; return db.projects.find((p) => p.session_id === sid && p.user_id === u.id) || null; },
     async saveProject(sid, patch) {
       const u = need();
       if (!isMember(sid)) throw new Error("Rejoignez d'abord la session.");
@@ -417,10 +420,10 @@ export function createDemoApi({ defaultActivities }) {
       return [...m].map(([k, n]) => ({ value: JSON.parse(k), n }));
     },
 
-    async listResources(sid) { return canSee(sid) ? db.resources.filter((r) => r.session_id === sid) : []; },
+    async listResources(sid) { return canSee(sid) && !memberLocked(sid) ? db.resources.filter((r) => r.session_id === sid) : []; },
     async addResource(sid, r) { needTrainer(); const row = { id: uid(), session_id: sid, created_at: now(), ...r }; db.resources.push(row); commit(); return row; },
     async removeResource(id) { needTrainer(); db.resources = db.resources.filter((r) => r.id !== id); commit(); },
-    async listSecrets(sid) { return manages(sid) || isMember(sid) ? db.secrets.filter((r) => r.session_id === sid) : []; }, // jamais l'invité·e
+    async listSecrets(sid) { return manages(sid) || (isMember(sid) && !memberLocked(sid)) ? db.secrets.filter((r) => r.session_id === sid) : []; }, // jamais l'invité·e
     async addSecret(sid, label, value = "") { needTrainer(); const row = { id: uid(), session_id: sid, label, value, created_at: now() }; db.secrets.push(row); commit(); return row; },
     async updateSecret(id, value) { needTrainer(); db.secrets.find((r) => r.id === id).value = value; commit(); },
     async removeSecret(id) { needTrainer(); db.secrets = db.secrets.filter((r) => r.id !== id); commit(); },

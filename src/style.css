@@ -297,6 +297,9 @@ select::-ms-expand{display:none}
 .wait-screen .wait-lead{font-size:21px;line-height:1.45;color:var(--ink);margin:0 0 20px}
 .wait-screen .wait-more{font-size:16px;color:var(--ink);margin:-8px 0 20px}
 .wait-screen .small{color:var(--muted)}
+.end-screen .end-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+.end-screen a:not(.btn){color:var(--blue)}
+.state.archived{background:var(--light);color:var(--muted)}
 /* Direct (stagiaire) */
 .card.live{border:2px solid var(--navy)}
 .card.live h3{font-size:20px;margin:8px 0 10px}

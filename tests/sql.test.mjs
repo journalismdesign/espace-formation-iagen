@@ -428,4 +428,31 @@ await db.exec(`select public.remove_staff('bob@exemple.fr'); select public.remov
 await su();
 ok((await db.query(`select string_agg(role, ',' order by email) r from profiles where id in ('${B}', '${G}')`)).rows[0].r === "trainee,trainee", "accès invité·e retiré : redevient stagiaire");
 
+/* ---------- Archivage : 5 jours après le dernier jour, plus rien pour les stagiaires ---------- */
+await as(T, "formateur@exemple.fr");
+const SA = (await db.query(`insert into sessions (title, status, date, format) values ('Archivée', 'draft', current_date - 10, '1') returning id, code`)).rows[0];
+const SR = (await db.query(`insert into sessions (title, status, date, format) values ('Récente', 'draft', current_date - 2, '1') returning id, code`)).rows[0];
+const S2J = (await db.query(`insert into sessions (title, status, date, date2, format) values ('Deux jours', 'draft', current_date - 9, current_date - 2, '2') returning id`)).rows[0];
+await db.exec(`insert into resources (session_id, title, url) values ('${SA.id}', 'Vieille charte', 'https://exemple.fr'), ('${SR.id}', 'Charte', 'https://exemple.fr');
+  insert into session_secrets (session_id, label, value) values ('${SA.id}', 'Compte', 'ancien');
+  insert into threads (session_id, title) values ('${SA.id}', 'Général');
+  insert into session_support values ('${SA.id}', 'https://drive.google.com/vieux.pdf');
+  update sessions set support_unlocked = true where id = '${SA.id}'`);
+ok((await db.query(`select public.session_archived('${SA.id}') a, public.session_archived('${SR.id}') r, public.session_archived('${S2J.id}') d`)).rows.map((x) => [x.a, x.r, x.d].join()).join() === "true,false,false", "archivage : 5 jours après le dernier jour (jour 2 compris)");
+await as(B, "bob@exemple.fr");
+await db.query(`select public.join_session('${SA.code}')`); await db.query(`select public.join_session('${SR.code}')`);
+ok((await db.query(`select count(*)::int n from sessions where id in ('${SA.id}', '${SR.id}')`)).rows[0].n === 2, "archivage : le stagiaire lit encore la session (pour afficher « Session archivée »)");
+ok((await db.query(`select count(*)::int n from resources where session_id = '${SA.id}'`)).rows[0].n === 0, "archivage : ressources fermées au stagiaire");
+ok((await db.query(`select count(*)::int n from resources where session_id = '${SR.id}'`)).rows[0].n === 1, "terminée depuis 2 jours : ressources encore ouvertes");
+ok((await db.query(`select count(*)::int n from session_secrets where session_id = '${SA.id}'`)).rows[0].n === 0, "archivage : codes d'exercice fermés");
+ok((await db.query(`select count(*)::int n from threads where session_id = '${SA.id}'`)).rows[0].n === 0, "archivage : discussion fermée");
+await fails(`insert into threads (session_id, title) values ('${SA.id}', 'Encore là')`, "archivage : le stagiaire n'écrit plus");
+await fails(`insert into projects (session_id, data) values ('${SA.id}', '{}')`, "archivage : le stagiaire ne crée plus de cadrage");
+const sup = (await db.query(`select * from public.support_status('${SA.id}')`)).rows[0];
+ok(sup.unlocked === true && sup.url === null && sup.configured === true, "archivage : lien du support masqué au stagiaire");
+await as(T, "formateur@exemple.fr");
+ok((await db.query(`select count(*)::int n from resources where session_id = '${SA.id}'`)).rows[0].n === 1, "archivage : l'équipe garde les ressources");
+ok((await db.query(`select url from public.support_status('${SA.id}')`)).rows[0].url.includes("vieux.pdf"), "archivage : l'équipe garde le lien du support");
+ok((await db.query(`select count(*)::int n from threads where session_id = '${SA.id}'`)).rows[0].n === 1, "archivage : l'équipe garde la discussion");
+
 console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests SQL passent.");

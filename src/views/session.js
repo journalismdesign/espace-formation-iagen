@@ -16,24 +16,40 @@ import { screenHtml } from "../lib/screen.js";
 import pauseGif from "../assets/pause.gif";
 import { morph } from "../lib/morph.js";
 import { loadScreenData } from "./adminSession.js";
+import { dayEnd } from "../lib/programme.js";
+import { isArchived, sessionEnded, nextTrainingDay, daysLeft, joursTxt, ARCHIVE_CONTACT } from "../lib/archive.js";
 
 const TABS = [
   ["direct", "Le jour J"], ["cadrage", "Mon cadrage"], ["ressources", "Ressources du jour"], ["fiches", "Glossaire"],
   ["outils", "Outils d'exercice"], ["discussion", "Discussion"],
   ["support", "Évaluation et support"], ["emargement", "Émargement"],
 ];
-// Après la clôture, les stagiaires gardent leurs ressources, les fiches, les exercices et le support
-// (ni déroulé, ni discussion, ni émargement ; la discussion est aussi fermée côté base)
-const CLOSED_TABS = ["ressources", "fiches", "outils", "support"];
+// Formation terminée (close, ou finie : voir sessionEnded) : les stagiaires gardent le message de fin (Le jour J),
+// leurs ressources, les fiches, les exercices et le support, jusqu'à l'archivage
+// (ni déroulé, ni discussion, ni émargement ; après la clôture, la discussion est aussi fermée côté base)
+const CLOSED_TABS = ["direct", "ressources", "fiches", "outils", "support"];
 // Colonne de droite en cours de chargement : « Chargement » et trois points qui apparaissent l'un après l'autre
 const LOADING = `<div class="tab-loading" role="status">Chargement<span class="dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></div>`;
 // Salle pas encore ouverte : message d'attente en grand, à la place du contenu. Le jour de la formation (ou sans date) :
 // « dans quelques minutes » ; avant : la date de début (et le cadrage à préparer, en deux journées).
-const waitHtml = (lead, more = "") => `<div class="wait-screen" role="status"><div class="wait-smile" aria-hidden="true">🙂</div>
-  <h1>${T("Merci de patienter")}</h1>
+const waitHtml = (lead, more = "", title = "Merci de patienter") => `<div class="wait-screen" role="status"><div class="wait-smile" aria-hidden="true">🙂</div>
+  <h1>${T(title)}</h1>
   <p class="wait-lead">${T(lead)}</p>${more ? `<p class="wait-more">${T(more)}</p>` : ""}
   <p class="small">${T("Cette page s'ouvrira d'elle-même dès l'ouverture de la salle.")}</p></div>`;
 const parisDay = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
+const dayFr = (d) => dateFr(d).replace(/^(\S+) 1 /, "$1 1er ");
+// Fin de la formation : merci, jours d'accès restants avant l'archivage, support à télécharger
+const endHtml = (sid, n) => `<div class="wait-screen end-screen" role="status"><div class="wait-smile" aria-hidden="true">⌛️</div>
+  <h1>${T("Merci de votre participation")}</h1>
+  <p class="wait-lead">${T(n == null ? "La formation est terminée, vous gardez l'accès aux ressources. N'oubliez pas de télécharger le support."
+    : `La formation est terminée, vous pouvez accéder aux ressources pendant encore ${joursTxt(n)}. N'oubliez pas de télécharger le support.`)}</p>
+  <p class="end-actions"><a class="btn" href="#/s/${sid}/support">Télécharger le support</a><a class="btn ghost" href="#/s/${sid}/ressources">Ressources du jour</a></p></div>`;
+// Session archivée : plus d'accès pour les stagiaires (fermé aussi côté base), adresse de contact
+const archivedHtml = (session) => `<div class="wait-screen end-screen" role="status">
+  <h1>${T("Session archivée")}</h1>
+  <p class="wait-lead">${T(`La session « ${session.title} » est maintenant archivée : l'accès des stagiaires est fermé.`)}</p>
+  <p class="wait-more">${T("Pour plus d'informations, écrivez à")} <a href="mailto:${ARCHIVE_CONTACT}">${ARCHIVE_CONTACT}</a>.</p>
+  <p class="end-actions"><a class="btn ghost" href="#/">Mon espace</a></p></div>`;
 export const FICHE_CATS = [
   ["comprendre", "Comprendre", ["interface", "configuration"]],
   ["outils", "Les briques des assistants", ["projet", "plugin", "connecteur", "competence", "mcp", "instructions", "notebook"]],
@@ -51,7 +67,19 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   if (!TABS.some(([k]) => k === tab)) tab = "direct";
   const membership = await api.myMembership(sid).catch(() => null);
   const trainerPreview = canView(me) && !membership; // équipe ou invité·e (pour qui myMembership vaut toujours null)
-  const closedView = session.status === "closed" && !trainerPreview;
+  // Archivée (5 jours après le dernier jour) : les stagiaires n'y ont plus accès, seulement un message
+  if (!trainerPreview && isArchived(session)) {
+    root.classList.remove("withside", "wait-mode");
+    root.innerHTML = archivedHtml(session);
+    return;
+  }
+  // Heure de fin de la journée n (déroulé, fin de journée modifiée comprise), sinon l'heure de fin de la session
+  const endOf = (n) => dayEnd(modulesFor(session), n) || (session.end_time ? String(session.end_time).slice(0, 5) : null);
+  /* Formation terminée : close, dernier jour passé, ou dernier jour salle fermée après l'heure de fin. Le stagiaire voit
+     le message de fin dans « Le jour J » et garde ressources, glossaire, exercices et support jusqu'à l'archivage.
+     Une évaluation projetée garde la main (carte « En direct ») tant que la session n'est pas close. */
+  const endedNow = () => !trainerPreview && sessionEnded(session, { endOf }) && !(session.status !== "closed" && session.live?.view === "evaluation");
+  const closedView = endedNow();
   /* Attente : dès que la salle est fermée (status draft) et que la session n'est pas close. Déroulé et carte
      « En direct » masqués, colonne de gauche grisée, message d'attente en grand. Restent actifs : l'émargement,
      et « Mon cadrage » avant le premier jour (préparation des formations de deux journées). Message selon le
@@ -63,18 +91,22 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
   const isWaiting = waitingNow();
   const beforeDay1 = !!session.date && parisDay() < session.date;
   const resumed = session.live?.started?.day === parisDay(); // salle déjà ouverte aujourd'hui : c'est une pause
-  const WAIT = beforeDay1
+  const nextDay = nextTrainingDay(session, { endOf }); // soir d'une journée qui n'est pas la dernière
+  const WAIT = nextDay
+    ? waitHtml(`La journée est terminée. La formation reprendra le ${dayFr(nextDay)}${session.start_time ? `, à ${String(session.start_time).slice(0, 5).replace(":", " h ")}` : ""}.`, "", "Merci pour cette journée")
+    : beforeDay1
     ? waitHtml(`La formation commencera le ${dateFr(session.date).replace(/^(\S+) 1 /, "$1 1er ")}${session.start_time ? `, à ${String(session.start_time).slice(0, 5).replace(":", " h ")}` : ""}.`, hasCadrage(session) ? "En attendant, vous pouvez préparer votre cadrage." : "")
     : waitHtml(`La formation va ${resumed ? "reprendre" : "commencer"} dans quelques minutes… Vous pouvez encore aller chercher un café.`);
   const waitAllowed = (t) => t === "emargement" || (t === "cadrage" && beforeDay1); // onglets ouverts pendant l'attente
-  if (closedView && !CLOSED_TABS.includes(tab)) { ctx.go(`#/s/${sid}/ressources`); return; }
+  if (closedView && !CLOSED_TABS.includes(tab)) { ctx.go(`#/s/${sid}/direct`); return; }
   const shownTabs = TABS.filter(([k]) => !closedView || CLOSED_TABS.includes(k));
   const project = await api.myProject(sid).catch(() => null);
   const live = () => session.status === "live" && !!(session.live?.act || session.live?.view || session.live?.module);
   const br = await resolveBranding(api, session);
   // Outils d'exercice : visibles dès que le formateur a lancé l'exercice qui les utilise (toujours visibles en aperçu formateur)
-  const toolsVisible = () => trainerPreview || session.status === "closed" || unlockedTools(session).size > 0;
-  const openTools = () => (session.status === "closed" ? new Set(TOOL_IDS) : unlockedTools(session)); // après clôture : tous les exercices
+  const toolsVisible = () => trainerPreview || session.status === "closed" || closedView || unlockedTools(session).size > 0;
+  const openTools = () => (session.status === "closed" || closedView ? new Set(TOOL_IDS) : unlockedTools(session)); // formation terminée : tous les exercices
+  const left = daysLeft(session);
 
   root.classList.add("withside");
   root.classList.toggle("wait-mode", isWaiting); // (pas « waiting » : classe déjà prise par les activités, en italique)
@@ -82,9 +114,10 @@ export async function viewSession(root, [sid, tab = "direct", sub], ctx) {
     <aside class="side">
       ${logosHtml(br, "sm")}
       <div class="side-head"><div><b>${T(session.title)}</b><div class="small muted">${T(datesFr(session))}</div></div></div>
-      <div class="side-live${live() ? " on" : ""}" id="sideLive"><span class="dot${live() ? " on" : ""}"></span>${live() ? "En direct" : STATUS[session.status]}</div>
+      <div class="side-live${live() ? " on" : ""}" id="sideLive"><span class="dot${live() ? " on" : ""}"></span>${live() ? "En direct" : closedView ? "Terminée" : STATUS[session.status]}</div>
       <div id="sideEm"></div>
-${closedView ? `      <p class="small muted" style="margin:0 0 12px">${T("La formation est terminée. Vous gardez l'accès aux ressources, au glossaire, aux exercices et au support.")}</p>` : `      <div class="side-label">Le parcours</div>
+${closedView ? `      <p class="small muted" style="margin:0 0 12px">${T(`La formation est terminée. Vous gardez l'accès aux ressources, au glossaire, aux exercices et au support${left == null ? "" : ` pendant encore ${joursTxt(left)}`}.`)}</p>
+      <div class="side-path"><a href="#/s/${sid}/direct" class="${tab === "direct" ? "cur" : ""}"><span class="ring on">✓</span><div><b>Le jour J</b><div class="small muted">Formation terminée</div></div></a></div>` : `      <div class="side-label">Le parcours</div>
       <div class="side-path">
         <a href="#/s/${sid}/direct" class="${tab === "direct" ? "cur" : ""}"><span class="ring"></span><div><b>Le jour J</b><div class="small muted">La formation en direct</div></div></a>
 ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "cadrage" ? "cur" : ""}"><span class="ring${project?.status === "validated" ? " on" : ""}">${project?.status === "validated" ? "✓" : ""}</span><div><b>Mon cadrage</b><div class="small muted">${project?.status === "validated" ? "Cas validé" : "Avant la formation"}</div></div></a>` : ""}
@@ -92,7 +125,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
       <div id="sideExtra"></div>
       <div class="side-label">Ressources</div>
       <nav class="side-nav">${shownTabs.filter(([k]) => !["direct", "cadrage", "emargement"].includes(k)).map(([k, l]) => `<a href="#/s/${sid}/${k}"${k === tab ? ' aria-current="page"' : ""}${k === "outils" ? ` id="navOutils"${toolsVisible() ? "" : " hidden"}` : ""}>${l}<span>›</span></a>`).join("")}</nav>
-      ${trainerPreview ? `<p class="small muted" style="margin-top:14px">${ctx.readOnly ? "Aperçu en lecture seule (invitation) : rien n'est enregistré." : "Aperçu formateur : vos clics ne sont pas enregistrés."} <a href="#/admin/s/${sid}/jour">Retour au back-office</a></p>` : ""}
+      ${trainerPreview ? `<p class="small muted" style="margin-top:14px">${ctx.readOnly ? "Aperçu en lecture seule (invitation) : rien n'est enregistré." : "Aperçu formateur : vos clics ne sont pas enregistrés."}${isArchived(session) ? " Session archivée : les stagiaires n'y ont plus accès." : sessionEnded(session, { endOf }) ? T(` Formation terminée : les stagiaires voient le message de fin${left == null ? "" : ` (encore ${joursTxt(left)} avant l'archivage)`}.`) : ""} <a href="#/admin/s/${sid}/jour">Retour au back-office</a></p>` : ""}
     </aside>
     <section class="sidemain" id="tabBody"></section>`;
   const body = $("#tabBody", root);
@@ -124,14 +157,17 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   const refreshSession = debounce(async () => {
     session = (await api.getSession(sid)) || session;
     const l = $("#sideLive", root);
-    if (l) { l.className = "side-live" + (live() ? " on" : ""); l.innerHTML = `<span class="dot${live() ? " on" : ""}"></span>${live() ? "En direct" : STATUS[session.status]}`; }
+    if (l) { l.className = "side-live" + (live() ? " on" : ""); l.innerHTML = `<span class="dot${live() ? " on" : ""}"></span>${live() ? "En direct" : closedView ? "Terminée" : STATUS[session.status]}`; }
     onSession.forEach((f) => f());
   }, 150);
   const onSession = new Set();
   onSession.add(() => { const n = $("#navOutils", root); if (n) n.hidden = !toolsVisible(); });
   // Clôture ou réouverture pendant la consultation : on redessine avec les bons onglets
-  const status0 = session.status;
-  onSession.add(() => { if (!trainerPreview && (session.status === "closed") !== (status0 === "closed")) { fullRender = true; ctx.go(location.hash); } });
+  // Fin de la formation (clôture, salle fermée après l'heure de fin) ou réouverture pendant la consultation :
+  // on redessine avec les bons onglets ; la fin peut aussi arriver avec l'heure, d'où la vérification à la minute
+  const recheckEnd = () => { if (!trainerPreview && !fullRender && endedNow() !== closedView) { fullRender = true; ctx.go(location.hash); } };
+  onSession.add(recheckEnd);
+  const endTimer = setInterval(recheckEnd, 60000); cleanups.push(() => clearInterval(endTimer));
   // Ouverture de la salle pendant l'attente : place au jour J ; fermeture (pause, fin de journée) : retour à l'attente
   onSession.add(() => { if (waitingNow() !== isWaiting) { fullRender = true; ctx.go(isWaiting ? `#/s/${sid}/direct` : location.hash); } });
   /* Évaluation projetée : le stagiaire qui est sur un autre onglet revient au jour J, où la carte « En direct »
@@ -171,7 +207,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
     if (fullRender || sid2 !== sid) return false; // autre session, ou clôture/réouverture : tout redessiner
     await (chain = chain.then(async () => {
       tab = TABS.some(([k]) => k === tab2) ? tab2 : "direct"; sub = sub2;
-      if (closedView && !CLOSED_TABS.includes(tab)) { ctx.go(`#/s/${sid}/ressources`); return; }
+      if (closedView && !CLOSED_TABS.includes(tab)) { ctx.go(`#/s/${sid}/direct`); return; }
       markNav();
       const before = body.firstElementChild; // l'ancien contenu : on ne remplace par « Chargement » que s'il est encore là
       const slow = setTimeout(() => { if (body.firstElementChild === before) body.innerHTML = LOADING; }, 150);
@@ -193,7 +229,8 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
     tabCleanups.forEach((f) => f && f()); tabCleanups = []; tabHandlers.clear();
     if (isWaiting && !waitAllowed(tab)) { body.innerHTML = WAIT; return; } // avant l'ouverture de la salle
     const extra = $("#sideExtra", root); if (extra) extra.innerHTML = ""; // complément du cadrage
-  if (tab === "direct") await tabDirect();
+  if (tab === "direct" && closedView) body.innerHTML = endHtml(sid, left); // formation terminée : message de fin
+  else if (tab === "direct") await tabDirect();
   else if (tab === "cadrage" && !hasCadrage(session)) ctx.go(`#/s/${sid}/direct`); // pas de cadrage en une journée
   else if (tab === "cadrage") await renderCadrage(body, $("#sideExtra", root), ctx, session, trainerPreview);
   else if (tab === "ressources") await tabRessources();

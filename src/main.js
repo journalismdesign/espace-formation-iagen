@@ -41,7 +41,7 @@ const ROUTES = [
   [/^#\/join\/([A-Za-z0-9]+)$/, viewEntry, { any: true, bare: true }],
   [/^#\/profil$/, viewProfile],
   [/^#\/s\/([\w-]+)(?:\/([\w-]+))?(?:\/([\w-]+))?$/, viewSession],
-  [/^#\/admin$/, viewAdmin, { trainer: true }],
+  [/^#\/admin(?:\/(archives))?$/, viewAdmin, { trainer: true }], // sessions à venir, ou archivées
   [/^#\/admin\/reglages(?:\/(\w+))?$/, viewSettings, { trainer: true, admin: true }],
   [/^#\/admin\/formateurs(?:\/([\w-]+))?$/, viewTrainers, { trainer: true, admin: true }],
   [/^#\/admin\/quiz(?:\/([\w-]+))?$/, viewQuizBank, { trainer: true, admin: true }],
