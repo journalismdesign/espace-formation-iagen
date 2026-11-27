@@ -215,10 +215,12 @@ header.top .hwrap{display:flex;gap:16px;align-items:center;justify-content:space
 main .linkbtn,.card .linkbtn,.sheet .linkbtn{color:var(--blue);padding:2px 4px}
 .demo-band{max-width:1180px;margin:10px auto 0;background:var(--yel);color:var(--ink);border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600}
 .demo-band .linkbtn{color:var(--ink);text-decoration:underline;padding:0 4px}
-/* Mode invitation : bandeau de lecture seule, commandes gelées (src/lib/freeze.js) */
+/* Mode invitation : bandeau de l'invité·e, page de ses sessions de démo */
 .guest-band{max-width:1180px;margin:10px auto 0;background:var(--tint);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600}
 .guest-band.over{background:var(--kotint);border-color:var(--ko);color:var(--ko)}
-body.ro button:disabled,body.ro input:disabled,body.ro select:disabled,body.ro textarea:disabled{cursor:not-allowed}
+.demo-card{display:flex;flex-direction:column;gap:6px;text-decoration:none;color:inherit}
+.demo-card h2{margin:0}
+.demo-card .btn{align-self:flex-start;margin-top:8px}
 /* Équipe et accès : une ligne par compte (rôle et date de fin côte à côte), aides sous le tableau */
 .staff-tbl td{vertical-align:middle;white-space:nowrap}
 .staff-card{overflow-x:auto}
@@ -314,7 +316,8 @@ select::-ms-expand{display:none}
 .end-screen a:not(.btn){color:var(--blue)}
 .state.archived{background:var(--light);color:var(--muted)}
 .state.current{background:var(--tint);color:var(--blue);display:inline-flex;align-items:center;gap:6px}
-.tbl td.state-cell{white-space:nowrap} /* « Terminée · archivage le 1er déc. » sur une ligne */
+.tbl td.state-cell{white-space:nowrap} /* « Terminée », puis dessous « archivage le 1er déc. » sans coupure */
+.archive-on{margin-top:4px;white-space:nowrap}
 .tbl tr.row-ended td{background:var(--light)}
 /* Direct (stagiaire) */
 .card.live{border:2px solid var(--navy)}

@@ -17,7 +17,7 @@ export function accessOf(t, staff) {
   if (!t.login_email) return { cls: "", txt: "Présentation seulement : pas d'accès au back-office" };
   const s = staff.find((x) => x.email === t.login_email);
   const role = s?.role || (s?.is_admin ? "admin" : "trainer");
-  return s ? { cls: role === "guest" ? "" : "ok", txt: `Accès actif · ${role === "admin" ? "admin" : role === "guest" ? "invité·e, lecture seule" : "formateur·ice"}` } : { cls: "ko", txt: "Adresse non autorisée : à ajouter dans « Comptes et accès »" };
+  return s ? { cls: role === "guest" ? "" : "ok", txt: `Accès actif · ${role === "admin" ? "admin" : role === "guest" ? "invité·e, sessions de démo" : "formateur·ice"}` } : { cls: "ko", txt: "Adresse non autorisée : à ajouter dans « Comptes et accès »" };
 }
 
 export function trainersListHtml(list, staff) {

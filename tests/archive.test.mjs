@@ -40,3 +40,11 @@ ok(dateOfDay(five, 3) === "2027-03-08" && dateOfDay(two, 2) === "2026-12-08" && 
 ok(trainingDates(five).length === 5 && lastDate(five) === "2027-03-15" && archiveDate(five) === "2027-03-20", "cinq journées : dernier jour et archivage");
 ok(nextTrainingDay(five, { today: "2027-03-02", hm: "18:00", endOf: () => "17:30" }) === "2027-03-08", "cinq journées : la journée suivante peut être la semaine d'après");
 ok(!sessionEnded(five, { today: "2027-03-09", hm: "18:00", endOf: () => "17:30" }), "cinq journées : pas finie avant le dernier jour");
+
+// Clôture automatique : 15 minutes après l'heure de fin des réglages, le dernier jour, même salle ouverte
+import { plusMin, AUTO_CLOSE_MIN } from "../src/lib/archive.js";
+ok(AUTO_CLOSE_MIN === 15 && plusMin("17:30:00", 15) === "17:45" && plusMin("23:50", 15) === "24:05", "heure de fin + 15 min");
+const fin = { ...one, status: "live", end_time: "17:30:00" };
+ok(!sessionEnded(fin, { today: "2026-12-06", hm: "17:44" }), "salle ouverte, 14 min après la fin : pas encore terminée");
+ok(sessionEnded(fin, { today: "2026-12-06", hm: "17:45" }), "salle ouverte, 15 min après la fin : terminée");
+ok(!sessionEnded({ ...two, status: "live", end_time: "17:30:00" }, { today: "2026-12-06", hm: "18:00" }), "deux journées : la fin du jour 1 ne clôt pas");

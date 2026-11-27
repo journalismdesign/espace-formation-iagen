@@ -369,14 +369,13 @@ await db.exec(`update sessions set quizzes = '{"llm":{"titre":"Copie","questions
 const d5 = (await db.query(`select public.duplicate_session('${S3.id}') id`)).rows[0].id;
 ok((await db.query(`select quizzes->'llm'->>'titre' t from sessions where id='${d5}'`)).rows[0].t === "Copie", "la duplication reprend les quiz de la session");
 
-/* ---------- Mode invitation : lecture seule, identités masquées, date de fin ---------- */
-const G = "00000000-0000-0000-0000-0000000000e1";
+/* ---------- Mode invitation : deux sessions de démo à manipuler, rien d'autre, date de fin ---------- */
+const G = "00000000-0000-0000-0000-0000000000e1", G2 = "00000000-0000-0000-0000-0000000000e2";
 await as(T, "formateur@exemple.fr");
-const S4 = (await db.query(`insert into sessions (title, status, online) values ('Invitation', 'live', true) returning id, code`)).rows[0]; // en ligne : discussion ouverte aux stagiaires
+const S4 = (await db.query(`insert into sessions (title, status, online) values ('Vraie session', 'live', true) returning id, code`)).rows[0];
 await db.exec(`insert into session_invites (session_id, email) values ('${S4.id}', 'invite@exemple.fr');
-  insert into resources (session_id, title, url) values ('${S4.id}', 'Charte', 'https://exemple.fr');
-  insert into session_secrets (session_id, label, value) values ('${S4.id}', 'Compte', 'mdp-secret')`);
-await db.exec(`select public.save_staff('invite@exemple.fr', 'guest', current_date + 10)`);
+  insert into resources (session_id, title, url) values ('${S4.id}', 'Charte', 'https://exemple.fr')`);
+await db.exec(`select public.save_staff('invite@exemple.fr', 'guest', current_date + 10); select public.save_staff('autre.invite@exemple.fr', 'guest', current_date + 10)`);
 const team = (await db.query(`select role, guest_until is not null u from public.list_team() where email = 'invite@exemple.fr'`)).rows[0];
 ok(team?.role === "guest" && team.u, "équipe : invité·e déclaré·e avec une date de fin");
 ok((await db.query(`select is_admin from public.list_staff() where email = 'invite@exemple.fr'`)).rows[0]?.is_admin === false, "équipe : l'ancienne liste reste lisible");
@@ -385,60 +384,63 @@ await as(B, "bob@exemple.fr");
 await db.query(`select public.join_session('${S4.code}')`);
 await db.exec(`insert into threads (session_id, title) values ('${S4.id}', 'Général')`);
 const t4 = (await db.query(`select id from threads where session_id = '${S4.id}'`)).rows[0].id;
-await db.exec(`insert into posts (thread_id, session_id, body) values ('${t4}', '${S4.id}', 'Message de Bob')`);
-await db.exec(`select public.submit_response('${S4.id}', 'niveau', '2'::jsonb)`);
 await su();
-const allSessions = (await db.query(`select count(*)::int n from sessions`)).rows[0].n;
-await db.exec(`insert into auth.users (id, email) values ('${G}', 'Invite@exemple.fr')`);
+await db.exec(`insert into auth.users (id, email) values ('${G}', 'Invite@exemple.fr'), ('${G2}', 'autre.invite@exemple.fr')`);
 ok((await db.query(`select role from profiles where id = '${G}'`)).rows[0].role === "guest", "invité·e : rôle posé à la création du compte");
 await as(G, "invite@exemple.fr");
 ok((await db.query(`select public.claim_invites() n`)).rows[0].n === 0, "invité·e : une invitation à une session ne l'y inscrit pas");
-ok((await db.query(`select count(*)::int n from sessions`)).rows[0].n === allSessions, "invité·e : voit toutes les sessions");
-const gr = (await db.query(`select email, full_name from public.session_roster('${S4.id}')`)).rows;
-ok(gr.length === 1 && gr[0].email === null && gr[0].full_name === "Stagiaire 1", "invité·e : participant·es masqué·es (Stagiaire 1, sans e-mail)");
-const gd = (await db.query(`select kind, author_name, body from public.guest_discussion('${S4.id}') order by created_at`)).rows;
-ok(gd.length === 2 && gd.every((r) => r.author_name === "Stagiaire 1") && gd.some((r) => r.body === "Message de Bob"), "invité·e : discussion lisible, auteurs masqués");
-ok((await db.query(`select count(*)::int n from threads`)).rows[0].n === 0 && (await db.query(`select count(*)::int n from posts`)).rows[0].n === 0, "invité·e : pas de lecture directe de la discussion (noms d'auteurs)");
-ok((await db.query(`select count(*)::int n from session_invites`)).rows[0].n === 0, "invité·e : adresses des invitations illisibles");
-ok((await db.query(`select count(*)::int n from session_secrets`)).rows[0].n === 0, "invité·e : codes d'exercice illisibles");
-ok((await db.query(`select count(*)::int n from responses`)).rows[0].n === 0, "invité·e : réponses nominatives illisibles");
-ok(Number((await db.query(`select n from public.live_results('${S4.id}', 'niveau')`)).rows[0]?.n) === 1, "invité·e : résultats agrégés lisibles");
-ok((await db.query(`select count(*)::int n from resources where session_id = '${S4.id}'`)).rows[0].n === 1, "invité·e : ressources lisibles");
-ok((await db.query(`select count(*)::int n from session_members where session_id = '${S4.id}'`)).rows[0].n === 1, "invité·e : progression lisible");
-ok((await db.query(`select count(*)::int n from quiz_bank`)).rows[0].n > 0, "invité·e : bibliothèque de quiz lisible");
-ok((await db.query(`select active from public.guest_status()`)).rows[0]?.active === true, "invité·e : accès en cours");
+ok((await db.query(`select count(*)::int n from sessions`)).rows[0].n === 0, "invité·e : ne voit aucune vraie session");
+await fails(`insert into sessions (title) values ('Pirate')`, "invité·e : ne crée pas de vraie session");
+await fails(`insert into sessions (title, demo_owner) values ('Pour un autre', '${G2}')`, "invité·e : ne crée pas de démo pour quelqu'un d'autre");
+const D1 = (await db.query(`insert into sessions (title, format, demo_owner) values ('Démo · une journée', '1', '${G}') returning id`)).rows[0].id;
+const D2 = (await db.query(`insert into sessions (title, format, date2, demo_owner) values ('Démo · deux journées', '2', current_date + 1, '${G}') returning id`)).rows[0].id;
+await fails(`insert into sessions (title, demo_owner) values ('Une troisième', '${G}')`, "invité·e : deux sessions de démo au plus");
+ok((await db.query(`select count(*)::int n from sessions`)).rows[0].n === 2, "invité·e : voit ses deux sessions de démo");
+await db.exec(`update sessions set title = 'Ma démo', status = 'live', live = '{"view":"title"}' where id = '${D1}'`);
+ok((await db.query(`select title from sessions where id = '${D1}'`)).rows[0].title === "Ma démo", "invité·e : pilote sa démo (réglages, salle, écran)");
+await db.exec(`insert into resources (session_id, title, url) values ('${D1}', 'Ressource de démo', 'https://exemple.fr')`);
+ok((await db.query(`select count(*)::int n from resources where session_id = '${D1}'`)).rows[0].n === 1, "invité·e : ajoute une ressource à sa démo");
+ok((await db.query(`select count(*)::int n from public.session_roster('${D1}')`)).rows[0].n === 0, "invité·e : tableau des participant·es de sa démo");
+await fails(`update sessions set demo_owner = null where id = '${D1}'`, "invité·e : sa démo ne devient pas une vraie session");
+await fails(`update sessions set trainer_id = (select id from trainers limit 1) where id = '${D1}'`, "invité·e : n'attribue pas sa démo");
+await fails(`select public.session_roster('${S4.id}')`, "invité·e : pas de participant·es d'une vraie session");
+ok((await db.query(`select count(*)::int n from resources where session_id = '${S4.id}'`)).rows[0].n === 0, "invité·e : pas de ressources d'une vraie session");
+ok((await db.query(`select count(*)::int n from threads`)).rows[0].n === 0, "invité·e : pas de discussion d'une vraie session");
 await db.exec(`update sessions set title = 'Piratée' where id = '${S4.id}'`);
-await db.exec(`delete from resources where session_id = '${S4.id}'`);
-await fails(`insert into sessions (title) values ('Pirate')`, "invité·e : ne crée pas de session");
-await fails(`insert into resources (session_id, title, url) values ('${S4.id}', 'X', 'https://x.fr')`, "invité·e : n'ajoute pas de ressource");
-await fails(`select public.set_attended('${S4.id}', '${B}', true)`, "invité·e : n'émarge personne");
-await fails(`insert into threads (session_id, title) values ('${S4.id}', 'Pirate')`, "invité·e : n'ouvre pas de conversation");
-await fails(`insert into posts (thread_id, session_id, body) values ('${t4}', '${S4.id}', 'Pirate')`, "invité·e : n'écrit pas dans la discussion");
-await fails(`select public.submit_response('${S4.id}', 'niveau', '1'::jsonb)`, "invité·e : ne répond pas aux activités");
 ok((await db.query(`select public.join_session('${S4.code}') r`)).rows[0].r === null, "invité·e : ne rejoint aucune session par code");
 await fails(`select public.set_trainer_code('nouveau-code-123')`, "invité·e : ne change pas le code formateur");
 await fails(`select public.list_team()`, "invité·e : pas de liste de l'équipe");
 await fails(`select public.save_staff('moi@exemple.fr', 'admin', null)`, "invité·e : ne se donne aucun rôle");
-await fails(`select public.duplicate_session('${S4.id}')`, "invité·e : ne duplique pas");
+await fails(`select public.duplicate_session('${D1}')`, "invité·e : ne duplique pas, même sa démo");
+await fails(`insert into posts (thread_id, session_id, body) values ('${t4}', '${S4.id}', 'Pirate')`, "invité·e : n'écrit pas dans une vraie discussion");
+ok((await db.query(`select count(*)::int n from quiz_bank`)).rows[0].n > 0, "invité·e : bibliothèque de quiz lisible");
+ok((await db.query(`select active from public.guest_status()`)).rows[0]?.active === true, "invité·e : accès en cours");
+await as(G2, "autre.invite@exemple.fr");
+ok((await db.query(`select count(*)::int n from sessions`)).rows[0].n === 0, "invité·e : ne voit pas les démos d'un·e autre invité·e");
+await db.exec(`update sessions set title = 'Chez l''autre' where id = '${D1}'`);
 await as(T, "formateur@exemple.fr");
-ok((await db.query(`select title from sessions where id = '${S4.id}'`)).rows[0].title === "Invitation", "invité·e : ne modifie pas une session");
-ok((await db.query(`select count(*)::int n from resources where session_id = '${S4.id}'`)).rows[0].n === 1, "invité·e : ne supprime pas de ressource");
-ok((await db.query(`select count(*)::int n from session_members where session_id = '${S4.id}'`)).rows[0].n === 1, "invité·e : n'apparaît pas parmi les participant·es");
+ok((await db.query(`select title from sessions where id = '${S4.id}'`)).rows[0].title === "Vraie session", "invité·e : ne modifie pas une vraie session");
+ok((await db.query(`select title from sessions where id = '${D1}'`)).rows[0].title === "Ma démo", "invité·e : ne modifie pas la démo d'un·e autre");
+ok((await db.query(`select count(*)::int n from sessions where demo_owner = '${G}'`)).rows[0].n === 2, "l'administration voit les démos (le site les écarte de la liste)");
+await as(G, "invite@exemple.fr");
+await db.exec(`delete from sessions where id = '${D2}'`);
+ok((await db.query(`select count(*)::int n from sessions`)).rows[0].n === 1, "invité·e : supprime sa démo (remise à zéro)");
 // Date de fin passée : plus rien de visible, même connecté·e
 await su();
 await db.exec(`update trainer_emails set guest_until = current_date - 1 where email = 'invite@exemple.fr'`);
 await as(G, "invite@exemple.fr");
-ok((await db.query(`select count(*)::int n from sessions`)).rows[0].n === 0, "invité·e : accès expiré, plus aucune session visible");
+ok((await db.query(`select count(*)::int n from sessions`)).rows[0].n === 0, "invité·e : accès expiré, sa démo n'est plus visible");
+await db.exec(`update sessions set title = 'Après la fin' where id = '${D1}'`);
 ok((await db.query(`select active from public.guest_status()`)).rows[0]?.active === false, "invité·e : le bandeau sait que l'accès a pris fin");
-await fails(`select public.session_roster('${S4.id}')`, "invité·e : accès expiré, plus de participant·es");
 // Un·e stagiaire devenu·e invité·e perd ses droits d'écriture de participant·e
 await as(T, "formateur@exemple.fr");
+ok((await db.query(`select title from sessions where id = '${D1}'`)).rows[0].title === "Ma démo", "invité·e : accès expiré, ne modifie plus sa démo");
 await db.exec(`select public.save_staff('bob@exemple.fr', 'guest', current_date + 5)`);
 await as(B, "bob@exemple.fr");
-await fails(`select public.submit_response('${S4.id}', 'niveau', '3'::jsonb)`, "stagiaire devenu·e invité·e : ne répond plus");
 await fails(`insert into posts (thread_id, session_id, body) values ('${t4}', '${S4.id}', 'Encore moi')`, "stagiaire devenu·e invité·e : n'écrit plus");
 await as(T, "formateur@exemple.fr");
-await db.exec(`select public.remove_staff('bob@exemple.fr'); select public.remove_staff('invite@exemple.fr')`);
+await db.exec(`select public.remove_staff('bob@exemple.fr'); select public.remove_staff('invite@exemple.fr'); select public.remove_staff('autre.invite@exemple.fr')`);
+ok((await db.query(`select count(*)::int n from sessions where demo_owner = '${G}'`)).rows[0].n === 0, "accès invité·e retiré : ses démos partent avec");
 await su();
 ok((await db.query(`select string_agg(role, ',' order by email) r from profiles where id in ('${B}', '${G}')`)).rows[0].r === "trainee,trainee", "accès invité·e retiré : redevient stagiaire");
 
@@ -481,5 +483,27 @@ const r6 = (await db.query(`select date::text d1, date2::text d2, array_to_strin
 ok(r6.ds === "2027-04-05,2027-04-06,2027-04-12,2027-04-13,2027-04-19" && r6.d2 === "2027-04-06" && r6.format === "5", "journées : la duplication décale toutes les dates du même écart");
 const d7 = (await db.query(`select public.duplicate_session('${SR.id}', null, '2027-05-10') id`)).rows[0].id;
 ok((await db.query(`select array_to_string(dates, ',') ds from sessions where id = '${d7}'`)).rows[0].ds === "2027-05-10", "journées : une journée dupliquée garde sa date");
+
+/* ---------- Clôture automatique : 15 min après l'heure de fin, le dernier jour ---------- */
+{
+await as(T, "formateur@exemple.fr");
+const F1 = (await db.query(`insert into sessions (title, status, date, format, end_time) values ('Finie hier', 'live', current_date - 1, '1', '17:30') returning id`)).rows[0].id;
+const F2 = (await db.query(`insert into sessions (title, status, date, format, end_time) values ('Pas finie', 'live', current_date + 1, '1', '17:30') returning id`)).rows[0].id;
+const F3 = (await db.query(`insert into sessions (title, status, date, date2, format, end_time) values ('Jour 2 demain', 'draft', current_date - 1, current_date + 1, '2', '17:30') returning id`)).rows[0].id;
+const F4 = (await db.query(`insert into sessions (title, status, format) values ('Sans date', 'live', '1') returning id`)).rows[0].id;
+await su();
+await db.exec(`insert into access_codes (session_id, email, code_hash, expires_at) values ('${F1}', 'x@exemple.fr', 'h', now() + interval '1 day')`);
+await as(B, "bob@exemple.fr");
+const closedN = (await db.query(`select public.close_finished_sessions() n`)).rows[0].n;
+await as(T, "formateur@exemple.fr");
+const st = Object.fromEntries((await db.query(`select id, status from sessions where id in ('${F1}', '${F2}', '${F3}', '${F4}')`)).rows.map((r) => [r.id, r.status]));
+ok(closedN >= 1 && st[F1] === "closed", "clôture automatique : session finie la veille close (appelable par tout compte connecté)");
+ok(st[F2] === "live" && st[F3] === "draft" && st[F4] === "live", "clôture automatique : ni avant le dernier jour, ni sans date");
+await su();
+ok((await db.query(`select count(*)::int n from access_codes where session_id = '${F1}'`)).rows[0].n === 0, "clôture automatique : codes purgés comme à la main");
+await db.exec(`reset role; set test.uid=''; set role anon;`);
+await fails(`select public.close_finished_sessions()`, "clôture automatique : pas sans connexion");
+await su();
+}
 
 console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests SQL passent.");
