@@ -4,10 +4,11 @@
 import { mountChat } from "../lib/chat.js";
 import { keepDraft } from "../lib/draft.js";
 import { $, $$, T, esc, fr, NB, guard, toast, debounce, dateFr, download, copyText } from "../lib/dom.js";
-import { QUIZ } from "../data.js";
 import { ACT_TYPES, currentAct, respKey, renderResults, defaultActivities, countOf, P as presetAct } from "../lib/activities.js";
+import { quizFor, quizKeysOf, snapshotQuizzes, pollActivity, respKeys, outdated, copyOf, newItemId } from "../lib/quizzes.js";
+import { mountEditor, blankValue, valueOf } from "../lib/quizEditor.js";
 import { screenHtml, nextPage, stepLive, pageKey, modPages, skipSet } from "../lib/screen.js";
-import { openSheet } from "../lib/content.js";
+import { openSheet, closeSheet } from "../lib/content.js";
 import { joinUrl, joinUrlLabel, qr, showQr, parseEmails, openDuplicate } from "./admin.js";
 import { logoPair } from "./settings.js";
 import { STEPS, SENSIB, VERIF } from "./cadrageModel.js";
@@ -47,7 +48,7 @@ export const OPENING_VIEWS = new Set(["title", "trainer", "emargement", "support
 export async function loadScreenData(api, session, { trainee = false } = {}) {
   const act = currentAct(session);
   const [rows, roster, projects] = await Promise.all([
-    act && session.status === "live" ? api.results(session.id, respKey(act, session.live)) : [],
+    act && session.status === "live" ? api.results(session.id, respKey(act, session.live, session)) : [],
     trainee ? [] : api.roster(session.id).catch(() => []), // le tableau des participants est réservé à l'équipe
     act?.type === "projects" ? api.listProjects(session.id) : [],
   ]);
@@ -441,7 +442,11 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       // Entreprise préenregistrée : ses nom et logos viennent des réglages généraux
       Object.assign(patch, patch.brand_id ? { client: "", client_logo: null, client_logo_light: null } : { client: $("#gC", box).value.trim(), client_logo: clientLogo, client_logo_light: clientLogoLight });
       const fmtChanged = format !== session.format;
-      if (fmtChanged) patch.activities = defaultActivities(format);
+      if (fmtChanged) {
+        const bank = await api.listBank().catch(() => ({ ready: false, items: [] }));
+        patch.activities = defaultActivities(format, bank.items);
+        if (bank.ready) patch.quizzes = snapshotQuizzes(session.quizzes, quizKeysOf(patch.activities, modulesFor({ ...session, format })), bank.items);
+      }
       const saved = await guard(() => api.updateSession(sid, patch));
       if (!saved) return;
       session = saved;
@@ -480,7 +485,12 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       const f = e.target.files[0]; e.target.value = "";
       if (!f) return;
       if (f.size > 300000) return toast("Fichier trop lourd pour un conducteur (300 Ko au plus).", "ko");
-      const { programme, warnings, errors } = parseConducteur(await f.text());
+      const bank = await api.listBank().catch(() => ({ ready: false, items: [] }));
+      const known = {
+        quizzes: [...new Set([...bank.items.filter((b) => b.kind === "quiz").map((b) => b.id), ...Object.keys(session.quizzes || {})])],
+        live: [...new Set([...bank.items.filter((b) => b.kind !== "quiz").map((b) => b.id), ...session.activities.filter((a) => a.type === "poll" || a.type === "cloud").map((a) => a.from || a.id)])],
+      };
+      const { programme, warnings, errors } = parseConducteur(await f.text(), known);
       programme.name = f.name;
       const rows = programme.modules.map((m) => `<tr><td class="mono small">${programme.nDays > 1 ? `J${m.day} · ` : ""}${m.t[0]}–${m.t[1]}</td><td><span class="pill ${m.type}">${typeLabel(m.type)}</span></td><td>${T(m.titre)}${m.cas ? `<div class="small muted">${T(m.cas)}</div>` : ""}</td><td class="small muted">${[m.obj && "objectifs", m.pts && "points clés", m.disc && "discussion", m.exo && `exercice ${m.exo.duree} min`, m.quiz && "quiz", m.live && "activité"].filter(Boolean).join(" · ")}</td></tr>`).join("");
       $("#condPrev", box).innerHTML = `<div class="cond-prev">
@@ -497,6 +507,11 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         const format = programme.nDays > 1 ? "2" : "1";
         if (format === "2" && !session.date2) toast("Pensez à indiquer la date du jour 2.", "info");
         const patch = { programme: session.programme?.ends ? { ...programme, ends: session.programme.ends } : programme, format };
+        // sondages et nuages cités par « activité: » : ajoutés aux activités de la session s'ils n'y sont pas
+        const missing = [...new Set(programme.modules.map((m) => m.live).filter(Boolean))].filter((k) => !session.activities.some((a) => a.id === k || a.from === k));
+        const add = missing.map((k) => bank.items.find((b) => b.id === k && b.kind !== "quiz")).filter(Boolean).map((it) => pollActivity(it));
+        if (add.length) patch.activities = [...session.activities, ...add];
+        if (bank.ready) patch.quizzes = snapshotQuizzes(session.quizzes, quizKeysOf(patch.activities || session.activities, programme.modules), bank.items);
         if (session.live?.module && !programme.modules.some((m) => m.id === session.live.module)) patch.live = { ...session.live, module: null };
         if (await guard(() => api.updateSession(sid, patch), "Conducteur appliqué : déroulé, parcours stagiaire et pilotage sont à jour.")) go(location.hash);
       };
@@ -569,6 +584,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
      ================================================================= */
   async function phaseJour() {
     let dragPause = null; // pause en cours de glisser-déposer : le redessin temps réel attend
+    let bank = { ready: false, items: [] }; // bibliothèque « Quiz et sondages » (chargée après l'affichage)
     box.innerHTML = `
       <div class="grid jour2">
         <div>
@@ -585,7 +601,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <div class="kicker-d" style="margin:16px 0 6px">Activités en direct</div>
             <div class="acts" id="acts"></div>
             <div id="ctrl" style="margin:12px 0"></div>
-            <details style="margin-top:14px"><summary class="small" style="cursor:pointer">Ajouter ou retirer des activités</summary><div id="actEdit"></div></details>
+            <details style="margin-top:14px"><summary class="small" style="cursor:pointer">Ajouter, modifier ou retirer des activités</summary><div id="actEdit"></div></details>
             <hr><label class="f inline"><input type="checkbox" id="closeDay"${session.status === "closed" ? " checked" : ""}> Clore la journée (les stagiaires gardent ressources, fiches, exercices et support ; discussion, émargement et déroulé se ferment)</label>
             <div class="reset-live"><button type="button" class="btn sm ghost" id="resetLive">Remettre le direct à zéro</button>
               <span class="small muted">${T("Après des essais : ferme la salle, efface la séquence lancée, les outils débloqués, les émargements projetés et l'heure d'ouverture du jour. Inscrit·es, réponses et discussion ne bougent pas.")}</span></div>
@@ -762,7 +778,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         const desc = { welcome: "Accueil affiché à l'écran, avec le QR code.", cloud: "Ils envoient leurs mots ; le nuage se forme à l'écran.", poll: "Ils répondent au sondage ; les résultats s'affichent à l'écran.", quiz: "Ils répondent ; affichez la bonne réponse quand tout le monde a voté.", vote: "Ils votent pour un cas d'usage.", projects: "Les cas d'usage validés défilent à l'écran." }[act.type];
         c = `<p class="small" style="margin:0 0 8px">${T(desc)}</p><div class="chips">`;
         if (act.type === "quiz") {
-          const n = QUIZ[act.quiz].q.length, qi = live.qi || 0;
+          const n = quizFor(session, act.quiz)?.questions.length || 0, qi = live.qi || 0;
           c += `<button class="btn sm ghost" data-q="-1" ${qi === 0 ? "disabled" : ""}>← Question précédente</button>
             <button class="btn sm" data-rev ${live.reveal ? "disabled" : ""}>Afficher la réponse</button>
             <button class="btn sm ghost" data-q="1" ${qi >= n - 1 ? "disabled" : ""}>Question suivante →</button>`;
@@ -894,34 +910,121 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       $('[data-pa="pj"]', el).onclick = () => show("pause");
       $('[data-pa="ok"]', el).onclick = () => { pauseOff = key; pauseTick(); };
     };
+    /* Activités de la session : ajouter depuis la bibliothèque, créer pour cette session, modifier, monter, retirer.
+       Les quiz de la session sont des copies (sessions.quizzes) : rien n'est écrit dans la bibliothèque.
+       Une activité qui a déjà reçu des réponses est verrouillée : on la duplique pour la modifier. */
+    const quizActTitle = (t) => (/^quiz\b/i.test(t) ? t : `Quiz · ${t}`).slice(0, 60); // pas de « Quiz · Quiz… »
+    const actKind = (a) => (a.type === "quiz" || a.type === "poll" || a.type === "cloud" ? a.type : null);
+    const bankItemOf = (a) => {
+      if (a.type === "quiz") { const c = session.quizzes?.[a.quiz]; return bank.items.find((b) => b.kind === "quiz" && b.id === (c ? c.from : a.quiz)) || null; }
+      if (a.type === "poll" || a.type === "cloud") return bank.items.find((b) => b.kind === a.type && b.id === (a.from || a.id)) || null;
+      return null;
+    };
+    const isOutdated = (a) => { const it = bankItemOf(a); return !!it && outdated(a.type === "quiz" ? quizFor(session, a.quiz) : a, it); };
+    const uniqueActId = (base) => (base && !session.activities.some((a) => a.id === base) ? base : "a" + Date.now().toString(36));
+    // Activités qui partagent ces réponses : un quiz copié peut servir à plusieurs activités
+    const hasAnswers = async (a) => {
+      const acts = a.type === "quiz" ? session.activities.filter((x) => x.type === "quiz" && x.quiz === a.quiz) : [a];
+      const keys = acts.flatMap((x) => respKeys(x, session));
+      const rows = await Promise.all(keys.map((k) => api.results(sid, k).catch(() => [])));
+      return rows.some((r) => r.length);
+    };
+    const saveSession = async (patch, msg) => { const s = await guard(() => api.updateSession(sid, patch), msg); if (s) { session = s; draw(); } return !!s; };
+    const needBank = () => { if (bank.ready) return true; toast("Quiz modifiables après la migration 20261126000000_quiz_sondages.sql sur Supabase.", "ko"); return false; };
+    const editSheet = (title, kind, value, draftKey, onSave) => {
+      openSheet(`<span class="pill">Activité de la session</span><h2>${T(title)}</h2><p class="small muted">${T("Modifiée pour cette session seulement : la bibliothèque ne change pas.")}</p><div id="qeSheet"></div>`);
+      mountEditor($("#qeSheet"), { kind, value, draftKey, saveLabel: "Enregistrer dans la session", onCancel: closeSheet, onSave: async (v) => { const done = await onSave(v); if (done) closeSheet(); return done; } });
+    };
+    // Duplique une activité (et la copie de son quiz) juste après l'originale, puis ouvre l'éditeur sur la copie
+    const duplicateAct = async (a) => {
+      const L = [...session.activities], i = L.findIndex((x) => x.id === a.id), id = uniqueActId();
+      const patch = {};
+      let copy;
+      if (a.type === "quiz") {
+        if (!needBank()) return;
+        const src = quizFor(session, a.quiz), key = newItemId(src.titre, "s-");
+        patch.quizzes = { ...(session.quizzes || {}), [key]: { titre: src.titre, questions: src.questions.map((q) => ({ ...q, o: [...q.o] })), from: null } };
+        copy = { id, type: "quiz", titre: `${a.titre} (2)`.slice(0, 60), quiz: key };
+      } else copy = { ...a, id, titre: `${a.titre} (2)`.slice(0, 60), from: null };
+      L.splice(i + 1, 0, copy); patch.activities = L;
+      if (await saveSession(patch, "Copie créée, juste après l'originale. Les réponses déjà données restent attachées à l'originale.")) editAct(copy);
+    };
+    const editAct = async (a) => {
+      const kind = actKind(a); if (!kind) return;
+      if (kind === "quiz" && !needBank()) return;
+      if (await hasAnswers(a)) {
+        openSheet(`<span class="pill">Activité de la session</span><h2>${T(a.titre)}</h2>
+          <p>${T("Cette activité a déjà reçu des réponses : la modifier fausserait leur lecture.")}</p>
+          <p class="small muted">${T("Dupliquez-la pour en faire une nouvelle version. Les réponses déjà données restent attachées à l'originale, toujours visibles dans l'onglet Après.")}</p>
+          <div class="chips"><button class="btn sm" id="dupAct">Dupliquer pour modifier</button><button class="btn sm ghost" id="noAct">Annuler</button></div>`);
+        $("#dupAct").onclick = () => duplicateAct(a);
+        $("#noAct").onclick = closeSheet;
+        return;
+      }
+      if (kind === "quiz") {
+        const cur = quizFor(session, a.quiz);
+        editSheet(`Modifier « ${a.titre} »`, "quiz", valueOf("quiz", cur), `act:${sid}:${a.quiz}`, async (v) => {
+          const prev = session.quizzes?.[a.quiz];
+          const quizzes = { ...(session.quizzes || {}), [a.quiz]: { titre: v.titre, questions: v.questions, from: prev ? prev.from ?? null : a.quiz } };
+          const activities = v.titre === cur.titre ? session.activities : session.activities.map((x) => (x.type === "quiz" && x.quiz === a.quiz ? { ...x, titre: quizActTitle(v.titre) } : x));
+          return saveSession({ quizzes, activities }, "Quiz enregistré dans la session.");
+        });
+      } else {
+        editSheet(`Modifier « ${a.titre} »`, kind, valueOf(kind, a), `act:${sid}:${a.id}`, (v) =>
+          saveSession({ activities: session.activities.map((x) => (x.id === a.id ? { ...x, titre: v.titre, q: v.q, ...(kind === "poll" ? { o: v.o } : {}) } : x)) }, "Activité enregistrée."));
+      }
+    };
+    const updateFromBank = async (a) => {
+      const it = bankItemOf(a); if (!it) return;
+      if (a.type === "quiz" && !needBank()) return;
+      if (await hasAnswers(a)) return toast("Cette activité a déjà reçu des réponses : dupliquez-la plutôt (bouton Modifier).", "ko");
+      if (!confirm(`Reprendre la version de la bibliothèque de « ${it.titre} » ? Les modifications faites dans cette session seront remplacées.`)) return;
+      if (a.type === "quiz") await saveSession({ quizzes: { ...(session.quizzes || {}), [a.quiz]: copyOf(it) } }, "Quiz mis à jour depuis la bibliothèque.");
+      else await saveSession({ activities: session.activities.map((x) => (x.id === a.id ? { ...x, q: it.content.q, ...(it.kind === "poll" ? { o: [...it.content.o] } : {}), from: it.id } : x)) }, "Activité mise à jour depuis la bibliothèque.");
+    };
+    const addFromBank = async (id) => {
+      const it = bank.items.find((b) => b.id === id); if (!it) return;
+      if (it.kind === "quiz") {
+        const a = { id: uniqueActId(), type: "quiz", titre: quizActTitle(it.titre), quiz: it.id };
+        await saveSession({ activities: [...session.activities, a], ...(bank.ready ? { quizzes: snapshotQuizzes(session.quizzes, [it.id], bank.items) } : {}) }, "Quiz ajouté.");
+      } else await saveSession({ activities: [...session.activities, pollActivity(it, uniqueActId(it.id))] }, "Activité ajoutée.");
+    };
+    const createAct = (kind) => {
+      if (kind === "quiz" && !needBank()) return;
+      editSheet(`Nouveau ${kind === "quiz" ? "quiz" : kind === "poll" ? "sondage" : "nuage de mots"} pour cette session`, kind, blankValue(kind), `act:${sid}:nouveau-${kind}`, (v) => {
+        const id = uniqueActId();
+        if (kind === "quiz") {
+          const key = newItemId(v.titre, "s-");
+          return saveSession({ quizzes: { ...(session.quizzes || {}), [key]: { titre: v.titre, questions: v.questions, from: null } }, activities: [...session.activities, { id, type: "quiz", titre: quizActTitle(v.titre), quiz: key }] }, "Quiz créé pour cette session.");
+        }
+        return saveSession({ activities: [...session.activities, { id, type: kind, titre: v.titre, q: v.q, ...(kind === "poll" ? { o: v.o } : {}) }] }, "Activité créée pour cette session.");
+      });
+    };
     const drawEdit = () => {
+      const grp = (k, label) => { const L = bank.items.filter((b) => b.kind === k); return L.length ? `<optgroup label="${label}">${L.map((b) => `<option value="${esc(b.id)}">${T(b.titre)}</option>`).join("")}</optgroup>` : ""; };
       $("#actEdit", box).innerHTML = `
-        ${session.activities.map((a, i) => `<div class="prow"><span>${i + 1}. ${T(a.titre)} <small class="muted">${ACT_TYPES[a.type]}</small></span><span><button class="iconbtn" data-up="${i}" ${i === 0 ? "disabled" : ""} aria-label="Monter">↑</button><button class="iconbtn danger" data-drop="${i}" aria-label="Retirer">✕</button></span></div>`).join("")}
-        <form id="addA" class="card" style="margin-top:10px;background:var(--light)">
-          <div class="grid g2"><div><label class="f">Type</label><select id="aT"><option value="poll">Sondage</option><option value="cloud">Nuage de mots</option>${Object.entries(QUIZ).map(([k, q]) => `<option value="quiz:${k}">Quiz · ${T(q.titre)}</option>`).join("")}</select></div>
-          <div><label class="f">Titre court</label><input type="text" id="aN" maxlength="40" placeholder="Ex. Point d'étape"></div></div>
-          <label class="f">Question (sondage, nuage)</label><input type="text" id="aQ" maxlength="160">
-          <label class="f">Réponses du sondage, séparées par ;</label><input type="text" id="aO" placeholder="Oui ; Non ; Je ne sais pas">
-          <div style="display:flex;gap:8px;margin-top:10px"><button class="btn sm" type="submit">Ajouter</button><button class="btn sm ghost" type="button" id="aReset">Revenir à la séquence par défaut</button></div>
-        </form>`;
-      const saveActs = async (activities) => { session = await guard(() => api.updateSession(sid, { activities })) || session; draw(); };
+        ${session.activities.map((a, i) => `<div class="prow act-row"><span>${i + 1}. ${T(a.titre)} <small class="muted">${ACT_TYPES[a.type]}${a.type === "quiz" ? ` · ${quizFor(session, a.quiz)?.questions.length || 0} q.` : ""}</small>${isOutdated(a) ? ` <button class="linkbtn small" data-upd="${i}" title="${esc(fr("La bibliothèque a une version différente de cette activité"))}">Mettre à jour depuis la bibliothèque</button>` : ""}</span>
+          <span class="act-tools">${actKind(a) ? `<button class="linkbtn small" data-edit="${i}">Modifier</button>` : ""}<button class="iconbtn" data-up="${i}" ${i === 0 ? "disabled" : ""} aria-label="Monter « ${esc(a.titre)} »">↑</button><button class="iconbtn danger" data-drop="${i}" aria-label="Retirer « ${esc(a.titre)} »">✕</button></span></div>`).join("")}
+        <div class="card act-add">
+          <label class="f" for="aBank">Ajouter depuis la bibliothèque</label>
+          <div class="askrow"><select id="aBank">${grp("quiz", "Quiz")}${grp("poll", "Sondages")}${grp("cloud", "Nuages de mots")}</select><button class="btn sm" type="button" id="aBankAdd"${bank.items.length ? "" : " disabled"}>Ajouter</button></div>
+          <div class="f qe-lbl">Créer pour cette session</div>
+          <div class="chips"><button class="btn sm ghost" type="button" data-create="quiz">Quiz</button><button class="btn sm ghost" type="button" data-create="poll">Sondage</button><button class="btn sm ghost" type="button" data-create="cloud">Nuage de mots</button></div>
+          <p class="small muted" style="margin:8px 0 0">${T(admin ? "Les modèles partagés se gèrent dans « Quiz et sondages », depuis la liste des sessions." : "Les modèles partagés sont gérés par l'administration.")}</p>
+          <button class="linkbtn small" type="button" id="aReset" style="margin-top:6px">Revenir à la séquence par défaut</button>
+        </div>`;
+      const saveActs = (activities) => saveSession({ activities, ...(bank.ready ? { quizzes: snapshotQuizzes(session.quizzes, quizKeysOf(activities, modulesFor(session)), bank.items) } : {}) });
       $$("[data-up]", box).forEach((b) => (b.onclick = () => { const L = [...session.activities], i = +b.dataset.up; [L[i - 1], L[i]] = [L[i], L[i - 1]]; saveActs(L); }));
       $$("[data-drop]", box).forEach((b) => (b.onclick = () => saveActs(session.activities.filter((_, i) => i !== +b.dataset.drop))));
-      $("#aReset", box).onclick = () => confirm("Remplacer la séquence par celle proposée par défaut ?") && saveActs(defaultActivities(session.format));
-      $("#addA", box).onsubmit = (e) => {
-        e.preventDefault();
-        const t = $("#aT", box).value, id = "a" + Date.now().toString(36);
-        let a;
-        if (t.startsWith("quiz:")) { const k = t.slice(5); a = { id, type: "quiz", quiz: k, titre: $("#aN", box).value.trim() || "Quiz · " + QUIZ[k].titre }; }
-        else {
-          const q = $("#aQ", box).value.trim(); if (!q) return toast("Indiquez la question.", "ko");
-          a = { id, type: t, q, titre: $("#aN", box).value.trim() || (t === "poll" ? "Sondage" : "Nuage de mots") };
-          if (t === "poll") { a.o = $("#aO", box).value.split(";").map((x) => x.trim()).filter(Boolean); if (a.o.length < 2) return toast("Au moins deux réponses.", "ko"); }
-        }
-        saveActs([...session.activities, a]);
-      };
+      $$("[data-edit]", box).forEach((b) => (b.onclick = () => editAct(session.activities[+b.dataset.edit])));
+      $$("[data-upd]", box).forEach((b) => (b.onclick = () => updateFromBank(session.activities[+b.dataset.upd])));
+      $$("[data-create]", box).forEach((b) => (b.onclick = () => createAct(b.dataset.create)));
+      $("#aBankAdd", box).onclick = () => addFromBank($("#aBank", box).value);
+      $("#aReset", box).onclick = () => confirm("Remplacer la séquence par celle proposée par défaut ?") && saveActs(defaultActivities(session.format, bank.items));
     };
     await draw();
+    // Bibliothèque chargée après l'affichage du pilotage (rien ne ralentit l'ouverture du Jour J)
+    api.listBank().then((b) => { bank = b; drawEdit(); }).catch(() => {});
     const redraw = debounce(() => { if (dragPause) return; if (!box.contains(document.activeElement) || document.activeElement.tagName === "BUTTON") draw(); }, 300);
     pauseTick(); const pauseT = setInterval(pauseTick, 5000); cleanups.push(() => clearInterval(pauseT));
     cleanups.push(api.watch(sid, redraw));
@@ -963,8 +1066,8 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
     if ($("#dup", box)) $("#dup", box).onclick = () => openDuplicate(api, session, go);
     cleanups.push(mountChat($("#chatAdm", box), { api, sid, me: ctx.me, staff: true, compact: true }));
     $("#csv", box).onclick = () => {
-      const quizzes = Object.keys(QUIZ);
-      const head = ["Nom", "E-mail", "Présent", "Métier", "Niveau IA", "Cadrage", "Cas d'usage", "Retour formateur", "Déroulé (séquences cochées)", ...quizzes.map((q) => "Quiz " + QUIZ[q].titre)];
+      const quizzes = [...new Set([...quizKeysOf(session.activities, modulesFor(session)), ...Object.keys(session.quizzes || {})])].filter((k) => quizFor(session, k));
+      const head = ["Nom", "E-mail", "Présent", "Métier", "Niveau IA", "Cadrage", "Cas d'usage", "Retour formateur", "Déroulé (séquences cochées)", ...quizzes.map((q) => "Quiz " + quizFor(session, q).titre)];
       const lines = roster.map((r) => {
         const p = projects.find((x) => x.user_id === r.user_id);
         return [r.full_name, r.email, r.attended ? "oui" : "non", r.metier, r.niveau, r.project_status === "validated" ? "validé" : r.project_id ? `${r.project_steps}/${STEPS.length}` : "non commencé",
@@ -985,10 +1088,10 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
     for (const act of session.activities) {
       if (["welcome", "projects"].includes(act.type)) continue;
       if (act.type === "quiz") {
-        const qs = QUIZ[act.quiz].q;
-        const rows = await Promise.all(qs.map((_, qi) => api.results(sid, `${act.id}#${qi}`)));
+        const qs = quizFor(session, act.quiz)?.questions || [];
+        const rows = await Promise.all(qs.map((q) => api.results(sid, `${act.id}#${q.id}`)));
         if (!rows.some((r) => r.length)) continue;
-        blocks.push(`<div class="res-block"><b>${T(act.titre)}</b>${qs.map((q, qi) => { const n = countOf(rows[qi]), good = rows[qi].filter((r) => r.value === q[2]).reduce((a, r) => a + r.n, 0); return `<div class="small prow"><span>${qi + 1}. ${T(q[0])}</span><b>${n ? Math.round((good / n) * 100) + NB + "%" : "—"}</b></div>`; }).join("")}<div class="small muted">Taux de bonnes réponses par question</div></div>`);
+        blocks.push(`<div class="res-block"><b>${T(act.titre)}</b>${qs.map((q, qi) => { const n = countOf(rows[qi]), good = rows[qi].filter((r) => r.value === q.ok).reduce((a, r) => a + r.n, 0); return `<div class="small prow"><span>${qi + 1}. ${T(q.q)}</span><b>${n ? Math.round((good / n) * 100) + NB + "%" : "—"}</b></div>`; }).join("")}<div class="small muted">Taux de bonnes réponses par question</div></div>`);
       } else {
         const rows = await api.results(sid, act.id);
         if (!rows.length) continue;

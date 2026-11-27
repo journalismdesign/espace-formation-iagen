@@ -32,7 +32,9 @@ const list = (v) => v.split(/[,;]/).map((x) => x.trim()).filter(Boolean);
 const yes = (v) => /^(oui|yes|vrai|true|1|x)$/i.test(v.trim());
 
 /** Lit un conducteur Markdown. Renvoie { programme, warnings, errors } ; programme = { formation, days, modules } */
-export function parseConducteur(md) {
+// known : clés acceptées pour « quiz: » et « activité: » (bibliothèque et session) ; par défaut, celles de data.js
+export function parseConducteur(md, known = {}) {
+  const quizKeys = new Set(known.quizzes || Object.keys(QUIZ)), liveKeys = new Set(known.live || Object.keys(PRESETS));
   // Les commentaires HTML sont retirés (en gardant les sauts de ligne, pour que les numéros de ligne restent justes)
   const lines = String(md || "").replace(/\r\n?/g, "\n").replace(/<!--[\s\S]*?-->/g, (c) => c.replace(/[^\n]/g, "")).split("\n");
   const errors = [], warnings = [], modules = [], days = {};
@@ -125,8 +127,8 @@ export function parseConducteur(md) {
     const prev = modules[k - 1];
     if (prev && prev.day === mo.day && mins(mo.t[0]) < mins(prev.t[1])) at(mo._line, `« ${mo.titre} » commence (${mo.t[0]}) avant la fin de la séquence précédente (${prev.t[1]}).`, warnings);
     if (prev && mo.day < prev.day) at(mo._line, `le jour ${mo.day} vient après le jour ${prev.day}.`);
-    if (mo.quiz && !QUIZ[mo.quiz]) { at(mo._line, `quiz « ${mo.quiz} » inconnu, retiré (disponibles : ${Object.keys(QUIZ).join(", ")}).`, warnings); delete mo.quiz; }
-    if (mo.live && !PRESETS[mo.live]) { at(mo._line, `activité « ${mo.live} » inconnue, retirée (disponibles : ${Object.keys(PRESETS).join(", ")}).`, warnings); delete mo.live; }
+    if (mo.quiz && !quizKeys.has(mo.quiz)) { at(mo._line, `quiz « ${mo.quiz} » inconnu, retiré (disponibles : ${[...quizKeys].join(", ")}).`, warnings); delete mo.quiz; }
+    if (mo.live && !liveKeys.has(mo.live)) { at(mo._line, `activité « ${mo.live} » inconnue, retirée (disponibles : ${[...liveKeys].join(", ")}).`, warnings); delete mo.live; }
     if (mo.fiches) { const bad = mo.fiches.filter((f) => !fiches.has(f)); if (bad.length) at(mo._line, `fiche(s) inconnue(s) retirée(s) : ${bad.join(", ")}.`, warnings); mo.fiches = mo.fiches.filter((f) => fiches.has(f)); if (!mo.fiches.length) delete mo.fiches; }
     if (mo.exo?.prompts) { const bad = mo.exo.prompts.filter((p) => !prompts.has(p)); if (bad.length) at(mo._line, `prompt(s) inconnu(s) retiré(s) : ${bad.join(", ")}.`, warnings); mo.exo.prompts = mo.exo.prompts.filter((p) => prompts.has(p)); if (!mo.exo.prompts.length) delete mo.exo.prompts; }
     if (mo.exo && !mo.exo.duree) mo.exo.duree = Math.max(5, mins(mo.t[1]) - mins(mo.t[0]) - 5);

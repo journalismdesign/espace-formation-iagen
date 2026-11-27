@@ -4,6 +4,7 @@
    stagiaire pour tester le direct. Aucune donnée ne quitte la machine. */
 
 import { DIRECT_PASS_HOURS } from "../lib/accessRules.js";
+import { bankFromData, ID_RE } from "../lib/quizzes.js";
 
 const KEY = "iagen-demo-db-v9";
 const USER_KEY = "iagen-demo-user";
@@ -208,6 +209,23 @@ export function createDemoApi({ defaultActivities }) {
       const x = { id: uid(), name: b.name, logo: b.logo ?? null, logo_light: b.logo_light ?? null, sort: 100 }; db.brands.push(x); commit(); return x;
     },
     async deleteBrand(id) { needAdmin(); db.brands = db.brands.filter((y) => y.id !== id); commit(); },
+    // Bibliothèque « Quiz et sondages » : amorcée avec le contenu de data.js, lue par l'équipe, modifiée par l'administration
+    async listBank() {
+      need(); if (!isTrainer()) return { ready: true, items: [] };
+      db.bank ||= bankFromData().map((b) => ({ ...b, updated_at: now() }));
+      return { ready: true, items: [...db.bank].sort((a, b) => a.titre.localeCompare(b.titre)) };
+    },
+    async saveBankItem(it) {
+      needAdmin();
+      if (!ID_RE.test(String(it.id || ""))) throw new Error("Identifiant invalide.");
+      if (!["quiz", "poll", "cloud"].includes(it.kind)) throw new Error("Type inconnu.");
+      db.bank ||= bankFromData().map((b) => ({ ...b, updated_at: now() }));
+      const row = { id: it.id, kind: it.kind, titre: it.titre, content: JSON.parse(JSON.stringify(it.content)), updated_at: now() };
+      const i = db.bank.findIndex((b) => b.id === it.id);
+      if (i >= 0) db.bank[i] = row; else db.bank.push(row);
+      commit(); return row;
+    },
+    async deleteBankItem(id) { needAdmin(); db.bank = (db.bank || bankFromData()).filter((b) => b.id !== id); commit(); },
     async listSkins() { need(); return [...(db.skins || [])].sort((a, b) => a.name.localeCompare(b.name)); },
     async saveSkin(k) {
       needAdmin(); db.skins = db.skins || [];
@@ -289,7 +307,7 @@ export function createDemoApi({ defaultActivities }) {
     async getSession(id) { return canSee(id) ? db.sessions.find((s) => s.id === id) || null : null; },
     async createSession(s) {
       needAdmin();
-      const row = { ...SESSION_DEFAULTS, id: uid(), formation: "Prendre en main les IA génératives", client: "", date: null, format: "1", code: code6(), status: "draft", activities: [], live: {}, created_at: now(), ...s };
+      const row = { ...SESSION_DEFAULTS, id: uid(), formation: "Prendre en main les IA génératives", client: "", date: null, format: "1", code: code6(), status: "draft", activities: [], quizzes: {}, live: {}, created_at: now(), ...s };
       db.sessions.push(row); commit(); return row;
     },
     async updateSession(id, patch) {

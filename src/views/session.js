@@ -311,7 +311,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
         card.innerHTML = `<div class="kicker-d">${session.status === "live" ? `<span class="dot on"></span> En direct` : "Fin de la formation"}</div>${h}`; // salle fermée : seule l'évaluation arrive ici
         return;
       }
-      const key = respKey(act, session.live);
+      const key = respKey(act, session.live, session);
       const mine = membership ? await api.myResponse(sid, key).catch(() => undefined) : undefined;
       card.innerHTML = `<div class="kicker-d"><span class="dot on"></span> En direct · ${T(act.titre)}</div><div id="liveIn"></div><div id="liveOut" style="margin-top:12px"></div>`;
       const showResults = async () => {
@@ -320,13 +320,13 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
         const m = membership ? await api.myResponse(sid, key).catch(() => undefined) : undefined;
         if (m === undefined && !session.live.reveal && !trainerPreview) { out.innerHTML = `<p class="small muted">Les réponses du groupe s'afficheront après la vôtre.</p>`; return; }
         const rows = await api.results(sid, key).catch(() => []);
-        out.innerHTML = `<div class="small muted">Réponses du groupe</div>` + renderResults(act, session.live, rows);
+        out.innerHTML = `<div class="small muted">Réponses du groupe</div>` + renderResults(act, session.live, rows, false, session);
       };
       renderInput($("#liveIn", card), act, session.live, mine, async (v) => {
         if (trainerPreview) { toast("Aperçu formateur : réponse non enregistrée."); return; }
         await guard(() => api.respond(sid, key, v));
         lastKey = null; drawLive();
-      });
+      }, session);
       showResults();
       poll = setInterval(showResults, 4000); // les réponses des autres ne sont lisibles qu'agrégées
       lastKey = key;

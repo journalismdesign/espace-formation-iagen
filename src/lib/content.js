@@ -1,7 +1,8 @@
 /* Contenus pédagogiques partagés : parcours, quiz, fiches, prompts, outils,
    assistant. Repris de la version claude.ai et rendus indépendants du
    stockage (la progression est passée en paramètre). */
-import { FICHES, GLOSS, PROMPTS, CASES, QUIZ, D1, D2, D2B, DAY_TITLES, PRESETS, CC, CCL, IDEES } from "../data.js";
+import { FICHES, GLOSS, PROMPTS, CASES, D1, D2, D2B, DAY_TITLES, CC, CCL, IDEES } from "../data.js";
+import { quizFor, pollFor } from "./quizzes.js";
 import { T, esc, fr, $, $$, NB, norm, mins, hfr, fmtMin, bindCopy } from "./dom.js";
 import { applyEnds } from "./programme.js";
 
@@ -99,20 +100,22 @@ export function bindRefs(root) {
 }
 
 /* ---------- Quiz (en autonomie) ---------- */
-export function renderQuiz(box, id, onScore) {
-  const Q = QUIZ[id]; let answered = 0, good = 0;
-  box.innerHTML = `<div class="quiz">${Q.q.map((q, i) => `<div class="qq" data-i="${i}"><p>${i + 1}. ${T(q[0])}</p>${q[1].map((o, j) => `<button class="opt" data-j="${j}">${T(o)}</button>`).join("")}</div>`).join("")}<div class="score" data-score></div></div>`;
+// quiz : { titre, questions: [{ id, q, o, ok, why }] } (quizFor, quizzes.js)
+export function renderQuiz(box, quiz, onScore) {
+  const L = quiz?.questions || []; let answered = 0, good = 0;
+  if (!L.length) { box.innerHTML = ""; return; }
+  box.innerHTML = `<div class="quiz">${L.map((q, i) => `<div class="qq" data-i="${i}"><p>${i + 1}. ${T(q.q)}</p>${q.o.map((o, j) => `<button class="opt" data-j="${j}">${T(o)}</button>`).join("")}</div>`).join("")}<div class="score" data-score></div></div>`;
   $$(".qq", box).forEach((qq) => {
-    const q = Q.q[+qq.dataset.i];
+    const q = L[+qq.dataset.i];
     $$(".opt", qq).forEach((b) => (b.onclick = () => {
       if (qq.dataset.done) return; qq.dataset.done = 1; answered++;
-      const j = +b.dataset.j, ok = j === q[2]; if (ok) good++;
-      b.classList.add(ok ? "ok" : "ko"); $$(".opt", qq)[q[2]].classList.add("ok");
-      qq.insertAdjacentHTML("beforeend", `<div class="expl"><b>${ok ? "Juste." : "Pas tout à fait."}</b> ${T(q[3])}</div>`);
-      if (answered === Q.q.length) {
-        $("[data-score]", box).innerHTML = T(`Score : ${good} sur ${Q.q.length}. `) + `<button class="btn sm ghost" data-again>Recommencer</button>`;
+      const j = +b.dataset.j, ok = j === q.ok; if (ok) good++;
+      b.classList.add(ok ? "ok" : "ko"); $$(".opt", qq)[q.ok]?.classList.add("ok");
+      qq.insertAdjacentHTML("beforeend", `<div class="expl"><b>${ok ? "Juste." : "Pas tout à fait."}</b> ${T(q.why || "")}</div>`);
+      if (answered === L.length) {
+        $("[data-score]", box).innerHTML = T(`Score : ${good} sur ${L.length}. `) + `<button class="btn sm ghost" data-again>Recommencer</button>`;
         onScore?.(good);
-        $("[data-again]", box).onclick = () => renderQuiz(box, id, onScore);
+        $("[data-again]", box).onclick = () => renderQuiz(box, quiz, onScore);
       }
     }));
   });
@@ -137,7 +140,7 @@ export function renderParcours(root, format, progress, onChange, opts = {}) {
         <div class="legend">${[["comprendre", "Comprendre", "var(--comp)"], ["pratique", "Pratique", "var(--prat)"], ["discussion", "Discussion libre", "var(--disc)"]].map(([k, l, c]) => `<span><b style="background:${c}"></b>${l} · ${fmtMin(t[k])}</span>`).join("")}</div>
       </div>
       ${D.n > 1 ? `<div class="days">${Array.from({ length: D.n }, (_, k) => k + 1).map((d) => `<button data-day="${d}" aria-pressed="${d === curDay}">Jour ${d}${D.titles[d] ? ` · ${T(D.titles[d])}` : ""}</button>`).join("")}</div>` : ""}
-      <div class="tl">${withSlots(mods, format, curDay, curMod).map((m) => m.slot ? slotHtml(m, format) : modHtml(m, progress, nm, curIdx < 0 ? null : list.indexOf(m) - curIdx)).join("")}${mods.length ? endHtml(mods[mods.length - 1].t[1]) : ""}</div>`;
+      <div class="tl">${withSlots(mods, format, curDay, curMod).map((m) => m.slot ? slotHtml(m, format) : modHtml(m, progress, nm, curIdx < 0 ? null : list.indexOf(m) - curIdx, format)).join("")}${mods.length ? endHtml(mods[mods.length - 1].t[1]) : ""}</div>`;
     $$("[data-day]", root).forEach((b) => (b.onclick = () => { curDay = +b.dataset.day; draw(); }));
     $$(".mod[data-id]", root).forEach((el) => {
       const head = $(".mhead", el), id = el.dataset.id;
@@ -149,7 +152,7 @@ export function renderParcours(root, format, progress, onChange, opts = {}) {
       $(".check", el).addEventListener("keydown", (e) => (e.key === " " || e.key === "Enter") && (e.preventDefault(), flip(e)));
       bindRefs(el);
       $$("[data-timer]", el).forEach((b) => (b.onclick = () => startTimer(+b.dataset.timer, b.dataset.tl || "Pratique")));
-      $$("[data-startquiz]", el).forEach((b) => (b.onclick = () => renderQuiz(b.closest("[data-quiz]"), b.dataset.startquiz, (s) => {
+      $$("[data-startquiz]", el).forEach((b) => (b.onclick = () => renderQuiz(b.closest("[data-quiz]"), quizFor(format, b.dataset.startquiz), (s) => {
         progress.quiz = { ...(progress.quiz || {}), [b.dataset.startquiz]: Math.max(progress.quiz?.[b.dataset.startquiz] || 0, s) }; onChange(progress);
       })));
     });
@@ -208,7 +211,8 @@ function slotHtml(x, session) {
 // Dernière ligne de chaque journée : l'heure de fin (modifiable par le formateur dans le pilotage)
 const endHtml = (t) => `<div class="mod" data-type="fin"><div class="time"><b>${hfr(t)}</b></div><div class="body"><div class="mhead"><div class="meta"><span class="pill fin">Fin de la journée</span></div></div></div></div>`;
 // rel : position par rapport à la séquence en cours (null si le formateur n'a rien lancé)
-function modHtml(m, progress, nm, rel = null) {
+// session : la session (ou son seul format, pour les anciens appels), pour lire ses quiz et ses activités
+function modHtml(m, progress, nm, rel = null, session = null) {
   const dur = mins(m.t[1]) - mins(m.t[0]);
   const isNow = rel === null ? nm >= mins(m.t[0]) && nm < mins(m.t[1]) : rel === 0;
   const passed = rel !== null && rel < 0; // séquence dépassée par le formateur : validée d'office
@@ -227,10 +231,10 @@ function modHtml(m, progress, nm, rel = null) {
         </div>
         <span class="chev">▸</span>
       </div>
-      <div class="mdetail">${detail(m, progress)}</div>
+      <div class="mdetail">${detail(m, progress, session)}</div>
     </div></div>`;
 }
-function detail(m, progress) {
+function detail(m, progress, session = null) {
   let h = "";
   if (m.obj) h += `<div class="blk"><h4>Objectifs</h4><ul>${m.obj.map((x) => `<li>${T(x)}</li>`).join("")}</ul></div>`;
   if (m.pts) h += `<div class="blk"><h4>Ce qu'il faut retenir</h4><ul>${m.pts.map((x) => `<li>${T(x)}</li>`).join("")}</ul></div>`;
@@ -242,9 +246,11 @@ function detail(m, progress) {
   }
   if (m.idees) h += `<div class="blk"><h4>Des idées pour démarrer</h4>${ideasHtml()}</div>`;
   if (m.disc) h += `<div class="blk disc"><h4 style="color:#7A5300">Discussion</h4><ul>${m.disc.map((x) => `<li>${T(x)}</li>`).join("")}</ul></div>`;
-  if (m.quiz) h += `<div class="blk"><h4>Quiz · ${T(QUIZ[m.quiz].titre)}</h4><div data-quiz="${m.quiz}"><button class="btn sm ghost" data-startquiz="${m.quiz}">Faire le quiz (${QUIZ[m.quiz].q.length} questions)${progress.quiz?.[m.quiz] != null ? ` · meilleur score ${progress.quiz[m.quiz]}/${QUIZ[m.quiz].q.length}` : ""}</button></div></div>`;
+  const QZ = m.quiz ? quizFor(session, m.quiz) : null;
+  if (QZ) h += `<div class="blk"><h4>Quiz · ${T(QZ.titre)}</h4><div data-quiz="${esc(m.quiz)}"><button class="btn sm ghost" data-startquiz="${esc(m.quiz)}">Faire le quiz (${QZ.questions.length} question${QZ.questions.length > 1 ? "s" : ""})${progress.quiz?.[m.quiz] != null ? ` · meilleur score ${progress.quiz[m.quiz]}/${QZ.questions.length}` : ""}</button></div></div>`;
   if (m.fiches) h += `<div class="blk"><h4>Dans le glossaire</h4><div class="chips">${m.fiches.map((f) => (ficheById(f) ? `<button class="chip" data-fiche="${f}">${T(ficheById(f).titre)}</button>` : "")).join("")}</div></div>`;
-  if (m.live && PRESETS[m.live]) h += `<p class="small muted" style="margin:0">Activité en salle prévue : « ${T(PRESETS[m.live].q)} ».</p>`;
+  const LV = m.live ? pollFor(session, m.live) : null;
+  if (LV) h += `<p class="small muted" style="margin:0">Activité en salle prévue : « ${T(LV.q)} ».</p>`;
   return h;
 }
 // Séquences déjà passées dans le déroulé piloté par le formateur
