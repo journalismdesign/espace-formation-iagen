@@ -106,6 +106,11 @@ export function createSupabaseApi(url, anonKey) {
       ok(await sb.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { emailRedirectTo: redirect() + "#/formateur", shouldCreateUser: true } }));
       return { sent: true };
     },
+    // Invité·e : code par e-mail (le lien éventuel de l'e-mail mène au back-office)
+    async sendGuestOtp(email) {
+      ok(await sb.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { emailRedirectTo: redirect() + "#/admin", shouldCreateUser: true } }));
+      return { sent: true };
+    },
     async verifyEmailOtp(email, token) {
       ok(await sb.auth.verifyOtp({ email: email.trim().toLowerCase(), token: String(token).replace(/\s/g, ""), type: "email" }));
       profileCache = null; return true;

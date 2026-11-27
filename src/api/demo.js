@@ -203,6 +203,7 @@ export function createDemoApi({ defaultActivities }) {
       db.otp = { email, code, exp: Date.now() + 3600000 }; commit();
       return { sent: true, demoCode: code };
     },
+    async sendGuestOtp(email) { return api.sendTrainerOtp(email); }, // démo : le code s'affiche à l'écran
     async verifyEmailOtp(email, token) {
       email = email.trim().toLowerCase();
       const o = db.otp;
