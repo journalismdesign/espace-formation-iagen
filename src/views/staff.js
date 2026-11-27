@@ -9,6 +9,7 @@
    La liste des comptes est tenue côté base (trainer_emails) ; ces écrans passent par des fonctions réservées à l'admin. */
 import { $, $$, T, esc, guard, copyText, dateFr } from "../lib/dom.js";
 import { trainersListHtml, renderTrainerEditor } from "./trainers.js";
+import { settingsHead } from "../lib/adminNav.js";
 
 const TABS = [["comptes", "Comptes et accès"], ["fiches", "Fiches intervenant·es"]];
 let pendingLogin = null; // adresse à reporter dans une nouvelle fiche ouverte depuis la liste des comptes
@@ -29,9 +30,8 @@ export async function viewStaff(root, [tab = "comptes", id], { api, me, go }) {
   const flag = (n) => (n ? ` <span class="tab-flag" title="${n} point${n > 1 ? "s" : ""} à régler">${n}</span>` : "");
 
   root.innerHTML = `
-    <p><a href="#/admin">← Sessions</a></p>
-    <div class="pagehead"><div><div class="kicker-d">Administration</div><h1>Équipe et accès</h1></div></div>
-    <div class="phases">${TABS.map(([k, l]) => `<a href="#/admin/equipe${k === "comptes" ? "" : "/" + k}"${k === tab ? ' aria-current="page"' : ""}>${l}${flag(k === "comptes" ? noFiche.length : notAllowed.length)}</a>`).join("")}</div>
+    ${settingsHead("equipe")}
+    <div class="phases subtabs">${TABS.map(([k, l]) => `<a href="#/admin/equipe${k === "comptes" ? "" : "/" + k}"${k === tab ? ' aria-current="page"' : ""}>${l}${flag(k === "comptes" ? noFiche.length : notAllowed.length)}</a>`).join("")}</div>
     <section id="eqBody"></section>`;
   const box = $("#eqBody", root);
 

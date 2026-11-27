@@ -14,6 +14,7 @@ import { D1, D2, QUIZ } from "../data.js";
 import { parsePages, formatPages, slideEmbedUrl, deckId, DECK_PAGES, DEFAULT_DECK_ID } from "../deck.js";
 import { parseConducteur, conducteurMarkdown } from "../lib/conducteur.js";
 import { typeLabel, TOOL_LABELS } from "../lib/content.js";
+import { studioHead, ICON } from "../lib/adminNav.js";
 import {
   fromProgramme, toProgramme, timeline, moveItem, addItem, updateItem, removeItem, duplicateItem, updateDay, addDay, removeDay,
   find, pagesUsage, blankTrame, BLOCKS, MAX_DAYS,
@@ -35,8 +36,8 @@ export async function viewTrames(root, [id], ctx) {
   if (id) return editor(root, id, list, bank, ctx);
 
   root.innerHTML = `
-    <div class="pagehead"><div><a href="#/admin" class="small">← Sessions</a><h1 style="margin:4px 0">Trames de conducteur</h1>
-      <p class="muted" style="margin:0;max-width:760px">${T("Des déroulés réutilisables, de une à cinq journées : séquences, slides, quiz et sondages. Construisez-les ici au glisser-déposer, puis appliquez-les à une session dans ses réglages (Conducteur).")}</p></div>
+    ${studioHead("trames")}
+    <div class="pagehead studio-sub"><div><p class="muted" style="margin:0;max-width:760px">${T("Des déroulés réutilisables, de une à cinq journées : séquences, slides, quiz et sondages. Construisez-les ici au glisser-déposer, puis appliquez-les à une session dans ses réglages (Conducteur).")}</p></div>
       ${list.ready ? `<div class="head-actions">
         <a class="btn" href="${BASE}/nouvelle">+ Nouvelle trame</a>
         <button class="btn ghost" type="button" data-from="1">À partir du déroulé d'une journée</button>
@@ -122,7 +123,8 @@ function editor(root, id, list, bank, { api, go }) {
       <span class="tr-time mono">${hfr(t[0])}<br><span class="muted">${hfr(t[1])}</span></span>
       <span class="tr-body"><span class="pill ${m.type}">${typeLabel(m.type)}</span> <b>${T(m.titre)}</b>${m.cas ? `<span class="small muted tr-cas">${T(m.cas)}</span>` : ""}
         <span class="tr-chips">${pages.length ? `<span class="chip sm">p. ${esc(formatPages(pages))}</span>` : ""}${acts.map((k) => `<span class="chip sm act">${KIND_LABEL[actKind(k)] || "Activité"} · ${T(actTitle(k))}</span>`).join("")}${m.quiz ? `<span class="chip sm">Quiz en autonomie · ${T(actTitle(m.quiz))}</span>` : ""}${m.outil ? `<span class="chip sm">${T(TOOL_LABELS[m.outil] || m.outil)}</span>` : ""}</span></span>
-      <span class="tr-dur small">${durTxt(m.dur)}</span></article>`;
+      <span class="tr-side"><span class="tr-dur small">${durTxt(m.dur)}</span>
+        <span class="tr-icons"><button type="button" class="tr-ico" data-cdup="${esc(m.id)}" title="Dupliquer" aria-label="Dupliquer « ${esc(m.titre)} »">${ICON.copy}</button><button type="button" class="tr-ico danger" data-cdel="${esc(m.id)}" title="Supprimer" aria-label="Supprimer « ${esc(m.titre)} »">${ICON.trash}</button></span></span></article>`;
   }
   function draw() {
     $("#trState", root).textContent = dirty ? "Modifications non enregistrées" : "Enregistré";
@@ -160,6 +162,13 @@ function editor(root, id, list, bank, { api, go }) {
       change(removeDay(model, d), null);
     }));
     $("#trAddDay", days)?.addEventListener("click", () => change(addDay(model)));
+    // Petites icônes de chaque bloc : dupliquer (juste après), supprimer
+    $$("[data-cdup]", days).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); const r = duplicateItem(model, b.dataset.cdup); change(r.model, r.id); }));
+    $$("[data-cdel]", days).forEach((b) => (b.onclick = (e) => {
+      e.stopPropagation();
+      const m = find(model, b.dataset.cdel)?.item; if (!m || !confirm(`Supprimer « ${m.titre} » ?`)) return;
+      change(removeItem(model, b.dataset.cdel), sel === b.dataset.cdel ? null : sel);
+    }));
     $$(".tr-card", days).forEach((c) => {
       c.onclick = () => { sel = c.dataset.id; draw(); };
       c.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); sel = c.dataset.id; draw(); } };

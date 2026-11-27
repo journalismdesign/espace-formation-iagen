@@ -7,6 +7,7 @@ import { modulesFor } from "../lib/content.js";
 import { STATUS } from "./home.js";
 import { skinDark } from "../lib/skin.js";
 import { isAdmin, isGuest } from "../lib/roles.js";
+import { ICON } from "../lib/adminNav.js";
 import { isArchived, archiveDate, sessionEnded, dayCount, trainingDates, parisToday, addDays } from "../lib/archive.js";
 
 // Lien court de la session : <site>/CODE (redirigé vers #/join/CODE par 404.html ou au démarrage).
@@ -50,7 +51,7 @@ export async function viewAdmin(root, [view], { api, go, me }) {
   root.innerHTML = `
     <div class="pagehead"><div><div class="kicker-d">${admin ? "Back-office · administration" : "Back-office formateur"}</div><h1>${admin ? "Sessions" : "Mes sessions"}</h1>
       ${admin ? "" : `<p class="muted">${T("Les sessions qui vous sont attribuées par l'administration. Pour en obtenir une autre, contactez-la.")}</p>`}</div>
-      ${admin ? `<div class="head-actions"><a class="btn ghost" href="#/admin/trames">Trames de conducteur</a><a class="btn ghost" href="#/admin/quiz">Quiz et sondages</a><a class="btn ghost" href="#/admin/equipe">Équipe et accès</a><a class="btn ghost" href="#/admin/reglages">Réglages généraux</a><button class="btn" id="newBtn">+ Démarrer une session</button></div>` : ""}</div>
+      ${admin ? `<div class="head-actions"><a class="btn ghost" href="#/admin/trames" title="Trames de conducteur, quiz et sondages">Studio</a><button class="btn" id="newBtn">+ Créer une session</button><a class="iconbtn gear-btn" href="#/admin/reglages" title="Réglages généraux (organisme, habillages, entreprises, e-mail, équipe et accès)" aria-label="Réglages généraux">${ICON.gear}</a></div>` : ""}</div>
     <form class="card" id="newForm" hidden style="margin-bottom:14px">
       <h3>Nouvelle session</h3>
       <div class="grid g2">

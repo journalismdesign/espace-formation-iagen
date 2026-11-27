@@ -1190,3 +1190,14 @@ main .linkbtn.danger,.sheet .linkbtn.danger{color:var(--ko)}
 .tr-iactions{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
 .tr-more summary{cursor:pointer;margin-top:12px}
 .tr-insp input:not([type=checkbox]):not([type=radio]),.tr-insp select,.tr-insp textarea,.tr-palette input[type=url],.tr-palette input[type=number],.tr-palette input[type=search]{width:100%;box-sizing:border-box}
+/* Navigation du back-office : engrenage des réglages, sous-onglets, studio */
+.gear-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;color:var(--ink)}
+.phases.subtabs{margin-top:-4px;font-size:14px}
+.studio-sub{margin-top:4px}
+/* Éditeur de trames : petites icônes sur chaque bloc */
+.tr-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.tr-icons{display:flex;gap:2px;opacity:.55;transition:opacity .15s}
+.tr-card:hover .tr-icons,.tr-card:focus-within .tr-icons,.tr-card.on .tr-icons{opacity:1}
+.tr-ico{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer}
+.tr-ico:hover{background:var(--light);color:var(--ink)}
+.tr-ico.danger:hover{color:var(--ko);background:var(--kotint)}

@@ -6,6 +6,7 @@
 import { $, $$, T, esc, guard, toast } from "../lib/dom.js";
 import { KINDS, newItemId } from "../lib/quizzes.js";
 import { mountEditor, blankValue, valueOf } from "../lib/quizEditor.js";
+import { studioHead } from "../lib/adminNav.js";
 
 const BASE = "#/admin/quiz";
 const NEW = { "nouveau-quiz": "quiz", "nouveau-sondage": "poll", "nouveau-nuage": "cloud" };
@@ -26,8 +27,8 @@ export async function viewQuizBank(root, [id], ctx) {
   const list = bank.items.filter((b) => b.kind === k);
 
   root.innerHTML = `
-    <div class="pagehead"><div><a href="#/admin" class="small">← Sessions</a><h1 style="margin:4px 0">Quiz et sondages</h1>
-      <p class="muted" style="margin:0;max-width:720px">${T("Les modèles proposés à la création des sessions et dans le Jour J. Chaque session garde sa propre copie : modifier un modèle ne change pas les sessions déjà créées.")}</p></div>
+    ${studioHead("quiz")}
+    <div class="pagehead studio-sub"><div><p class="muted" style="margin:0;max-width:720px">${T("Les modèles proposés à la création des sessions et dans le Jour J. Chaque session garde sa propre copie : modifier un modèle ne change pas les sessions déjà créées.")}</p></div>
       ${bank.ready ? `<div class="head-actions"><a class="btn" href="${BASE}/${NEW_OF[k][0]}">${NEW_OF[k][1]}</a></div>` : ""}</div>
     ${bank.ready ? "" : `<div class="warn small" style="margin-bottom:14px">${T(MIG)}</div>`}
     <div class="phases" style="margin-bottom:12px">${SECTIONS.map(([x, l]) => `<a href="${BASE}/${TAB_OF[x]}"${x === k ? ' aria-current="page"' : ""}>${l} <span class="small muted">${bank.items.filter((b) => b.kind === x).length}</span></a>`).join("")}</div>
