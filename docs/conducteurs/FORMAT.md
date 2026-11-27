@@ -41,4 +41,5 @@ Règles : horaires en `09:30` ou `9h30`, séparés par un tiret ou « à ». Les
 
 Fichiers fournis :
 - `conducteur-1-jour.md` et `conducteur-2-jours.md` : les déroulés actuels, exportés tels quels (un import ne change rien, sert de modèle à modifier) ;
+- `conducteur-libe-1-jour.md` : la journée Libération, même déroulé qu’une journée avec les pages du deck Libé (positions dans le deck ; voir le commentaire en tête du fichier) ;
 - `conducteur-test-atelier.md` : une matinée-atelier plus courte, pour vérifier qu'un import modifie bien le parcours.
