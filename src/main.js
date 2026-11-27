@@ -51,10 +51,12 @@ function header(route) {
   const trainer = isStaff(me);
   const h = location.hash;
   const link = (href, label, on) => `<a href="${href}"${on ? ' aria-current="page"' : ""}>${label}</a>`;
+  // Vue stagiaire d'une session (aperçu formateur) : « Back-office » ramène au Jour J de cette session
+  const inSession = h.match(/^#\/s\/([\w-]+)/)?.[1];
   return `<header class="top"><div class="hwrap">
     <a class="brand-wrap" href="#/">${samsaHtml(true, "head")}<span class="brand"><span class="kicker">Espace formation · ${esc(currentSkin()?.name || "Journalisme & IA")}</span><b>Prendre en main les IA génératives</b></span></a>
     <nav class="topnav">
-      ${trainer ? link("#/admin", "Back-office", h.startsWith("#/admin")) : link("#/", "Mon espace", h === "#/" || h === "" || h.startsWith("#/s/"))}
+      ${trainer ? link(inSession ? `#/admin/s/${inSession}/jour` : "#/admin", "Back-office", h.startsWith("#/admin")) : link("#/", "Mon espace", h === "#/" || h === "" || h.startsWith("#/s/"))}
       ${link("#/profil", esc(me.full_name || me.email.split("@")[0]), h === "#/profil")}
       <button class="linkbtn" id="logout">Se déconnecter</button>
     </nav></div>

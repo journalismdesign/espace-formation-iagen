@@ -92,7 +92,7 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
       <div id="sideExtra"></div>
       <div class="side-label">Ressources</div>
       <nav class="side-nav">${shownTabs.filter(([k]) => !["direct", "cadrage", "emargement"].includes(k)).map(([k, l]) => `<a href="#/s/${sid}/${k}"${k === tab ? ' aria-current="page"' : ""}${k === "outils" ? ` id="navOutils"${toolsVisible() ? "" : " hidden"}` : ""}>${l}<span>›</span></a>`).join("")}</nav>
-      ${trainerPreview ? `<p class="small muted" style="margin-top:14px">Aperçu formateur : vos clics ne sont pas enregistrés. <a href="#/admin/s/${sid}">Retour au back-office</a></p>` : ""}
+      ${trainerPreview ? `<p class="small muted" style="margin-top:14px">Aperçu formateur : vos clics ne sont pas enregistrés. <a href="#/admin/s/${sid}/jour">Retour au back-office</a></p>` : ""}
     </aside>
     <section class="sidemain" id="tabBody"></section>`;
   const body = $("#tabBody", root);
