@@ -21,7 +21,7 @@ import {
 } from "../lib/trame.js";
 
 const BASE = "#/admin/trames";
-const MIG = "Trames pas encore activées : la migration 20261129010000_trames.sql doit être exécutée dans Supabase.";
+const MIG = "Création de programmes pas encore activée : la migration 20261129010000_trames.sql doit être exécutée dans Supabase.";
 const DRAFT = (id) => `iagen-draft:trame:${id}`;
 const hfr = (t) => String(t || "").slice(0, 5).replace(/^0/, "").replace(":", " h ");
 const durTxt = (n) => (n >= 60 ? `${Math.floor(n / 60)} h${n % 60 ? ` ${String(n % 60).padStart(2, "0")}` : ""}` : `${n} min`);
@@ -39,19 +39,19 @@ export async function viewTrames(root, [id], ctx) {
     ${studioHead("trames")}
     <div class="pagehead studio-sub"><div><p class="muted" style="margin:0;max-width:760px">${T("Des déroulés réutilisables, de une à cinq journées : séquences, slides, quiz et sondages. Construisez-les ici au glisser-déposer, puis appliquez-les à une session dans ses réglages (Conducteur).")}</p></div>
       ${list.ready ? `<div class="head-actions">
-        <a class="btn" href="${BASE}/nouvelle">+ Nouvelle trame</a>
+        <a class="btn" href="${BASE}/nouvelle">+ Nouveau programme</a>
         <button class="btn ghost" type="button" data-from="1">À partir du déroulé d'une journée</button>
         <button class="btn ghost" type="button" data-from="2">… de deux journées</button>
         <label class="btn ghost" style="cursor:pointer">Importer un .md<input type="file" id="trImp" accept=".md,.markdown,.txt" hidden></label></div>` : ""}</div>
     ${list.ready ? "" : `<div class="warn small" style="margin-bottom:14px">${T(MIG)}</div>`}
-    <div class="card table-card">${list.items.length ? `<table class="tbl"><thead><tr><th>Trame</th><th>Journées</th><th>Séquences</th><th>Modifiée</th><th></th></tr></thead><tbody>
+    <div class="card table-card">${list.items.length ? `<table class="tbl"><thead><tr><th>Programme</th><th>Journées</th><th>Séquences</th><th>Modifiée</th><th></th></tr></thead><tbody>
       ${list.items.map((t) => `<tr><td><a href="${BASE}/${t.id}"><b>${T(t.titre)}</b></a>${t.content?.formation ? `<div class="small muted">${T(t.content.formation)}</div>` : ""}</td>
         <td>${t.content?.nDays || 1}</td><td>${countSeq(t.content)}</td><td class="small muted">${when(t.updated_at)}</td>
         <td class="actions"><button class="iconbtn" data-exp="${t.id}" title="Exporter en .md" aria-label="Exporter « ${esc(t.titre)} » en .md">⤓</button><button class="iconbtn" data-dup="${t.id}" title="Dupliquer" aria-label="Dupliquer « ${esc(t.titre)} »">⧉</button><button class="iconbtn danger" data-del="${t.id}" title="Supprimer" aria-label="Supprimer « ${esc(t.titre)} »">✕</button></td></tr>`).join("")}
-      </tbody></table>` : `<p class="empty">${T(list.ready ? "Aucune trame pour l'instant. Créez la première, ou partez du déroulé par défaut." : "Les trames apparaîtront ici une fois la migration exécutée.")}</p>`}</div>`;
+      </tbody></table>` : `<p class="empty">${T(list.ready ? "Aucun programme pour l'instant. Créez le premier, ou partez du déroulé par défaut." : "Les programmes apparaîtront ici une fois la migration exécutée.")}</p>`}</div>`;
 
   const byId = (x) => list.items.find((t) => t.id === x);
-  const create = async (titre, content) => { const row = await guard(() => api.saveTrame({ titre, content }), "Trame créée."); if (row) go(`${BASE}/${row.id}`); };
+  const create = async (titre, content) => { const row = await guard(() => api.saveTrame({ titre, content }), "Programme créé."); if (row) go(`${BASE}/${row.id}`); };
   $$("[data-from]", root).forEach((b) => (b.onclick = () => {
     const two = b.dataset.from === "2";
     create(two ? "Deux journées (déroulé par défaut)" : "Une journée (déroulé par défaut)", toProgramme(fromProgramme({ formation: "Prendre en main les IA génératives", nDays: two ? 2 : 1, modules: two ? D2 : D1, slides_url: `https://docs.google.com/presentation/d/${DEFAULT_DECK_ID}/edit`, slides_n: DECK_PAGES.length })));
@@ -68,8 +68,8 @@ export async function viewTrames(root, [id], ctx) {
   $$("[data-dup]", root).forEach((b) => (b.onclick = () => { const t = byId(b.dataset.dup); create(`${t.titre} (copie)`.slice(0, 120), JSON.parse(JSON.stringify(t.content))); }));
   $$("[data-del]", root).forEach((b) => (b.onclick = async () => {
     const t = byId(b.dataset.del);
-    if (!confirm(`Supprimer la trame « ${t.titre} » ?\nLes sessions où elle a été appliquée gardent leur déroulé.`)) return;
-    if (await guard(() => api.deleteTrame(t.id).then(() => true), "Trame supprimée.")) go(BASE);
+    if (!confirm(`Supprimer le programme « ${t.titre} » ?\nLes sessions où il a été appliqué gardent leur déroulé.`)) return;
+    if (await guard(() => api.deleteTrame(t.id).then(() => true), "Programme supprimé.")) go(BASE);
   }));
 }
 
@@ -77,7 +77,7 @@ export async function viewTrames(root, [id], ctx) {
 const knownOf = (bank) => ({ quizzes: bank.items.filter((b) => b.kind === "quiz").map((b) => b.id), live: bank.items.filter((b) => b.kind !== "quiz").map((b) => b.id) });
 function exportMd(titre, model) {
   const p = toProgramme(model);
-  download(`trame-${String(titre).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "conducteur"}.md`,
+  download(`programme-${String(titre).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "conducteur"}.md`,
     conducteurMarkdown(p.modules, { formation: p.formation, days: p.days, slides_url: p.slides_url, slides_n: p.slides_n }), "text/markdown;charset=utf-8");
 }
 
@@ -85,11 +85,11 @@ function exportMd(titre, model) {
 function editor(root, id, list, bank, { api, go }) {
   const isNew = id === "nouvelle";
   const row = isNew ? null : list.items.find((t) => t.id === id);
-  if (!isNew && !row) { root.innerHTML = `<div class="card"><h2>Trame introuvable</h2><p class="muted">Elle a peut-être été supprimée.</p><a class="btn" href="${BASE}">Trames</a></div>`; return; }
+  if (!isNew && !row) { root.innerHTML = `<div class="card"><h2>Programme introuvable</h2><p class="muted">Il a peut-être été supprimé.</p><a class="btn" href="${BASE}">Programmes</a></div>`; return; }
   if (!list.ready) { root.innerHTML = `<div class="warn">${T(MIG)}</div>`; return; }
 
   // État : titre de la trame + modèle ; brouillon repris s'il existe
-  let titre = row?.titre || "Nouvelle trame", model = row ? fromProgramme(row.content) : blankTrame("Prendre en main les IA génératives");
+  let titre = row?.titre || "Nouveau programme", model = row ? fromProgramme(row.content) : blankTrame("Prendre en main les IA génératives");
   let saved = JSON.stringify({ titre, model }), sel = null, dirty = false, palette = "blocs", preview = 0, filter = "";
   try { const d = JSON.parse(localStorage.getItem(DRAFT(id)) || "null"); if (d?.model?.days?.length && JSON.stringify(d) !== saved) { ({ titre, model } = d); dirty = true; } } catch {}
   const bankById = new Map(bank.items.map((b) => [b.id, b]));
@@ -101,8 +101,8 @@ function editor(root, id, list, bank, { api, go }) {
   const change = (m, select) => { model = m; if (select !== undefined) sel = select; dirty = JSON.stringify({ titre, model }) !== saved; keepDraft(); draw(); };
 
   root.innerHTML = `
-    <div class="pagehead tr-head"><div style="flex:1;min-width:0"><a href="${BASE}" class="small">← Trames</a>
-      <input class="tr-title" id="trT" maxlength="120" value="${esc(titre)}" aria-label="Titre de la trame">
+    <div class="pagehead tr-head"><div style="flex:1;min-width:0"><a href="${BASE}" class="small">← Programmes</a>
+      <input class="tr-title" id="trT" maxlength="120" value="${esc(titre)}" aria-label="Titre du programme">
       <input class="tr-formation" id="trF" maxlength="140" value="${esc(model.formation)}" placeholder="Intitulé de la formation" aria-label="Intitulé de la formation"></div>
       <div class="head-actions"><span class="small muted" id="trState"></span>
         <label class="btn ghost sm" style="cursor:pointer">Importer .md<input type="file" id="trImp2" accept=".md,.markdown,.txt" hidden></label>
@@ -331,15 +331,15 @@ function editor(root, id, list, bank, { api, go }) {
     if (f.size > 300000) return toast("Fichier trop lourd (300 ko au plus).", "ko");
     const r = parseConducteur(await f.text(), knownOf(bank));
     if (r.errors.length) return toast(`Import impossible : ${r.errors[0]}`, "ko");
-    if (!confirm(`Remplacer le contenu de la trame par « ${f.name} » (${r.programme.modules.filter((x) => x.type !== "pause").length} séquences, ${r.programme.nDays} journée(s)) ?`)) return;
+    if (!confirm(`Remplacer le contenu du programme par « ${f.name} » (${r.programme.modules.filter((x) => x.type !== "pause").length} séquences, ${r.programme.nDays} journée(s)) ?`)) return;
     if (r.warnings.length) toast(`${r.warnings.length} remarque(s) : ${r.warnings[0]}`, "");
     change(fromProgramme(r.programme), null);
     $("#trF", root).value = model.formation;
   };
   $("#trSave", root).onclick = async () => {
     const t = $("#trT", root).value.trim();
-    if (!t) return toast("Donnez un titre à la trame.", "ko");
-    const out = await guard(() => api.saveTrame({ id: isNew ? undefined : id, titre: t, content: toProgramme(model) }), "Trame enregistrée.");
+    if (!t) return toast("Donnez un titre au programme.", "ko");
+    const out = await guard(() => api.saveTrame({ id: isNew ? undefined : id, titre: t, content: toProgramme(model) }), "Programme enregistré.");
     if (!out) return;
     try { localStorage.removeItem(DRAFT(id)); } catch {}
     if (isNew) return go(`${BASE}/${out.id}`);

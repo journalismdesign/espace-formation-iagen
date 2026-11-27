@@ -21,6 +21,7 @@ import { isLunch, pauseTargets, movePause, shiftPause, pauseAlert, pauseAlertTex
 import { loadSkins, skinFor, applySkin, currentSkin } from "../lib/skin.js";
 import { samsaHtml } from "../lib/brand.js";
 import { isAdmin } from "../lib/roles.js";
+import { sessionNo } from "../lib/presence.js";
 import { dateOfDay, MAX_DAYS } from "../lib/archive.js";
 import { morph } from "../lib/morph.js";
 import { parsePages, formatPages, slideEmbedUrl, deckId, deckKind } from "../deck.js";
@@ -165,7 +166,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     <p><a href="#/admin">← Sessions</a></p>
     <div class="pagehead sess-head"><div>
       <h1 style="margin:0">${T(session.title)}</h1>
-      <p class="muted" style="margin:4px 0">${T(session.formation)} · ${T(datesFr(session))} · code <b class="mono">${esc(session.code)}</b></p>
+      <p class="muted" style="margin:4px 0">${sessionNo(session) ? `N° <b class="mono">${esc(sessionNo(session))}</b> · ` : ""}${T(session.formation)} · ${T(datesFr(session))} · code <b class="mono">${esc(session.code)}</b></p>
     </div>
     <div class="head-actions">${session.status !== "closed" ? `<button class="btn ghost sm" id="addBtn" title="Faire entrer une personne qui ne reçoit pas l'e-mail : accès direct ou code à transmettre">Ajouter un·e stagiaire</button>` : ""}<a class="btn ghost sm" href="#/s/${sid}" title="Voir l'espace tel que le voient les stagiaires">Voir côté stagiaire</a>
       ${session.status === "draft" ? `<button class="btn sm" data-status="live">Ouvrir la salle</button>` : session.status === "live" ? `<button class="btn sm ghost" data-status="draft">Fermer la salle</button>` : `<button class="btn sm ghost" data-status="live">Rouvrir</button>`}</div></div>
@@ -301,8 +302,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <button type="button" class="linkbtn" id="condReset"${session.programme?.modules?.length ? "" : " hidden"}>Revenir au déroulé par défaut</button>
           </div>
           <div class="cond-actions" id="condTrames" hidden>
-            <select id="condTrame" aria-label="Appliquer une trame"><option value="">Appliquer une trame…</option></select>
-            ${admin ? `<button type="button" class="btn sm ghost" id="condSaveTrame">Enregistrer comme trame</button>` : ""}
+            <select id="condTrame" aria-label="Appliquer un programme"><option value="">Appliquer un programme…</option></select>
+            ${admin ? `<button type="button" class="btn sm ghost" id="condSaveTrame">Enregistrer comme programme</button>` : ""}
           </div>
           <div id="condPrev"></div>
         </div>
@@ -518,7 +519,7 @@ function showPreview(programme, { title, errors = [], warnings = [], bank }) {
     ${errors.length ? `<div class="warn small"><b>${errors.length} erreur${errors.length > 1 ? "s" : ""} à corriger avant d'appliquer :</b><ul>${errors.map((x) => `<li>${T(x)}</li>`).join("")}</ul></div>` : ""}
     ${warnings.length ? `<details class="small cond-warn"><summary>${warnings.length} remarque${warnings.length > 1 ? "s" : ""} (sans blocage)</summary><ul>${warnings.map((x) => `<li>${T(x)}</li>`).join("")}</ul></details>` : ""}
     ${programme.modules.length ? `<div class="cond-table"><table class="tbl small"><thead><tr><th>Horaires</th><th>Type</th><th>Séquence</th><th>Contenu</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
-    ${slidesOpt ? `<label class="f inline small"><input type="checkbox" id="condSlides"${session.slides_url ? "" : " checked"}> ${T("Utiliser aussi le support de la trame (lien Google Slides) pour cette session")}</label>` : ""}
+    ${slidesOpt ? `<label class="f inline small"><input type="checkbox" id="condSlides"${session.slides_url ? "" : " checked"}> ${T("Utiliser aussi le support du programme (lien Google Slides) pour cette session")}</label>` : ""}
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
       <button type="button" class="btn sm" id="condApply"${errors.length ? " disabled" : ""}>Appliquer (${programme.nDays} journée${programme.nDays > 1 ? "s" : ""})</button>
       <button type="button" class="btn sm ghost" id="condCancel">Annuler</button>
@@ -537,7 +538,7 @@ api.listTrames().then((tl) => {
   if (!tl.ready || !$("#condTrames", box)) return;
   $("#condTrames", box).hidden = false;
   const sel = $("#condTrame", box);
-  sel.insertAdjacentHTML("beforeend", tl.items.map((t) => `<option value="${t.id}">${T(t.titre)} · ${t.content?.nDays || 1} j.</option>`).join("") || `<option value="" disabled>Aucune trame : créez-en dans « Trames de conducteur »</option>`);
+  sel.insertAdjacentHTML("beforeend", tl.items.map((t) => `<option value="${t.id}">${T(t.titre)} · ${t.content?.nDays || 1} j.</option>`).join("") || `<option value="" disabled>Aucun programme : créez-en dans Studio, « Création de programmes »</option>`);
   sel.onchange = async () => {
     const t = tl.items.find((x) => x.id === sel.value); if (!t) return ($("#condPrev", box).innerHTML = "");
     const bank = await api.listBank().catch(() => ({ ready: false, items: [] }));
@@ -545,9 +546,9 @@ api.listTrames().then((tl) => {
   };
 }).catch(() => {});
 $("#condSaveTrame", box)?.addEventListener("click", async () => {
-  const titre = prompt("Titre de la nouvelle trame :", `${session.title}`.slice(0, 120));
+  const titre = prompt("Titre du nouveau programme :", `${session.title}`.slice(0, 120));
   if (!titre?.trim()) return;
-  const row = await guard(() => api.saveTrame({ titre: titre.trim(), content: trameFromSession(session) }), "Trame enregistrée : retrouvez-la dans « Trames de conducteur ».");
+  const row = await guard(() => api.saveTrame({ titre: titre.trim(), content: trameFromSession(session) }), "Programme enregistré : retrouvez-le dans Studio, « Création de programmes ».");
   if (row) go(`#/admin/trames/${row.id}`);
 });
   }
@@ -1140,7 +1141,7 @@ $("#condSaveTrame", box)?.addEventListener("click", async () => {
     const validated = projects.filter((p) => p.status === "validated");
     box.innerHTML = `
       <div class="card"><p style="margin:0 0 10px">${roster.length} participant·es · ${hasCadrage(session) ? `${validated.length} cadrage(s) validé(s) · ` : ""}${roster.filter((r) => r.attended).length} présent·es émargé·es. ${T("Les projets, retours et résultats restent consultables après la session.")}</p>
-        <div class="chips">${hasCadrage(session) ? `<a class="btn sm" href="#projets">Voir les projets</a>` : ""}<a class="btn sm ghost" href="#emarg">Émargement, bilan et duplication</a><a class="btn sm ghost" href="#resultats">Résultats à l'écran</a></div></div>
+        <div class="chips">${hasCadrage(session) ? `<a class="btn sm" href="#projets">Voir les projets</a>` : ""}<a class="btn sm ghost" href="#/admin/participants/emargements/${sid}">Feuille d'émargement</a><a class="btn sm ghost" href="#emarg">Présences, bilan et duplication</a><a class="btn sm ghost" href="#resultats">Résultats à l'écran</a></div></div>
 
 ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:14px"><h3>Projets (${projects.length})</h3>
         ${projects.length ? `<div class="grid g2">${projects.map((p) => `<div class="proj-card"><span class="tag${p.status === "validated" ? " ok" : ""}">${p.status === "validated" ? "✓ Validé" : "En cours"}</span><b>${T(p.data?.retenu?.titre || "Sans titre")}</b><div class="small muted">${T(by[p.user_id]?.full_name || by[p.user_id]?.email || "")}</div><p class="small">${T((p.data?.retenu?.description || "").slice(0, 260))}</p>${p.trainer_comment ? `<p class="small"><b>Votre retour :</b> ${T(p.trainer_comment)}</p>` : ""}</div>`).join("")}</div>` : `<p class="empty">Aucun cadrage.</p>`}</div>` : ""}

@@ -39,12 +39,15 @@ export function bindCopy(root) {
 }
 
 // Message bref en bas d'écran
+// Points d’accroche pour les animations (src/lib/motion.js) : rien tant qu’elles ne sont pas chargées
+export const hooks = { toast: null };
 export function toast(msg, kind = "") {
   let box = $("#toasts");
   if (!box) { box = document.createElement("div"); box.id = "toasts"; document.body.appendChild(box); }
   const d = document.createElement("div");
   d.className = "toast " + kind; d.textContent = fr(msg);
   box.appendChild(d);
+  hooks.toast?.(d);
   setTimeout(() => d.classList.add("out"), 3200);
   setTimeout(() => d.remove(), 3700);
 }

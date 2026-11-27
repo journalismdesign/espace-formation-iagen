@@ -7,13 +7,14 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:sql": "node tests/sql.test.mjs && node tests/sql-rerun.test.mjs && node tests/conducteur.test.mjs && node tests/mail.test.mjs && node tests/access.test.mjs && node tests/programme.test.mjs && node tests/quiz.test.mjs && node tests/archive.test.mjs && node tests/trame.test.mjs",
+    "test:sql": "node tests/sql.test.mjs && node tests/sql-rerun.test.mjs && node tests/conducteur.test.mjs && node tests/mail.test.mjs && node tests/access.test.mjs && node tests/programme.test.mjs && node tests/quiz.test.mjs && node tests/archive.test.mjs && node tests/trame.test.mjs && node tests/presence.test.mjs",
     "test:e2e": "python3 tests/e2e.py"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/montserrat": "^5.3.0",
     "@supabase/supabase-js": "^2.119.2",
+    "gsap": "3.15.1",
     "qrcode": "^1.5.4",
     "vite": "^6.4.6"
   },

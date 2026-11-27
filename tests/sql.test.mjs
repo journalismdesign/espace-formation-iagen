@@ -530,4 +530,60 @@ await su();
   await su();
 }
 
+/* ---------- Numéro de session, émargement par demi-journée, liste des stagiaires ---------- */
+{
+  await su();
+  const nums = (await db.query(`select count(*)::int n, count(num_seq)::int k from sessions where demo_owner is null`)).rows[0];
+  ok(nums.n === nums.k, "numéros : toutes les sessions (hors démos) en ont un");
+  const dupN = (await db.query(`select count(*)::int n from (select num_year, num_seq from sessions where num_seq is not null group by 1, 2 having count(*) > 1) x`)).rows[0].n;
+  ok(dupN === 0, "numéros : aucun doublon");
+  const demoN = (await db.query(`insert into sessions (title, demo_owner) values ('Démo numérotée ?', '${G}') returning num_seq`)).rows[0].num_seq;
+  ok(demoN === null, "numéros : pas de numéro pour une session de démo");
+  await as(T, "formateur@exemple.fr");
+  const N1 = (await db.query(`insert into sessions (title) values ('Même titre') returning id, num_year, num_seq`)).rows[0];
+  const N2 = (await db.query(`insert into sessions (title, num_year, num_seq) values ('Même titre', 1999, 1) returning id, num_year, num_seq`)).rows[0];
+  ok(N2.num_year === N1.num_year && N2.num_seq === N1.num_seq + 1, "numéros : deux sessions de même titre, rangs qui se suivent, numéro imposé ignoré");
+  await db.exec(`update sessions set num_seq = 999, num_year = 2000, title = 'Autre titre' where id = '${N2.id}'`);
+  const n2b = (await db.query(`select num_year, num_seq, title from sessions where id = '${N2.id}'`)).rows[0];
+  ok(n2b.num_seq === N1.num_seq + 1 && n2b.num_year === N1.num_year && n2b.title === "Autre titre", "numéros : le titre change, le numéro jamais");
+  const ND = (await db.query(`select public.duplicate_session('${N1.id}', 'Même titre', null::date) id`)).rows[0].id;
+  ok((await db.query(`select num_seq from sessions where id = '${ND}'`)).rows[0].num_seq === N1.num_seq + 2, "numéros : la copie reçoit son propre numéro");
+
+  // Émargement par demi-journée
+  const NS = (await db.query(`insert into sessions (title, status) values ('Émargement', 'live') returning id, code`)).rows[0];
+  await db.exec(`insert into session_invites (session_id, email) values ('${NS.id}', 'nina@exemple.fr')`);
+  await as(B, "bob@exemple.fr");
+  await db.query(`select public.join_session('${NS.code}')`);
+  const p1 = (await db.query(`select public.sign_presence('${NS.id}', 'j1-matin') p`)).rows[0].p;
+  ok(!!p1["j1-matin"]?.self, "émargement : le ou la stagiaire émarge le matin");
+  const p1b = (await db.query(`select public.sign_presence('${NS.id}', 'j1-matin') p`)).rows[0].p;
+  ok(p1b["j1-matin"].self === p1["j1-matin"].self, "émargement : un second clic garde la première heure");
+  await fails(`select public.sign_presence('${NS.id}', 'j9-soir')`, "émargement : créneau inconnu refusé");
+  await fails(`select public.set_presence('${NS.id}', '${B}', 'j1-matin', true)`, "émargement : un·e stagiaire ne se corrige pas");
+  await fails(`select * from public.session_presence('${NS.id}')`, "émargement : un·e stagiaire ne lit pas la feuille");
+  await fails(`update session_members set presence = '{"j1-aprem":{"staff":true}}' where session_id = '${NS.id}' and user_id = '${B}'`, "émargement : pas d'écriture directe");
+  await as(F2, "form2@exemple.fr");
+  await fails(`select * from public.session_presence('${NS.id}')`, "émargement : un formateur d'une autre session ne lit pas la feuille");
+  await fails(`select public.set_presence('${NS.id}', '${B}', 'j1-matin', true)`, "émargement : ni ne la corrige");
+  await as(T, "formateur@exemple.fr");
+  const p2 = (await db.query(`select public.set_presence('${NS.id}', '${B}', 'j1-aprem', false) p`)).rows[0].p;
+  ok(p2["j1-aprem"].staff === false && !!p2["j1-matin"].self, "émargement : l'équipe marque une absence, la déclaration du matin reste");
+  const p3 = (await db.query(`select public.set_presence('${NS.id}', '${B}', 'j1-aprem', null) p`)).rows[0].p;
+  ok(!("staff" in p3["j1-aprem"]), "émargement : retour à la déclaration");
+  const sheet = (await db.query(`select * from public.session_presence('${NS.id}')`)).rows;
+  ok(sheet.length === 1 && sheet[0].user_id === B && !!sheet[0].presence["j1-matin"].self, "émargement : l'équipe lit la feuille");
+  await fails(`select public.set_presence('${NS.id}', '${A}', 'j1-matin', true)`, "émargement : personne hors session refusée");
+
+  // Adresses des stagiaires
+  const lt = (await db.query(`select * from public.list_trainees() where session_id = '${NS.id}' order by email`)).rows;
+  ok(lt.length === 2 && lt[0].email === "bob@exemple.fr" && lt[0].joined && lt[1].email === "nina@exemple.fr" && !lt[1].joined, "stagiaires : inscrit·es et invité·es, pour l'administration");
+  await db.exec(`update sessions set status = 'closed' where id = '${NS.id}'`);
+  await as(F2, "form2@exemple.fr");
+  await fails(`select * from public.list_trainees()`, "stagiaires : pas pour un formateur");
+  await as(B, "bob@exemple.fr");
+  await fails(`select * from public.list_trainees()`, "stagiaires : pas pour un·e stagiaire");
+  await fails(`select public.sign_presence('${NS.id}', 'j1-aprem')`, "émargement : plus après la clôture");
+  await su();
+}
+
 console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests SQL passent.");

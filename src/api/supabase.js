@@ -232,6 +232,11 @@ export function createSupabaseApi(url, anonKey) {
     },
     async removeInvite(sid, email) { ok(await sb.from("session_invites").delete().eq("session_id", sid).eq("email", email)); },
     async roster(sid) { return ok(await sb.rpc("session_roster", { p_session: sid })); },
+    // Émargement par demi-journée et adresses des stagiaires (migration …_numeros_emargements.sql)
+    async signPresence(sid, slot) { return ok(await sb.rpc("sign_presence", { p_session: sid, p_slot: slot })); },
+    async setPresence(sid, uid, slot, v) { return ok(await sb.rpc("set_presence", { p_session: sid, p_user: uid, p_slot: slot, p_value: v })); },
+    async presence(sid) { return ok(await sb.rpc("session_presence", { p_session: sid })); },
+    async listTrainees() { return ok(await sb.rpc("list_trainees")); },
     async setAttended(sid, uid, v) { ok(await sb.rpc("set_attended", { p_session: sid, p_user: uid, p_value: v })); },
     async removeMember(sid, uid) { ok(await sb.from("session_members").delete().eq("session_id", sid).eq("user_id", uid)); },
     async myMembership(sid) {

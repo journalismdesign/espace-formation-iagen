@@ -6,6 +6,7 @@
 import { DIRECT_PASS_HOURS } from "../lib/accessRules.js";
 import { isArchived, lastDate, addDays, dayCount, sessionEnded } from "../lib/archive.js";
 import { bankFromData, ID_RE } from "../lib/quizzes.js";
+import { SLOT_RE } from "../lib/presence.js";
 
 const KEY = "iagen-demo-db-v9";
 const USER_KEY = "iagen-demo-user";
@@ -57,6 +58,16 @@ function save(db, notify = true) {
 
 export function createDemoApi({ defaultActivities }) {
   let db = load() || seed(defaultActivities);
+  // Numéro de session (comme le déclencheur session_number) : année de création + rang dans l'année ; pas pour les démos
+  const numberSession = (row) => {
+    if (row.demo_owner) { row.num_year = null; row.num_seq = null; return row; }
+    const y = Number(new Date(row.created_at || now()).toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" }).slice(0, 4));
+    row.num_year = y;
+    row.num_seq = Math.max(0, ...db.sessions.filter((x) => x !== row && x.num_year === y).map((x) => x.num_seq || 0)) + 1;
+    return row;
+  };
+  const unnumbered = db.sessions.filter((x) => !x.demo_owner && !x.num_seq).sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+  if (unnumbered.length) { unnumbered.forEach(numberSession); save(db, false); } // base d'avant les numéros : rattrapage, comme la migration
   const listeners = new Set();
   const refresh = () => { db = load() || db; listeners.forEach((f) => f()); };
   bc && (bc.onmessage = refresh);
@@ -351,6 +362,7 @@ export function createDemoApi({ defaultActivities }) {
       if (s.demo_owner) { if (!guestActive() || s.demo_owner !== user()?.id || db.sessions.filter((x) => x.demo_owner === s.demo_owner).length >= 2) throw new Error("Deux sessions de démonstration au plus."); }
       else needAdmin();
       const row = { ...SESSION_DEFAULTS, id: uid(), formation: "Prendre en main les IA génératives", client: "", date: null, format: "1", code: code6(), status: "draft", activities: [], quizzes: {}, live: {}, created_at: now(), ...s };
+      numberSession(row); // numéro attribué ici, jamais repris de la session copiée
       db.sessions.push(row); commit(); return row;
     },
     async updateSession(id, patch) {
@@ -358,7 +370,8 @@ export function createDemoApi({ defaultActivities }) {
       const s = db.sessions.find((x) => x.id === id);
       if (!isAdmin() && ((patch.trainer_id !== undefined && patch.trainer_id !== s.trainer_id) || (patch.skin_id !== undefined && patch.skin_id !== s.skin_id))) throw new Error("Seule l'administration attribue une session et choisit son habillage.");
       if (!isAdmin() && patch.demo_owner !== undefined && patch.demo_owner !== s.demo_owner) throw new Error("Une session de démonstration ne change pas de propriétaire.");
-      Object.assign(s, patch);
+      const { num_year: _y, num_seq: _n, ...p } = patch; // le numéro ne change jamais
+      Object.assign(s, p);
       if (s.status === "closed") { // codes et accès directs détruits à la clôture
         db.codes = db.codes.filter((c) => c.session_id !== id);
         db.passes = (db.passes || []).filter((c) => c.session_id !== id);
@@ -424,6 +437,40 @@ export function createDemoApi({ defaultActivities }) {
       });
     },
     async setAttended(sid, u, v) { needTrainer(); const m = db.members.find((x) => x.session_id === sid && x.user_id === u); if (m) { m.attended = v; commit(); } },
+    // Émargement par demi-journée (comme sign_presence, set_presence, session_presence)
+    async signPresence(sid, slot) {
+      const u = need(); if (!SLOT_RE.test(slot)) throw new Error("Créneau inconnu.");
+      const m = db.members.find((x) => x.session_id === sid && x.user_id === u.id);
+      if (!m || isGuest()) throw new Error("Réservé aux participant·es de la session.");
+      const s = db.sessions.find((x) => x.id === sid);
+      if (!s || s.status === "closed" || isArchived(s)) throw new Error("La session est terminée.");
+      m.presence ||= {}; m.presence[slot] = { ...(m.presence[slot] || {}), self: m.presence[slot]?.self || now() };
+      commit(); return m.presence;
+    },
+    async setPresence(sid, userId, slot, v) {
+      needTrainer(); if (!manages(sid)) throw new Error("Réservé à l'équipe de la session.");
+      if (!SLOT_RE.test(slot)) throw new Error("Créneau inconnu.");
+      const m = db.members.find((x) => x.session_id === sid && x.user_id === userId); if (!m) throw new Error("Participant·e introuvable.");
+      const cur = { ...((m.presence ||= {})[slot] || {}) };
+      if (v == null) { delete cur.staff; delete cur.by; delete cur.at; } else Object.assign(cur, { staff: !!v, by: user().id, at: now() });
+      m.presence[slot] = cur; commit(); return m.presence;
+    },
+    async presence(sid) {
+      if (!manages(sid)) throw new Error("Réservé à l'équipe de la session.");
+      return db.members.filter((m) => m.session_id === sid).map((m) => ({ user_id: m.user_id, presence: m.presence || {} }));
+    },
+    // Adresses des stagiaires (comme list_trainees) : inscrit·es et invité·es, hors sessions de démo
+    async listTrainees() {
+      needAdmin();
+      const real = new Set(db.sessions.filter((s) => !s.demo_owner).map((s) => s.id));
+      const rows = db.members.filter((m) => real.has(m.session_id)).map((m) => {
+        const p = prof(m.user_id);
+        return p && p.role === "trainee" ? { email: p.email.toLowerCase(), full_name: p.full_name, metier: p.metier, niveau: p.niveau, session_id: m.session_id, joined: true, joined_at: m.joined_at } : null;
+      }).filter(Boolean);
+      db.invites.filter((i) => real.has(i.session_id) && !rows.some((r) => r.session_id === i.session_id && r.email === i.email))
+        .forEach((i) => rows.push({ email: i.email, full_name: null, metier: null, niveau: null, session_id: i.session_id, joined: false, joined_at: null }));
+      return rows;
+    },
     async removeMember(sid, u) { needTrainer(); db.members = db.members.filter((x) => !(x.session_id === sid && x.user_id === u)); commit(); },
     async myMembership(sid) { const u = need(); return db.members.find((m) => m.session_id === sid && m.user_id === u.id) || null; },
     async saveProgress(sid, progress) { const m = await api.myMembership(sid); if (m) { m.progress = progress; commit(); } },

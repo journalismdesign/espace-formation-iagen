@@ -7,7 +7,7 @@ import { modulesFor } from "../lib/content.js";
 import { STATUS } from "./home.js";
 import { skinDark } from "../lib/skin.js";
 import { isAdmin, isGuest } from "../lib/roles.js";
-import { ICON } from "../lib/adminNav.js";
+import { sessionNo } from "../lib/presence.js";
 import { isArchived, archiveDate, sessionEnded, dayCount, trainingDates, parisToday, addDays } from "../lib/archive.js";
 
 // Lien court de la session : <site>/CODE (redirigé vers #/join/CODE par 404.html ou au démarrage).
@@ -51,7 +51,7 @@ export async function viewAdmin(root, [view], { api, go, me }) {
   root.innerHTML = `
     <div class="pagehead"><div><div class="kicker-d">${admin ? "Back-office · administration" : "Back-office formateur"}</div><h1>${admin ? "Sessions" : "Mes sessions"}</h1>
       ${admin ? "" : `<p class="muted">${T("Les sessions qui vous sont attribuées par l'administration. Pour en obtenir une autre, contactez-la.")}</p>`}</div>
-      ${admin ? `<div class="head-actions"><a class="btn ghost" href="#/admin/trames" title="Trames de conducteur, quiz et sondages">Studio</a><button class="btn" id="newBtn">+ Créer une session</button><a class="iconbtn gear-btn" href="#/admin/reglages" title="Réglages généraux (organisme, habillages, entreprises, e-mail, équipe et accès)" aria-label="Réglages généraux">${ICON.gear}</a></div>` : ""}</div>
+      ${admin ? `<div class="head-actions"><button class="btn" id="newBtn">+ Créer une session</button></div>` : ""}</div>
     <form class="card" id="newForm" hidden style="margin-bottom:14px">
       <h3>Nouvelle session</h3>
       <div class="grid g2">
@@ -69,8 +69,9 @@ export async function viewAdmin(root, [view], { api, go, me }) {
     </form>
     <div class="phases" style="margin-bottom:12px"><a href="#/admin"${archivedTab ? "" : ' aria-current="page"'}>Sessions à venir</a><a href="#/admin/archives"${archivedTab ? ' aria-current="page"' : ""}>Sessions archivées${archived.length ? ` <span class="small muted">${archived.length}</span>` : ""}</a></div>
     <div class="card table-card">
-      ${sessions.length ? `<table class="tbl"><thead><tr><th>Client</th><th>Session</th><th>Intervenant·e</th><th>État</th><th>Date</th><th>Code</th><th>Participants</th><th></th></tr></thead><tbody>
+      ${sessions.length ? `<table class="tbl"><thead><tr><th>N°</th><th>Client</th><th>Session</th><th>Intervenant·e</th><th>État</th><th>Date</th><th>Code</th><th>Participants</th><th></th></tr></thead><tbody>
       ${sessions.map((s) => `<tr${!archivedTab && sessionEnded(s) ? ' class="row-ended"' : ""}>
+        <td class="mono small num-cell">${esc(sessionNo(s) || "—")}</td>
         <td class="client-cell">${(() => { const c = clientOf(s); return c.logo ? `<img src="${esc(c.logo)}" alt="${esc(c.name)}" title="${esc(c.name)}" class="client-logo">` : c.name ? `<span>${T(c.name)}</span>` : `<span class="muted">—</span>`; })()}</td>
         <td><a href="#/admin/s/${s.id}"><b>${T(s.title)}</b></a><div class="small muted">${T(s.formation || "")}${dayCount(s) > 1 ? ` · ${dayCount(s)} jours` : " · 1 jour"}</div></td>
         <td class="small">${admin ? `<select class="assign" data-assign="${s.id}" aria-label="Intervenant·e de la session">${trOptions(s.trainer_id)}</select>` : T(trainerName(s.trainer_id) || "—")}</td>
@@ -147,7 +148,7 @@ export function openDuplicate(api, s, go) {
   d.innerHTML = `<form class="card modal" role="dialog" aria-modal="true" aria-labelledby="dupH">
       <h3 id="dupH">Dupliquer « ${T(s.title)} »</h3>
       <p class="small muted" style="margin-top:0">${T("Sont repris : réglages, déroulé et activités, conducteur importé, habillage, intervenant·e, présentations, émargement, évaluation, support, mode en ligne et ressources. Ne sont jamais repris : participant·es, réponses, cadrages et discussion. La copie part en brouillon avec un nouveau code.")}</p>
-      <label class="f" for="dT">Intitulé</label><input type="text" id="dT" required maxlength="140" value="${esc(s.title + " (copie)")}">
+      <label class="f" for="dT">Intitulé</label><input type="text" id="dT" required maxlength="140" value="${esc(s.title)}">
       <div class="grid g2">
         <div><label class="f" for="dD">${two ? "Jour 1" : "Date"}</label><input type="date" id="dD"></div>
         ${two ? `<div><label class="f" for="dD2">Jour 2</label><input type="date" id="dD2"></div>` : ""}
