@@ -2,6 +2,8 @@
 import { $, T, esc, guard } from "../lib/dom.js";
 
 const GATE = "iagen-trainer-gate";
+// Page d'invitation : adresse qui vient de valider son code, et adresse refusée faute d'invitation
+export const GUEST_TRY = "iagen-guest-try", GUEST_REFUSED = "iagen-guest-refused";
 
 export async function viewTrainerLogin(root, p, ctx) {
   const { api } = ctx;
@@ -213,6 +215,9 @@ export async function viewGuestLogin(root, _p, { api, go }) {
   </div></div>`;
   let email = "";
   const msg = (h) => ($("#gMsg").innerHTML = h);
+  // Retour après un code valide pour une adresse sans invitation (main.js a déconnecté le compte) : le dire clairement
+  let refused = null; try { refused = sessionStorage.getItem(GUEST_REFUSED); sessionStorage.removeItem(GUEST_REFUSED); } catch {}
+  if (refused) msg(`<div class="warn">${T(`L'adresse ${esc(refused)} n'a pas d'invitation en cours. Demandez à l'équipe de l'ajouter dans « Équipe et accès » avec le rôle « Invité·e (démo) », puis recommencez.`)}</div>`);
   $("#gF").onsubmit = async (e) => {
     e.preventDefault();
     email = $("#gMail").value.trim().toLowerCase();
@@ -229,8 +234,9 @@ export async function viewGuestLogin(root, _p, { api, go }) {
     e.preventDefault();
     const btn = $("#gV button[type=submit]"); btn.disabled = true; btn.textContent = "Vérification…";
     try {
+      try { sessionStorage.setItem(GUEST_TRY, email); } catch {} // main.js vérifie le rôle à la connexion
       await api.verifyEmailOtp(email, $("#gCode").value);
-      go("#/admin"); // la connexion relance aussi le rendu ; une adresse non invitée arrive sur « Mon espace »
+      go("#/admin"); // la connexion relance aussi le rendu ; sans invitation, retour ici avec un message
     } catch {
       btn.disabled = false; btn.textContent = "Entrer";
       msg(`<div class="warn">Code invalide ou expiré.</div>`); $("#gCode").select();
