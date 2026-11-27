@@ -131,6 +131,7 @@ cas: Radio France héberge Whisper chez elle pour protéger la voix des sources
 pages: 75 à 79, 86, 87, 91
 temps fort: 2
 fiches: interface, projet, connecteur, competence, plugin, mcp, instructions, injection
+outil: code couleur
 
 ### Points clés
 - Les assistants partagent la même architecture : projets, sélecteur de modèle, outils, historique, paramètres.
