@@ -21,6 +21,27 @@ ok(bad.errors.some((e) => e.includes("finit avant")), "horaires inversés : erre
 ok(bad.errors.some((e) => e.includes("horaires introuvables")), "horaire de fin manquant : erreur");
 ok(bad.errors.some((e) => e.includes("type « atelier libre »")), "type inconnu : erreur");
 ok(bad.warnings.some((e) => e.includes("quiz « inexistant »")), "quiz inconnu : remarque et retrait");
-ok(bad.errors.some((e) => e.includes("deux au plus")), "trois journées : refus");
+ok(!bad.errors.some((e) => e.includes("au plus")), "trois journées : acceptées (cinq au plus)");
+{
+  const six = [1, 2, 3, 4, 5, 6].map((d) => `# Jour ${d}\n## 09:30–10:00 · Séquence ${d}\n`).join("\n");
+  ok(parseConducteur(six).errors.some((e) => e.includes("cinq au plus")), "six journées : refus");
+  const five = parseConducteur(six.split("# Jour 6")[0]);
+  ok(!five.errors.length && five.programme.nDays === 5, "cinq journées : acceptées");
+}
 ok(parseConducteur("Bonjour").errors.length === 1, "texte sans séquence : refus");
+// Export puis retour : identifiants, activités en salle (plusieurs), pastilles d'aide, lien du support
+{
+  const r = parseConducteur(conducteurMarkdown(D1, { formation: "F" }));
+  ok(r.programme.modules.every((m, i) => m.id === D1[i].id || (D1[i].type === "pause" && /^(pause|déjeuner)/i.test(D1[i].titre))), "les identifiants des séquences survivent à l'export");
+  const md = `---\nformation: Essai\nslides: https://docs.google.com/presentation/d/abc123def456ghi789/edit\nnombre de slides: 120\n---\n## 09:30–10:00 · Accueil\nid: accueil\nactivité: niveau, llm, inconnue\nidées: oui\n`;
+  const p = parseConducteur(md);
+  const m = p.programme.modules[0];
+  ok(m.id === "accueil" && m.live === "niveau" && m.acts.join() === "niveau,llm", "activité: plusieurs clés (sondage et quiz en salle), l'inconnue retirée");
+  ok(p.warnings.some((w) => w.includes("inconnue")), "activité inconnue : remarque");
+  ok(m.idees === true, "idées: oui");
+  ok(p.programme.slides_url.includes("abc123") && p.programme.slides_n === 120, "lien du support et nombre de slides dans l'en-tête");
+  const back = parseConducteur(conducteurMarkdown(p.programme.modules, { formation: "Essai", slides_url: p.programme.slides_url, slides_n: 120 }));
+  const b = back.programme.modules[0];
+  ok(b.acts.join() === "niveau,llm" && b.idees && back.programme.slides_n === 120 && back.programme.slides_url === p.programme.slides_url, "aller-retour complet (activités, idées, support)");
+}
 console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests du conducteur passent.");

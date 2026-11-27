@@ -1,8 +1,11 @@
 /* Contenus pédagogiques partagés : parcours, quiz, fiches, prompts, outils,
    assistant. Repris de la version claude.ai et rendus indépendants du
    stockage (la progression est passée en paramètre). */
-import { FICHES, GLOSS, PROMPTS, CASES, QUIZ, D1, D2, PRESETS, CC, CCL } from "../data.js";
+import { FICHES, GLOSS, PROMPTS, CASES, D1, D2, D2B, DAY_TITLES, CC, CCL, IDEES } from "../data.js";
+import { dateOfDay } from "./archive.js";
+import { quizFor, pollFor } from "./quizzes.js";
 import { T, esc, fr, $, $$, NB, norm, mins, hfr, fmtMin, bindCopy } from "./dom.js";
+import { applyEnds } from "./programme.js";
 
 export const ficheById = (id) => FICHES.find((f) => f.id === id);
 // Déroulé d'une session : conducteur importé (sessions.programme) s'il existe, sinon déroulé par défaut du format.
@@ -11,13 +14,14 @@ export const ficheById = (id) => FICHES.find((f) => f.id === id);
 // pour chaque journée ; sur la dernière, l'évaluation de fin de stage avant la dernière séquence.
 export function emargementSlots(session) {
   const all = modulesFor(session);
-  const days = session.format === "2" ? [1, 2] : [1];
+  const days = Array.from({ length: daysOf(session).n }, (_, i) => i + 1);
+  const own = !!session.programme?.modules?.length; // conducteur ou trame : chaque journée commence à sa première séquence
   return days.flatMap((d) => {
     const dm = all.filter((m) => (m.day || 1) === d);
     const lunch = dm.find((m) => m.type === "pause" && /jeuner/i.test(m.titre));
-    const am = String(session.start_time || dm[0]?.t[0] || "09:30").slice(0, 5);
+    const am = String((own && dm[0]?.t[0]) || session.start_time || dm[0]?.t[0] || "09:30").slice(0, 5);
     const pm = lunch ? lunch.t[1] : "13:30";
-    const date = d === 2 ? session.date2 : session.date;
+    const date = dateOfDay(session, d);
     const out = [{ key: `j${d}-matin`, day: d, t: am, label: "Émargement du matin", date }, { key: `j${d}-aprem`, day: d, t: pm, label: "Émargement de l'après-midi", date }];
     if (d === days[days.length - 1]) { const last = dm.filter((m) => m.type !== "pause").pop(); if (last) out.push({ key: `j${d}-eval`, day: d, t: last.t[0], label: "Évaluation de fin de stage", date, kind: "evaluation" }); }
     return out;
@@ -33,7 +37,7 @@ export function emargementOpen(session, d = new Date()) {
   const n = parisNow(d), toM = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
   return emargementSlots(session).find((x) => !x.kind && x.date === n.date && n.min >= toM(x.t) && n.min < toM(x.t) + 30) || null;
 }
-/* Déroulé importé (conducteur Markdown, ou écrit directement par l'API) : les champs « techniques » sont insérés
+/* Déroulé importé (conducteur Markdown, trame, ou écrit directement par l'API) : les champs « techniques » sont insérés
    sans échappement dans les gabarits (identifiants, classes, horaires, nombres). On les ramène ici à des valeurs
    sûres, une fois pour toutes les vues ; les textes libres (titres, objectifs…) restent échappés par T(). */
 const MOD_TYPES = ["comprendre", "pratique", "discussion", "pause"];
@@ -41,12 +45,12 @@ const HHMM = /^\d{1,2}:\d{2}$/;
 const safeCache = new WeakMap();
 function safeModules(list) {
   if (safeCache.has(list)) return safeCache.get(list);
-  const out = list.map((m, i) => ({
+  const out = list.filter((m) => m && typeof m === "object").map((m, i) => ({
     ...m,
     id: /^[\w-]{1,80}$/.test(String(m.id)) ? String(m.id) : `m${i + 1}`,
     type: MOD_TYPES.includes(m.type) ? m.type : "comprendre",
     t: Array.isArray(m.t) && m.t.length === 2 && m.t.every((x) => HHMM.test(String(x))) ? m.t.map(String) : ["09:00", "09:00"],
-    day: m.day == null ? m.day : +m.day === 2 ? 2 : 1,
+    day: m.day == null ? m.day : Math.min(5, Math.max(1, Math.round(+m.day) || 1)),
     tf: m.tf ? +m.tf || null : m.tf,
     titre: String(m.titre ?? ""),
     exo: m.exo ? { ...m.exo, duree: Math.max(0, Math.round(+m.exo.duree || 0)), steps: Array.isArray(m.exo.steps) ? m.exo.steps : [] } : m.exo,
@@ -54,11 +58,27 @@ function safeModules(list) {
   safeCache.set(list, out);
   return out;
 }
-export const modulesFor = (x) => (x && typeof x === "object" ? (x.programme?.modules?.length ? safeModules(x.programme.modules) : x.format === "2" ? D2 : D1) : x === "2" ? D2 : D1);
+/* Niveau du jour 2 (deux journées, déroulé par défaut) : sessions.programme.level vaut "debutant" (R·M·C·T·F, puis
+   ateliers en groupe, D2B) ; absent, c'est le niveau expert (le jour 2 de D2). Sans effet sur un conducteur importé. */
+export const levelOf = (x) => (x && typeof x === "object" && x.programme?.level === "debutant" ? "debutant" : "expert");
+export const defaultModules = (x) => (x && typeof x === "object" ? (x.format === "2" ? (levelOf(x) === "debutant" ? D2B : D2) : D1) : x === "2" ? D2 : D1);
+// Déroulé de base (sans les heures de fin modifiées) : sert au déplacement des pauses et aux bornes de la fin de journée
+export const baseModules = (x) => (x && typeof x === "object" && x.programme?.modules?.length ? safeModules(x.programme.modules) : defaultModules(x));
+// Déroulé effectif : heures de fin de journée appliquées (sessions.programme.ends, programme.js). Même tableau tant que rien ne change.
+const fitted = new WeakMap();
+export const modulesFor = (x) => {
+  const base = baseModules(x), ends = x && typeof x === "object" ? x.programme?.ends : null;
+  if (!ends || typeof ends !== "object" || !Object.keys(ends).length) return base;
+  const key = JSON.stringify(ends);
+  let byEnds = fitted.get(base);
+  if (!byEnds) fitted.set(base, (byEnds = new Map()));
+  if (!byEnds.has(key)) byEnds.set(key, applyEnds(base, ends));
+  return byEnds.get(key);
+};
 // Nombre de journées et titres des journées
 export const daysOf = (x) => {
   const mods = modulesFor(x), n = Math.max(1, ...mods.map((m) => m.day || 1));
-  const titles = x && typeof x === "object" && x.programme?.modules?.length ? x.programme.days || {} : n > 1 ? { 1: "Comprendre et Gemini Notebook", 2: "Les assistants et les méthodes" } : {};
+  const titles = x && typeof x === "object" && x.programme?.modules?.length ? x.programme.days || {} : n > 1 ? DAY_TITLES[levelOf(x)] : {};
   return { n, titles };
 };
 export const typeLabel = (t) => ({ comprendre: "Comprendre", pratique: "Pratique", discussion: "Discussion libre", pause: "Pause" }[t]);
@@ -103,20 +123,22 @@ export function bindRefs(root) {
 }
 
 /* ---------- Quiz (en autonomie) ---------- */
-export function renderQuiz(box, id, onScore) {
-  const Q = QUIZ[id]; let answered = 0, good = 0;
-  box.innerHTML = `<div class="quiz">${Q.q.map((q, i) => `<div class="qq" data-i="${i}"><p>${i + 1}. ${T(q[0])}</p>${q[1].map((o, j) => `<button class="opt" data-j="${j}">${T(o)}</button>`).join("")}</div>`).join("")}<div class="score" data-score></div></div>`;
+// quiz : { titre, questions: [{ id, q, o, ok, why }] } (quizFor, quizzes.js)
+export function renderQuiz(box, quiz, onScore) {
+  const L = quiz?.questions || []; let answered = 0, good = 0;
+  if (!L.length) { box.innerHTML = ""; return; }
+  box.innerHTML = `<div class="quiz">${L.map((q, i) => `<div class="qq" data-i="${i}"><p>${i + 1}. ${T(q.q)}</p>${q.o.map((o, j) => `<button class="opt" data-j="${j}">${T(o)}</button>`).join("")}</div>`).join("")}<div class="score" data-score></div></div>`;
   $$(".qq", box).forEach((qq) => {
-    const q = Q.q[+qq.dataset.i];
+    const q = L[+qq.dataset.i];
     $$(".opt", qq).forEach((b) => (b.onclick = () => {
       if (qq.dataset.done) return; qq.dataset.done = 1; answered++;
-      const j = +b.dataset.j, ok = j === q[2]; if (ok) good++;
-      b.classList.add(ok ? "ok" : "ko"); $$(".opt", qq)[q[2]].classList.add("ok");
-      qq.insertAdjacentHTML("beforeend", `<div class="expl"><b>${ok ? "Juste." : "Pas tout à fait."}</b> ${T(q[3])}</div>`);
-      if (answered === Q.q.length) {
-        $("[data-score]", box).innerHTML = T(`Score : ${good} sur ${Q.q.length}. `) + `<button class="btn sm ghost" data-again>Recommencer</button>`;
+      const j = +b.dataset.j, ok = j === q.ok; if (ok) good++;
+      b.classList.add(ok ? "ok" : "ko"); $$(".opt", qq)[q.ok]?.classList.add("ok");
+      qq.insertAdjacentHTML("beforeend", `<div class="expl"><b>${ok ? "Juste." : "Pas tout à fait."}</b> ${T(q.why || "")}</div>`);
+      if (answered === L.length) {
+        $("[data-score]", box).innerHTML = T(`Score : ${good} sur ${L.length}. `) + `<button class="btn sm ghost" data-again>Recommencer</button>`;
         onScore?.(good);
-        $("[data-again]", box).onclick = () => renderQuiz(box, id, onScore);
+        $("[data-again]", box).onclick = () => renderQuiz(box, quiz, onScore);
       }
     }));
   });
@@ -141,7 +163,7 @@ export function renderParcours(root, format, progress, onChange, opts = {}) {
         <div class="legend">${[["comprendre", "Comprendre", "var(--comp)"], ["pratique", "Pratique", "var(--prat)"], ["discussion", "Discussion libre", "var(--disc)"]].map(([k, l, c]) => `<span><b style="background:${c}"></b>${l} · ${fmtMin(t[k])}</span>`).join("")}</div>
       </div>
       ${D.n > 1 ? `<div class="days">${Array.from({ length: D.n }, (_, k) => k + 1).map((d) => `<button data-day="${d}" aria-pressed="${d === curDay}">Jour ${d}${D.titles[d] ? ` · ${T(D.titles[d])}` : ""}</button>`).join("")}</div>` : ""}
-      <div class="tl">${withSlots(mods, format, curDay, curMod).map((m) => m.slot ? slotHtml(m, format) : modHtml(m, progress, nm, curIdx < 0 ? null : list.indexOf(m) - curIdx)).join("")}</div>`;
+      <div class="tl">${withSlots(mods, format, curDay, curMod).map((m) => m.slot ? slotHtml(m, format) : modHtml(m, progress, nm, curIdx < 0 ? null : list.indexOf(m) - curIdx, format)).join("")}${mods.length ? endHtml(mods[mods.length - 1].t[1]) : ""}</div>`;
     $$("[data-day]", root).forEach((b) => (b.onclick = () => { curDay = +b.dataset.day; draw(); }));
     $$(".mod[data-id]", root).forEach((el) => {
       const head = $(".mhead", el), id = el.dataset.id;
@@ -153,12 +175,36 @@ export function renderParcours(root, format, progress, onChange, opts = {}) {
       $(".check", el).addEventListener("keydown", (e) => (e.key === " " || e.key === "Enter") && (e.preventDefault(), flip(e)));
       bindRefs(el);
       $$("[data-timer]", el).forEach((b) => (b.onclick = () => startTimer(+b.dataset.timer, b.dataset.tl || "Pratique")));
-      $$("[data-startquiz]", el).forEach((b) => (b.onclick = () => renderQuiz(b.closest("[data-quiz]"), b.dataset.startquiz, (s) => {
+      $$("[data-startquiz]", el).forEach((b) => (b.onclick = () => renderQuiz(b.closest("[data-quiz]"), quizFor(format, b.dataset.startquiz), (s) => {
         progress.quiz = { ...(progress.quiz || {}), [b.dataset.startquiz]: Math.max(progress.quiz?.[b.dataset.startquiz] || 0, s) }; onChange(progress);
       })));
     });
   };
   draw();
+  bindIdeas(root);
+}
+
+/* Pastilles d'aide (ateliers du jour 2 en niveau débutant, constructeur R·M·C·T·F) : une pastille touchée montre
+   sa situation, une seule à la fois ; touchée de nouveau, elle se referme. */
+export function ideasHtml() {
+  return `<div class="ideas"><p class="small muted" style="margin:0 0 8px">${T("Touchez une pastille pour voir une situation, puis adaptez-la à votre service. Pour formuler le problème : « Chaque [fréquence], nous devons [tâche], ce qui prend [temps] parce que [difficulté]. »")}</p>
+    ${IDEES.map((g, gi) => `<div class="ideas-g"><div class="ideas-h">${T(g.g)}</div><div class="chips">${g.items.map(([t], i) => `<button type="button" class="chip" data-idea="${gi}-${i}" aria-expanded="false">${T(t)}</button>`).join("")}</div></div>`).join("")}
+    <div class="idea-out" hidden></div></div>`;
+}
+const ideasBound = new WeakSet(); // délégation posée une fois par conteneur (le parcours se redessine dans le même)
+export function bindIdeas(root) {
+  if (!root || ideasBound.has(root)) return;
+  ideasBound.add(root);
+  root.addEventListener("click", (e) => {
+    const b = e.target.closest?.("[data-idea]"); if (!b) return;
+    const box = b.closest(".ideas"), out = $(".idea-out", box), [gi, i] = b.dataset.idea.split("-").map(Number);
+    const was = b.getAttribute("aria-expanded") === "true";
+    $$("[data-idea]", box).forEach((x) => { x.setAttribute("aria-expanded", "false"); x.classList.remove("on"); });
+    if (was || !IDEES[gi]?.items[i]) { out.hidden = true; return; }
+    const [t, sit] = IDEES[gi].items[i];
+    b.setAttribute("aria-expanded", "true"); b.classList.add("on");
+    out.innerHTML = `<b>${T(t)}</b><p>${T(sit)}</p>`; out.hidden = false;
+  });
 }
 /* Créneaux d'émargement dans le déroulé du stagiaire (session connue seulement), à leur heure :
    validés quand ils sont passés (30 min après l'heure prévue, jour passé), présentés par le formateur,
@@ -185,8 +231,11 @@ function slotHtml(x, session) {
     <div class="body"><div class="mhead"><span class="check" aria-hidden="true">${x.past ? "✓" : ""}</span><div class="meta"><span class="pill em">Émargement</span><b>${T(x.label)}</b>${tag}</div></div></div></div>`;
 }
 
+// Dernière ligne de chaque journée : l'heure de fin (modifiable par le formateur dans le pilotage)
+const endHtml = (t) => `<div class="mod" data-type="fin"><div class="time"><b>${hfr(t)}</b></div><div class="body"><div class="mhead"><div class="meta"><span class="pill fin">Fin de la journée</span></div></div></div></div>`;
 // rel : position par rapport à la séquence en cours (null si le formateur n'a rien lancé)
-function modHtml(m, progress, nm, rel = null) {
+// session : la session (ou son seul format, pour les anciens appels), pour lire ses quiz et ses activités
+function modHtml(m, progress, nm, rel = null, session = null) {
   const dur = mins(m.t[1]) - mins(m.t[0]);
   const isNow = rel === null ? nm >= mins(m.t[0]) && nm < mins(m.t[1]) : rel === 0;
   const passed = rel !== null && rel < 0; // séquence dépassée par le formateur : validée d'office
@@ -205,10 +254,10 @@ function modHtml(m, progress, nm, rel = null) {
         </div>
         <span class="chev">▸</span>
       </div>
-      <div class="mdetail">${detail(m, progress)}</div>
+      <div class="mdetail">${detail(m, progress, session)}</div>
     </div></div>`;
 }
-function detail(m, progress) {
+function detail(m, progress, session = null) {
   let h = "";
   if (m.obj) h += `<div class="blk"><h4>Objectifs</h4><ul>${m.obj.map((x) => `<li>${T(x)}</li>`).join("")}</ul></div>`;
   if (m.pts) h += `<div class="blk"><h4>Ce qu'il faut retenir</h4><ul>${m.pts.map((x) => `<li>${T(x)}</li>`).join("")}</ul></div>`;
@@ -218,10 +267,16 @@ function detail(m, progress) {
       <div class="chips" style="margin-top:10px"><button class="btn sm" data-timer="${m.exo.duree}" data-tl="${esc(m.exo.titre)}">Lancer le minuteur (${m.exo.duree}${NB}min)</button>
       ${(m.exo.prompts || []).map((p) => { const P = PROMPTS.find((x) => x.id === p); return P ? `<button class="chip" data-prompt="${p}">Prompt : ${T(P.titre)}</button>` : ""; }).join("")}</div></div>`;
   }
+  if (m.idees) h += `<div class="blk"><h4>Des idées pour démarrer</h4>${ideasHtml()}</div>`;
   if (m.disc) h += `<div class="blk disc"><h4 style="color:#7A5300">Discussion</h4><ul>${m.disc.map((x) => `<li>${T(x)}</li>`).join("")}</ul></div>`;
-  if (m.quiz) h += `<div class="blk"><h4>Quiz · ${T(QUIZ[m.quiz].titre)}</h4><div data-quiz="${m.quiz}"><button class="btn sm ghost" data-startquiz="${m.quiz}">Faire le quiz (${QUIZ[m.quiz].q.length} questions)${progress.quiz?.[m.quiz] != null ? ` · meilleur score ${progress.quiz[m.quiz]}/${QUIZ[m.quiz].q.length}` : ""}</button></div></div>`;
-  if (m.fiches) h += `<div class="blk"><h4>Fiches pratiques</h4><div class="chips">${m.fiches.map((f) => (ficheById(f) ? `<button class="chip" data-fiche="${f}">${T(ficheById(f).titre)}</button>` : "")).join("")}</div></div>`;
-  if (m.live && PRESETS[m.live]) h += `<p class="small muted" style="margin:0">Activité en salle prévue : « ${T(PRESETS[m.live].q)} ».</p>`;
+  const QZ = m.quiz ? quizFor(session, m.quiz) : null;
+  if (QZ) h += `<div class="blk"><h4>Quiz · ${T(QZ.titre)}</h4><div data-quiz="${esc(m.quiz)}"><button class="btn sm ghost" data-startquiz="${esc(m.quiz)}">Faire le quiz (${QZ.questions.length} question${QZ.questions.length > 1 ? "s" : ""})${progress.quiz?.[m.quiz] != null ? ` · meilleur score ${progress.quiz[m.quiz]}/${QZ.questions.length}` : ""}</button></div></div>`;
+  if (m.fiches) h += `<div class="blk"><h4>Dans le glossaire</h4><div class="chips">${m.fiches.map((f) => (ficheById(f) ? `<button class="chip" data-fiche="${f}">${T(ficheById(f).titre)}</button>` : "")).join("")}</div></div>`;
+  // Activités en salle placées dans cette séquence (pilotage), sinon celle que cite le déroulé
+  const PL = session?.activities ? actsByModule(session).get(m.id) || [] : [];
+  const LV = !PL.length && m.live ? pollFor(session, m.live) : null;
+  if (PL.length) h += `<p class="small muted" style="margin:0">${PL.length > 1 ? "Activités en salle" : "Activité en salle"} : ${PL.map((a) => `« ${T(a.titre)} »`).join(", ")}.</p>`;
+  else if (LV) h += `<p class="small muted" style="margin:0">Activité en salle prévue : « ${T(LV.q)} ».</p>`;
   return h;
 }
 // Séquences déjà passées dans le déroulé piloté par le formateur
@@ -230,7 +285,30 @@ export const hasCadrage = (session) => daysOf(session).n > 1;
 
 /* Outils d'exercice : ils apparaissent côté stagiaire quand le formateur lance (ou dépasse) la séquence
    qui les propose, puis restent disponibles. Après la session (close), tous restent accessibles. */
-export const TOOL_IDS = ["toolRmctf", "toolSve"];
+/* Activités placées dans le déroulé (quiz, sondages, nuages…). a.at : séquence choisie dans le pilotage
+   ("" = hors déroulé, choix explicite). Sans a.at, ou si sa séquence n'existe plus : la séquence dont la ligne
+   `activité:` cite l'activité (m.live), ou dont le quiz en autonomie (m.quiz) est celui de l'activité.
+   Une activité n'est placée qu'à un seul endroit ; plusieurs activités d'une séquence gardent l'ordre de la liste. */
+export function actPlace(session, a, mods = modulesFor(session)) {
+  if (!a) return null;
+  if (a.at === "") return null;
+  if (a.at && mods.some((m) => m.id === a.at)) return a.at;
+  const m = mods.find((x) => x.type !== "pause" && ((x.live && (x.live === a.id || x.live === a.from)) || (a.type === "quiz" && x.quiz && x.quiz === a.quiz)));
+  return m ? m.id : null;
+}
+export function actsByModule(session) {
+  const mods = modulesFor(session), map = new Map();
+  for (const a of session?.activities || []) {
+    const id = actPlace(session, a, mods);
+    if (id) { if (!map.has(id)) map.set(id, []); map.get(id).push(a); }
+  }
+  return map;
+}
+
+export const TOOL_IDS = ["toolRmctf", "toolSve", "toolCc"];
+export const TOOL_LABELS = { toolRmctf: "Constructeur R·M·C·T·F", toolSve: "Kit S·V·E", toolCc: "Jeu du code couleur" };
+/* Outils visibles des stagiaires : ceux des séquences qui portent `outil`, une fois lancées ou dépassées dans le
+   déroulé ; live.tools les garde ensuite (revenir en arrière ne les retire pas). Tous après la clôture. */
 export function unlockedTools(session) {
   if (!session) return new Set();
   if (session.status === "closed") return new Set(TOOL_IDS);
@@ -273,17 +351,34 @@ export function startTimer(min, label) {
 }
 
 /* ---------- Outils d'exercice ---------- */
+const TASK_MAX = 12;
+const taskRow = (n, ph = "Tâche suivante, avec un verbe : « Classe… », « Vérifie… », « Propose… »") =>
+  `<div class="task-row"><span class="task-n" aria-hidden="true">${n}</span><input type="text" data-task placeholder="${esc(ph)}" aria-label="Tâche ${n}"><button type="button" class="iconbtn" data-task-del aria-label="Retirer la tâche ${n}">×</button></div>`;
+/* Prompt R·M·C·T·F : f = { R, M, C, T: [tâches], F }. Une tâche : « TÂCHE … » ; plusieurs : liste numérotée. */
+export function rmctfPrompt(f, { doubt = false, inv = false } = {}) {
+  const lab = { R: "RÔLE", M: "MISSION", C: "CONTEXTE", F: "FORMAT" };
+  const tasks = (f.T || []).map((x) => String(x).trim()).filter(Boolean);
+  const out = ["R", "M", "C"].filter((k) => f[k]).map((k) => `${lab[k]} ${f[k]}`);
+  if (tasks.length === 1) out.push(`TÂCHE ${tasks[0]}`);
+  else if (tasks.length > 1) out.push(`TÂCHES\n${tasks.map((t, i) => `${i + 1}. ${t}`).join("\n")}`);
+  if (f.F) out.push(`FORMAT ${f.F}`);
+  if (doubt) out.push("Si tu ne sais pas, dis-le. N'invente ni chiffre, ni citation, ni source.");
+  if (inv) out.push("Avant de répondre, pose-moi les questions dont tu as besoin pour faire ce travail.");
+  return out.join("\n");
+}
 export function toolsHtml() {
   return `<div class="grid g2">
   <div class="card" id="toolRmctf">
     <h3>Constructeur R·M·C·T·F</h3>
     <p class="small muted" style="margin-top:0">Méthode d'initiation, pour une demande ponctuelle (p.${NB}101). Remplissez, puis copiez le prompt.</p>
     ${[["R", "Rôle · qui doit répondre ?", "Tu es secrétaire de rédaction d'une rédaction d'information."], ["M", "Mission · pour quoi faire ?", "Aider un·e journaliste à s'approprier un rapport avant une interview."], ["C", "Contexte · ce que l'IA ne peut pas deviner", "Public, source, date, contraintes. « Appuie-toi uniquement sur le texte fourni. »", 1], ["T", "Tâche · l'action précise, avec un verbe", "Extrais les 5 chiffres clés et signale ce qui est contestable."], ["F", "Format · la forme attendue", "5 puces de 25 mots maximum ; un tableau Chiffre | Ce qu'il mesure | Page."]]
-      .map(([k, l, ph, ta]) => `<label class="f"><span class="letter">${k}</span>${T(l)}</label>${ta ? `<textarea data-k="${k}" placeholder="${esc(ph)}"></textarea>` : `<input type="text" data-k="${k}" placeholder="${esc(ph)}">`}`).join("")}
+      .map(([k, l, ph, ta]) => k === "T" ? `<label class="f"><span class="letter">T</span>${T("Tâches · une action par ligne, avec un verbe")}</label><div class="tasks" id="rTasks">${taskRow(1, ph)}</div><button type="button" class="btn sm ghost task-add" id="rTaskAdd">+ Ajouter une tâche</button>`
+        : `<label class="f"><span class="letter">${k}</span>${T(l)}</label>${ta ? `<textarea data-k="${k}" placeholder="${esc(ph)}"></textarea>` : `<input type="text" data-k="${k}" placeholder="${esc(ph)}">`}`).join("")}
     <label class="f inline"><input type="checkbox" id="rDoubt" checked> Ajouter « Si tu ne sais pas, dis-le. N'invente ni chiffre, ni citation, ni source. »</label>
     <label class="f inline"><input type="checkbox" id="rInv"> Prompt inversé : « Avant de répondre, pose-moi les questions dont tu as besoin. »</label>
     <div class="prompt" id="rOut"></div>
     <div style="display:flex;gap:8px;align-items:center"><button class="btn sm" data-copy="rOut">Copier le prompt</button><span class="small muted" id="rCheck"></span></div>
+    <details class="ideas-d"><summary class="small">Besoin d'idées ? Des situations pour démarrer</summary>${ideasHtml()}</details>
   </div>
   <div class="card" id="toolSve">
     <h3>Kit S·V·E pour un travail suivi</h3>
@@ -293,7 +388,7 @@ export function toolsHtml() {
     <div class="subnav" id="sveNav"><button data-s="S" aria-pressed="true">S · Spec par interview</button><button data-s="V" aria-pressed="false">V · Critères d'abord</button><button data-s="E" aria-pressed="false">E · Instructions du projet</button><button data-s="N" aria-pressed="false">Note de décisions</button></div>
     <div class="prompt" id="sveOut"></div><button class="btn sm" data-copy="sveOut">Copier le prompt</button>
   </div>
-  <div class="card">
+  <div class="card" id="toolCc">
     <h3>Jeu : le code couleur de la rédaction</h3>
     <p class="small muted" style="margin-top:0">Pour chaque contenu : jamais, avec précaution ou sans risque dans un assistant grand public (p.${NB}97).</p>
     <div id="ccGame"></div>
@@ -306,18 +401,46 @@ export function toolsHtml() {
   </div></div>`;
 }
 export function bindTools(root) {
-  const v = (k) => $(`#toolRmctf [data-k="${k}"]`, root).value.trim();
-  const lab = { R: "RÔLE", M: "MISSION", C: "CONTEXTE", T: "TÂCHE", F: "FORMAT" };
+  const card = $("#toolRmctf", root), list = $("#rTasks", root);
+  const tasks = () => $$("[data-task]", list).map((i) => i.value.trim()).filter(Boolean);
+  const v = (k) => (k === "T" ? tasks().join(" ") : $(`#toolRmctf [data-k="${k}"]`, root).value.trim());
   const rm = () => {
-    let out = ["R", "M", "C", "T", "F"].filter((k) => v(k)).map((k) => `${lab[k]} ${v(k)}`).join("\n");
-    if ($("#rDoubt", root).checked) out += (out ? "\n" : "") + "Si tu ne sais pas, dis-le. N'invente ni chiffre, ni citation, ni source.";
-    if ($("#rInv", root).checked) out += (out ? "\n" : "") + "Avant de répondre, pose-moi les questions dont tu as besoin pour faire ce travail.";
+    const out = rmctfPrompt({ R: v("R"), M: v("M"), C: v("C"), T: tasks(), F: v("F") }, { doubt: $("#rDoubt", root).checked, inv: $("#rInv", root).checked });
     $("#rOut", root).textContent = out || "Le prompt apparaîtra ici.";
     const miss = ["R", "M", "C", "T", "F"].filter((k) => !v(k));
     $("#rCheck", root).textContent = miss.length ? fr("Manque : " + miss.join(", ")) : fr("Les cinq lettres y sont. Chaque lettre est-elle précise ?");
   };
-  $$("#toolRmctf input, #toolRmctf textarea", root).forEach((i) => (i.oninput = rm));
-  rm();
+  // Tâches : une par ligne. « Ajouter une tâche » ou Entrée ajoute une ligne, × la retire (il en reste toujours une).
+  const renumber = () => {
+    const rows = $$(".task-row", list);
+    rows.forEach((r, i) => { $(".task-n", r).textContent = i + 1; $("[data-task]", r).setAttribute("aria-label", `Tâche ${i + 1}`); $("[data-task-del]", r).setAttribute("aria-label", `Retirer la tâche ${i + 1}`); $("[data-task-del]", r).hidden = rows.length < 2; });
+    $("#rTaskAdd", root).disabled = rows.length >= TASK_MAX;
+  };
+  const addTask = (after) => {
+    if ($$(".task-row", list).length >= TASK_MAX) return;
+    const tmp = document.createElement("div"); tmp.innerHTML = taskRow(0);
+    const row = tmp.firstElementChild;
+    after ? after.after(row) : list.append(row);
+    renumber(); $("[data-task]", row).focus(); rm();
+  };
+  $("#rTaskAdd", root).onclick = () => addTask(null);
+  list.addEventListener("click", (e) => {
+    const del = e.target.closest("[data-task-del]"); if (!del) return;
+    const row = del.closest(".task-row"), prev = row.previousElementSibling || row.nextElementSibling;
+    if ($$(".task-row", list).length < 2) return;
+    row.remove(); renumber(); rm(); $("[data-task]", prev)?.focus();
+  });
+  list.addEventListener("keydown", (e) => {
+    const inp = e.target.closest("[data-task]"); if (!inp) return;
+    if (e.key === "Enter") { e.preventDefault(); addTask(inp.closest(".task-row")); }
+    else if (e.key === "Backspace" && !inp.value && $$(".task-row", list).length > 1) { // ligne vide effacée : retour à la précédente
+      e.preventDefault(); const row = inp.closest(".task-row"), prev = row.previousElementSibling || row.nextElementSibling;
+      row.remove(); renumber(); rm(); const p = $("[data-task]", prev); p?.focus(); p?.setSelectionRange(p.value.length, p.value.length);
+    }
+  });
+  card.addEventListener("input", rm); card.addEventListener("change", rm); // champs et lignes ajoutées ensuite
+  renumber(); rm();
+  bindIdeas(card);
   let tab = "S";
   const sv = () => {
     $$("#sveNav button", root).forEach((b) => b.setAttribute("aria-pressed", b.dataset.s === tab));

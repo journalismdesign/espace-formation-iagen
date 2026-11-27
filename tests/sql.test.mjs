@@ -43,7 +43,7 @@ const s = await db.query(`insert into sessions (title) values ('Libération · 2
 const sid = s.rows[0].id, code = s.rows[0].code;
 ok(/^[ABCDEFGHJKMNPQRSTUVWXYZ2-9]{8}$/.test(code), "code de session généré, 8 caractères sans ambiguïté : " + code);
 await db.exec(`insert into session_invites values ('${sid}','alice@exemple.fr'); insert into resources (session_id,title,url) values ('${sid}','Charte','https://exemple.fr')`);
-await db.exec(`update sessions set status='live' where id='${sid}'`);
+await db.exec(`update sessions set status='live', online = true where id='${sid}'`); // en ligne : discussion ouverte aux stagiaires
 
 // Alice : réclame son invitation, cadre son projet, répond
 await as(A, "alice@exemple.fr");
@@ -99,12 +99,17 @@ await db.exec(`delete from sessions where id = '${dup3}'`);
 // v3 : support, logos, codes, page publique
 await db.exec(`reset role; update sessions set date = current_date + 1, end_time = '23:59', format = '1' where id = '${sid}';
   insert into session_support values ('${sid}', 'https://drive.google.com/support.pdf');
-  insert into access_codes (session_id, email, code_hash, expires_at) values ('${sid}', 'bob@exemple.fr', 'x', now() + interval '1 day');`);
+  insert into access_codes (session_id, email, code_hash, expires_at) values ('${sid}', 'bob@exemple.fr', 'x', now() + interval '1 day');
+  insert into access_passes (session_id, email, expires_at) values ('${sid}', 'bob@exemple.fr', now() + interval '1 day'), ('${sid}', 'vieux@exemple.fr', now() - interval '1 hour');
+  select public.purge_access_codes();`);
+ok((await db.query(`select string_agg(email, ',' order by email) e from access_passes`)).rows[0].e === "bob@exemple.fr", "purge : accès direct périmé effacé, l'autre gardé");
 await as(B, "bob@exemple.fr");
 let st = (await db.query(`select * from public.support_status('${sid}')`)).rows[0];
 ok(st.unlocked === false && st.url === null && st.configured === true, "support verrouillé : lien masqué au stagiaire");
 ok((await db.query(`select count(*)::int n from session_support`)).rows[0].n === 0, "le stagiaire ne lit pas la table du support");
 await fails(`select * from access_codes`, "les codes d'accès sont illisibles côté client");
+await fails(`select * from access_passes`, "les accès directs sont illisibles côté client");
+await fails(`insert into access_passes (session_id, email, expires_at) values ('${sid}', 'pirate@exemple.fr', now() + interval '1 day')`, "un client ne s'accorde pas d'accès direct");
 ok((await db.query(`select count(*)::int n from brands`)).rows[0].n === 3, "trois logos préenregistrés lisibles");
 await db.exec(`update brands set name = 'pirate' || name`);
 ok((await db.query(`select count(*)::int n from brands where name like 'pirate%'`)).rows[0].n === 0, "le stagiaire ne modifie pas les logos");
@@ -135,13 +140,27 @@ await as(B, "bob@exemple.fr");
 await db.exec(`update sessions set skip_pages = '' where id = '${sid}'`);
 await as(T, "formateur@exemple.fr");
 ok((await db.query(`select skip_pages from sessions where id='${sid}'`)).rows[0].skip_pages === "5, 12 à 14", "le stagiaire ne change pas les pages masquées");
+// Formation en salle (online = false) : la discussion est fermée aux stagiaires, l'équipe la garde
+await db.exec(`update sessions set online = false where id = '${sid}'`);
+await as(B, "bob@exemple.fr");
+ok((await db.query(`select count(*)::int n from threads`)).rows[0].n === 0, "formation en salle : le stagiaire ne lit pas la discussion");
+ok((await db.query(`select count(*)::int n from posts`)).rows[0].n === 0, "formation en salle : le stagiaire ne lit pas les messages");
+await fails(`insert into posts (thread_id, session_id, body) values ('${tid}', '${sid}', 'en salle')`, "formation en salle : le stagiaire n'écrit pas");
+await fails(`insert into threads (session_id, title) values ('${sid}', 'Nouvelle conversation')`, "formation en salle : le stagiaire n'ouvre pas de conversation");
+await as(T, "formateur@exemple.fr");
+ok((await db.query(`select count(*)::int n from posts where session_id='${sid}'`)).rows[0].n === 2, "formation en salle : l'équipe lit la discussion");
+await db.exec(`insert into posts (thread_id, session_id, body) values ('${tid}', '${sid}', 'Note de l''équipe')`);
+await db.exec(`update sessions set online = true where id = '${sid}'`);
+await as(B, "bob@exemple.fr");
+ok((await db.query(`select count(*)::int n from posts`)).rows[0].n === 3, "formation en ligne réactivée : le stagiaire relit tous les messages");
+await as(T, "formateur@exemple.fr");
 await db.exec(`update sessions set status = 'closed' where id = '${sid}'`);
 await as(B, "bob@exemple.fr");
 ok((await db.query(`select count(*)::int n from threads`)).rows[0].n === 0, "session close : le stagiaire ne lit plus la discussion");
 ok((await db.query(`select count(*)::int n from resources`)).rows[0].n === 1, "session close : le stagiaire garde les ressources");
 await fails(`insert into posts (thread_id, session_id, body) values ('${tid}', '${sid}', 'encore là')`, "session close : le stagiaire n'écrit plus");
 await as(T, "formateur@exemple.fr");
-ok((await db.query(`select count(*)::int n from posts where session_id='${sid}'`)).rows[0].n === 2, "session close : l'équipe relit la discussion");
+ok((await db.query(`select count(*)::int n from posts where session_id='${sid}'`)).rows[0].n === 3, "session close : l'équipe relit la discussion");
 await as(B, "bob@exemple.fr");
 await db.exec(`delete from threads where session_id = '${sid}'`);
 await as(T, "formateur@exemple.fr");
@@ -150,6 +169,7 @@ await db.exec(`delete from threads where session_id = '${sid}'`);
 ok((await db.query(`select count(*)::int n from posts where session_id='${sid}'`)).rows[0].n === 0, "l'équipe efface toute la discussion (messages compris)");
 await db.exec(`reset role;`);
 ok((await db.query(`select count(*)::int n from access_codes where session_id='${sid}'`)).rows[0].n === 0, "codes détruits à la clôture");
+ok((await db.query(`select count(*)::int n from access_passes where session_id='${sid}'`)).rows[0].n === 0, "accès directs détruits à la clôture");
 ok((await db.query(`select count(*)::int n from public.session_public('${code}')`)).rows[0].n === 0, "session close invisible publiquement");
 
 // Profils intervenant·es
@@ -229,6 +249,9 @@ await fails(`select public.session_roster('${sid}')`, "pas de tableau des partic
 await fails(`select public.list_staff()`, "pas d'accès à la liste de l'équipe");
 await fails(`insert into brands (name) values ('Pirate')`, "pas de réglages communs");
 ok((await db.query(`select count(*)::int n from public.session_roster('${s2}')`)).rows[0].n === 0, "tableau de sa propre session");
+// Code sans e-mail (fonction access, action issue) : autorisé par manages(), appelé avec le jeton de la personne connectée
+ok((await db.query(`select public.manages('${s2}') m`)).rows[0].m === true, "code sans e-mail : la formatrice peut en générer pour sa session");
+ok((await db.query(`select public.manages('${sid}') m`)).rows[0].m === false, "code sans e-mail : pas pour une session qui ne lui est pas attribuée");
 await as(T, "formateur@exemple.fr");
 await fails(`select public.remove_staff('formateur@exemple.fr')`, "l'admin ne se retire pas lui-même");
 await db.exec(`select public.save_staff('fanny@exemple.fr', true)`);
@@ -279,7 +302,7 @@ ok((await db.query(`select public.join_session('ZZZZZZZZ') r`)).rows[0].r === nu
 // Réponses : seulement salle ouverte, seulement par submit_response
 await fails(`select public.submit_response('${S3.id}', 'niveau', '1'::jsonb)`, "salle fermée : pas de réponse");
 await as(T, "formateur@exemple.fr");
-await db.exec(`update sessions set status = 'live' where id = '${S3.id}'`);
+await db.exec(`update sessions set status = 'live', online = true where id = '${S3.id}'`);
 await db.exec(`insert into session_secrets (session_id, label, value) values ('${S3.id}', 'Compte test', 'secret-42')`);
 await as(B, "bob@exemple.fr");
 await db.exec(`select public.submit_response('${S3.id}', 'niveau', '1'::jsonb)`);
@@ -303,6 +326,7 @@ ok((await db.query(`select count(*)::int n from session_secrets where session_id
 await fails(`select login_email from trainers`, "un stagiaire ne lit pas les adresses de connexion de l'équipe");
 ok((await db.query(`select count(*)::int n from trainers`)).rows[0].n >= 1, "il lit toujours les fiches des intervenant·es");
 ok((await db.query(`select count(*)::int n from public.trainer_logins()`)).rows[0].n === 0, "trainer_logins vide pour un stagiaire");
+ok((await db.query(`select public.manages('${sid}') m`)).rows[0].m === false, "code sans e-mail : refusé à un stagiaire");
 await as(T, "formateur@exemple.fr");
 ok((await db.query(`select count(*)::int n from public.trainer_logins() where login_email is not null`)).rows[0].n >= 1, "l'équipe lit les adresses de connexion");
 // Contraintes et duplication
@@ -311,4 +335,199 @@ await fails(`update sessions set emargement_qr = 'javascript:alert(1)' where id 
 await db.exec(`update sessions set emargement_qr = 'data:image/png;base64,AAAA' where id = '${S3.id}'`);
 const d4 = (await db.query(`select public.duplicate_session('${S3.id}') id`)).rows[0].id;
 ok((await db.query(`select access_mode from sessions where id='${d4}'`)).rows[0].access_mode === "invites", "la duplication reprend le mode d'accès");
+// Bibliothèque « Quiz et sondages » : lue par l'équipe, modifiée par l'administration, fermée aux stagiaires
+await su();
+const F2 = "00000000-0000-0000-0000-0000000000f2";
+await db.exec(`insert into trainer_emails (email, is_admin) values ('form2@exemple.fr', false) on conflict do nothing;
+insert into auth.users (id,email) values ('${F2}','form2@exemple.fr') on conflict do nothing;`);
+ok((await db.query(`select count(*)::int n from quiz_bank`)).rows[0].n === 16, "bibliothèque : 7 quiz et 9 sondages repris de data.js");
+ok((await db.query(`select content->'questions'->0->>'id' i from quiz_bank where id = 'llm'`)).rows[0].i === "0", "bibliothèque : questions reprises avec leur rang comme identifiant");
+ok(!(await db.query(`select has_table_privilege('anon', 'public.quiz_bank', 'select') p`)).rows[0].p, "bibliothèque : rien pour anon");
+await as(B, "bob@exemple.fr");
+ok((await db.query(`select count(*)::int n from quiz_bank`)).rows[0].n === 0, "bibliothèque : un·e stagiaire ne lit rien");
+await fails(`insert into quiz_bank (id, kind, titre, content) values ('pirate', 'cloud', 'Pirate', '{"q":"?"}')`, "bibliothèque : un·e stagiaire n'ajoute rien");
+await as(F2, "form2@exemple.fr");
+ok((await db.query(`select count(*)::int n from quiz_bank`)).rows[0].n === 16, "bibliothèque : un formateur la lit");
+await fails(`insert into quiz_bank (id, kind, titre, content) values ('perso', 'cloud', 'Perso', '{"q":"?"}')`, "bibliothèque : un formateur n'ajoute rien");
+await db.exec(`update quiz_bank set titre = 'Changé' where id = 'llm'`);
+await db.exec(`delete from quiz_bank where id = 'llm'`);
+await as(T, "formateur@exemple.fr");
+ok((await db.query(`select titre from quiz_bank where id = 'llm'`)).rows[0]?.titre === "Comprendre la machine", "bibliothèque : un formateur ne modifie ni ne supprime rien");
+await db.exec(`insert into quiz_bank (id, kind, titre, content) values ('nouveau-ab12', 'quiz', 'Nouveau', '{"questions":[{"id":"q-abc123","q":"?","o":["a","b"],"ok":0,"why":""}]}')`);
+await db.exec(`update quiz_bank set titre = 'Nouveau titre', updated_at = '2000-01-01' where id = 'nouveau-ab12'`);
+const nb = (await db.query(`select titre, updated_by, updated_at > now() - interval '1 minute' recent from quiz_bank where id = 'nouveau-ab12'`)).rows[0];
+ok(nb.titre === "Nouveau titre" && nb.updated_by === T && nb.recent, "bibliothèque : l'admin modifie, date et auteur tenus par le déclencheur");
+await db.exec(`delete from quiz_bank where id = 'nouveau-ab12'`);
+ok((await db.query(`select count(*)::int n from quiz_bank where id = 'nouveau-ab12'`)).rows[0].n === 0, "bibliothèque : l'admin supprime");
+await fails(`insert into quiz_bank (id, kind, titre, content) values ('Mauvais Id', 'cloud', 'X', '{"q":"?"}')`, "bibliothèque : identifiant hors format refusé");
+await fails(`insert into quiz_bank (id, kind, titre, content) values ('genre', 'texte', 'X', '{"q":"?"}')`, "bibliothèque : type inconnu refusé");
+await fails(`insert into quiz_bank (id, kind, titre, content) values ('lourd', 'cloud', 'X', jsonb_build_object('q', repeat(md5(random()::text), 4000)))`, "bibliothèque : contenu de plus de 100 ko refusé");
+// Copie des quiz dans la session
+ok(JSON.stringify((await db.query(`select quizzes from sessions where id='${S3.id}'`)).rows[0].quizzes) === "{}", "session : aucun quiz copié par défaut");
+await fails(`update sessions set quizzes = '[]'::jsonb where id = '${S3.id}'`, "session : quizzes doit être un objet");
+await db.exec(`update sessions set quizzes = '{"llm":{"titre":"Copie","questions":[{"id":"0","q":"?","o":["a","b"],"ok":1,"why":""}],"from":"llm"}}' where id = '${S3.id}'`);
+const d5 = (await db.query(`select public.duplicate_session('${S3.id}') id`)).rows[0].id;
+ok((await db.query(`select quizzes->'llm'->>'titre' t from sessions where id='${d5}'`)).rows[0].t === "Copie", "la duplication reprend les quiz de la session");
+
+/* ---------- Mode invitation : deux sessions de démo à manipuler, rien d'autre, date de fin ---------- */
+const G = "00000000-0000-0000-0000-0000000000e1", G2 = "00000000-0000-0000-0000-0000000000e2";
+await as(T, "formateur@exemple.fr");
+const S4 = (await db.query(`insert into sessions (title, status, online) values ('Vraie session', 'live', true) returning id, code`)).rows[0];
+await db.exec(`insert into session_invites (session_id, email) values ('${S4.id}', 'invite@exemple.fr');
+  insert into resources (session_id, title, url) values ('${S4.id}', 'Charte', 'https://exemple.fr')`);
+await db.exec(`select public.save_staff('invite@exemple.fr', 'guest', current_date + 10); select public.save_staff('autre.invite@exemple.fr', 'guest', current_date + 10)`);
+const team = (await db.query(`select role, guest_until is not null u from public.list_team() where email = 'invite@exemple.fr'`)).rows[0];
+ok(team?.role === "guest" && team.u, "équipe : invité·e déclaré·e avec une date de fin");
+ok((await db.query(`select is_admin from public.list_staff() where email = 'invite@exemple.fr'`)).rows[0]?.is_admin === false, "équipe : l'ancienne liste reste lisible");
+await fails(`select public.save_staff('x@exemple.fr', 'chef', null)`, "équipe : rôle inconnu refusé");
+await as(B, "bob@exemple.fr");
+await db.query(`select public.join_session('${S4.code}')`);
+await db.exec(`insert into threads (session_id, title) values ('${S4.id}', 'Général')`);
+const t4 = (await db.query(`select id from threads where session_id = '${S4.id}'`)).rows[0].id;
+await su();
+await db.exec(`insert into auth.users (id, email) values ('${G}', 'Invite@exemple.fr'), ('${G2}', 'autre.invite@exemple.fr')`);
+ok((await db.query(`select role from profiles where id = '${G}'`)).rows[0].role === "guest", "invité·e : rôle posé à la création du compte");
+await as(G, "invite@exemple.fr");
+ok((await db.query(`select public.claim_invites() n`)).rows[0].n === 0, "invité·e : une invitation à une session ne l'y inscrit pas");
+ok((await db.query(`select count(*)::int n from sessions`)).rows[0].n === 0, "invité·e : ne voit aucune vraie session");
+await fails(`insert into sessions (title) values ('Pirate')`, "invité·e : ne crée pas de vraie session");
+await fails(`insert into sessions (title, demo_owner) values ('Pour un autre', '${G2}')`, "invité·e : ne crée pas de démo pour quelqu'un d'autre");
+const D1 = (await db.query(`insert into sessions (title, format, demo_owner) values ('Démo · une journée', '1', '${G}') returning id`)).rows[0].id;
+const D2 = (await db.query(`insert into sessions (title, format, date2, demo_owner) values ('Démo · deux journées', '2', current_date + 1, '${G}') returning id`)).rows[0].id;
+await fails(`insert into sessions (title, demo_owner) values ('Une troisième', '${G}')`, "invité·e : deux sessions de démo au plus");
+ok((await db.query(`select count(*)::int n from sessions`)).rows[0].n === 2, "invité·e : voit ses deux sessions de démo");
+await db.exec(`update sessions set title = 'Ma démo', status = 'live', live = '{"view":"title"}' where id = '${D1}'`);
+ok((await db.query(`select title from sessions where id = '${D1}'`)).rows[0].title === "Ma démo", "invité·e : pilote sa démo (réglages, salle, écran)");
+await db.exec(`insert into resources (session_id, title, url) values ('${D1}', 'Ressource de démo', 'https://exemple.fr')`);
+ok((await db.query(`select count(*)::int n from resources where session_id = '${D1}'`)).rows[0].n === 1, "invité·e : ajoute une ressource à sa démo");
+ok((await db.query(`select count(*)::int n from public.session_roster('${D1}')`)).rows[0].n === 0, "invité·e : tableau des participant·es de sa démo");
+await fails(`update sessions set demo_owner = null where id = '${D1}'`, "invité·e : sa démo ne devient pas une vraie session");
+await fails(`update sessions set trainer_id = (select id from trainers limit 1) where id = '${D1}'`, "invité·e : n'attribue pas sa démo");
+await fails(`select public.session_roster('${S4.id}')`, "invité·e : pas de participant·es d'une vraie session");
+ok((await db.query(`select count(*)::int n from resources where session_id = '${S4.id}'`)).rows[0].n === 0, "invité·e : pas de ressources d'une vraie session");
+ok((await db.query(`select count(*)::int n from threads`)).rows[0].n === 0, "invité·e : pas de discussion d'une vraie session");
+await db.exec(`update sessions set title = 'Piratée' where id = '${S4.id}'`);
+ok((await db.query(`select public.join_session('${S4.code}') r`)).rows[0].r === null, "invité·e : ne rejoint aucune session par code");
+await fails(`select public.set_trainer_code('nouveau-code-123')`, "invité·e : ne change pas le code formateur");
+await fails(`select public.list_team()`, "invité·e : pas de liste de l'équipe");
+await fails(`select public.save_staff('moi@exemple.fr', 'admin', null)`, "invité·e : ne se donne aucun rôle");
+await fails(`select public.duplicate_session('${D1}')`, "invité·e : ne duplique pas, même sa démo");
+await fails(`insert into posts (thread_id, session_id, body) values ('${t4}', '${S4.id}', 'Pirate')`, "invité·e : n'écrit pas dans une vraie discussion");
+ok((await db.query(`select count(*)::int n from quiz_bank`)).rows[0].n > 0, "invité·e : bibliothèque de quiz lisible");
+ok((await db.query(`select active from public.guest_status()`)).rows[0]?.active === true, "invité·e : accès en cours");
+await as(G2, "autre.invite@exemple.fr");
+ok((await db.query(`select count(*)::int n from sessions`)).rows[0].n === 0, "invité·e : ne voit pas les démos d'un·e autre invité·e");
+await db.exec(`update sessions set title = 'Chez l''autre' where id = '${D1}'`);
+await as(T, "formateur@exemple.fr");
+ok((await db.query(`select title from sessions where id = '${S4.id}'`)).rows[0].title === "Vraie session", "invité·e : ne modifie pas une vraie session");
+ok((await db.query(`select title from sessions where id = '${D1}'`)).rows[0].title === "Ma démo", "invité·e : ne modifie pas la démo d'un·e autre");
+ok((await db.query(`select count(*)::int n from sessions where demo_owner = '${G}'`)).rows[0].n === 2, "l'administration voit les démos (le site les écarte de la liste)");
+await as(G, "invite@exemple.fr");
+await db.exec(`delete from sessions where id = '${D2}'`);
+ok((await db.query(`select count(*)::int n from sessions`)).rows[0].n === 1, "invité·e : supprime sa démo (remise à zéro)");
+// Date de fin passée : plus rien de visible, même connecté·e
+await su();
+await db.exec(`update trainer_emails set guest_until = current_date - 1 where email = 'invite@exemple.fr'`);
+await as(G, "invite@exemple.fr");
+ok((await db.query(`select count(*)::int n from sessions`)).rows[0].n === 0, "invité·e : accès expiré, sa démo n'est plus visible");
+await db.exec(`update sessions set title = 'Après la fin' where id = '${D1}'`);
+ok((await db.query(`select active from public.guest_status()`)).rows[0]?.active === false, "invité·e : le bandeau sait que l'accès a pris fin");
+// Un·e stagiaire devenu·e invité·e perd ses droits d'écriture de participant·e
+await as(T, "formateur@exemple.fr");
+ok((await db.query(`select title from sessions where id = '${D1}'`)).rows[0].title === "Ma démo", "invité·e : accès expiré, ne modifie plus sa démo");
+await db.exec(`select public.save_staff('bob@exemple.fr', 'guest', current_date + 5)`);
+await as(B, "bob@exemple.fr");
+await fails(`insert into posts (thread_id, session_id, body) values ('${t4}', '${S4.id}', 'Encore moi')`, "stagiaire devenu·e invité·e : n'écrit plus");
+await as(T, "formateur@exemple.fr");
+await db.exec(`select public.remove_staff('bob@exemple.fr'); select public.remove_staff('invite@exemple.fr'); select public.remove_staff('autre.invite@exemple.fr')`);
+ok((await db.query(`select count(*)::int n from sessions where demo_owner = '${G}'`)).rows[0].n === 0, "accès invité·e retiré : ses démos partent avec");
+await su();
+ok((await db.query(`select string_agg(role, ',' order by email) r from profiles where id in ('${B}', '${G}')`)).rows[0].r === "trainee,trainee", "accès invité·e retiré : redevient stagiaire");
+
+/* ---------- Archivage : 5 jours après le dernier jour, plus rien pour les stagiaires ---------- */
+await as(T, "formateur@exemple.fr");
+const SA = (await db.query(`insert into sessions (title, status, date, format) values ('Archivée', 'draft', current_date - 10, '1') returning id, code`)).rows[0];
+const SR = (await db.query(`insert into sessions (title, status, date, format) values ('Récente', 'draft', current_date - 2, '1') returning id, code`)).rows[0];
+const S2J = (await db.query(`insert into sessions (title, status, date, date2, format) values ('Deux jours', 'draft', current_date - 9, current_date - 2, '2') returning id`)).rows[0];
+await db.exec(`insert into resources (session_id, title, url) values ('${SA.id}', 'Vieille charte', 'https://exemple.fr'), ('${SR.id}', 'Charte', 'https://exemple.fr');
+  insert into session_secrets (session_id, label, value) values ('${SA.id}', 'Compte', 'ancien');
+  insert into threads (session_id, title) values ('${SA.id}', 'Général');
+  insert into session_support values ('${SA.id}', 'https://drive.google.com/vieux.pdf');
+  update sessions set support_unlocked = true where id = '${SA.id}'`);
+ok((await db.query(`select public.session_archived('${SA.id}') a, public.session_archived('${SR.id}') r, public.session_archived('${S2J.id}') d`)).rows.map((x) => [x.a, x.r, x.d].join()).join() === "true,false,false", "archivage : 5 jours après le dernier jour (jour 2 compris)");
+await as(B, "bob@exemple.fr");
+await db.query(`select public.join_session('${SA.code}')`); await db.query(`select public.join_session('${SR.code}')`);
+ok((await db.query(`select count(*)::int n from sessions where id in ('${SA.id}', '${SR.id}')`)).rows[0].n === 2, "archivage : le stagiaire lit encore la session (pour afficher « Session archivée »)");
+ok((await db.query(`select count(*)::int n from resources where session_id = '${SA.id}'`)).rows[0].n === 0, "archivage : ressources fermées au stagiaire");
+ok((await db.query(`select count(*)::int n from resources where session_id = '${SR.id}'`)).rows[0].n === 1, "terminée depuis 2 jours : ressources encore ouvertes");
+ok((await db.query(`select count(*)::int n from session_secrets where session_id = '${SA.id}'`)).rows[0].n === 0, "archivage : codes d'exercice fermés");
+ok((await db.query(`select count(*)::int n from threads where session_id = '${SA.id}'`)).rows[0].n === 0, "archivage : discussion fermée");
+await fails(`insert into threads (session_id, title) values ('${SA.id}', 'Encore là')`, "archivage : le stagiaire n'écrit plus");
+await fails(`insert into projects (session_id, data) values ('${SA.id}', '{}')`, "archivage : le stagiaire ne crée plus de cadrage");
+const sup = (await db.query(`select * from public.support_status('${SA.id}')`)).rows[0];
+ok(sup.unlocked === true && sup.url === null && sup.configured === true, "archivage : lien du support masqué au stagiaire");
+await as(T, "formateur@exemple.fr");
+ok((await db.query(`select count(*)::int n from resources where session_id = '${SA.id}'`)).rows[0].n === 1, "archivage : l'équipe garde les ressources");
+ok((await db.query(`select url from public.support_status('${SA.id}')`)).rows[0].url.includes("vieux.pdf"), "archivage : l'équipe garde le lien du support");
+ok((await db.query(`select count(*)::int n from threads where session_id = '${SA.id}'`)).rows[0].n === 1, "archivage : l'équipe garde la discussion");
+
+/* ---------- Formations de 1 à 5 journées ---------- */
+await as(T, "formateur@exemple.fr");
+const S5 = (await db.query(`insert into sessions (title, format, date, date2, dates) values ('Cinq jours', '5', '2027-03-01', '2027-03-02', array['2027-03-01','2027-03-02','2027-03-08','2027-03-09','2027-03-15']::date[]) returning id, code`)).rows[0];
+await fails(`insert into sessions (title, format) values ('Six jours', '6')`, "journées : six refusées");
+await fails(`insert into sessions (title, format, dates) values ('Trop de dates', '5', array['2027-01-01','2027-01-02','2027-01-03','2027-01-04','2027-01-05','2027-01-06']::date[])`, "journées : six dates refusées");
+ok((await db.query(`select public.session_last_day(s)::text d from sessions s where id = '${S5.id}'`)).rows[0].d === "2027-03-15", "journées : le dernier jour est la plus tardive des dates");
+ok((await db.query(`select date2::text d from public.session_public('${S5.code}')`)).rows[0].d === "2027-03-15", "journées : l'entrée stagiaire reçoit le dernier jour");
+const d6 = (await db.query(`select public.duplicate_session('${S5.id}', 'Cinq jours (bis)', '2027-04-05') id`)).rows[0].id;
+const r6 = (await db.query(`select date::text d1, date2::text d2, array_to_string(dates, ',') ds, format from sessions where id = '${d6}'`)).rows[0];
+ok(r6.ds === "2027-04-05,2027-04-06,2027-04-12,2027-04-13,2027-04-19" && r6.d2 === "2027-04-06" && r6.format === "5", "journées : la duplication décale toutes les dates du même écart");
+const d7 = (await db.query(`select public.duplicate_session('${SR.id}', null, '2027-05-10') id`)).rows[0].id;
+ok((await db.query(`select array_to_string(dates, ',') ds from sessions where id = '${d7}'`)).rows[0].ds === "2027-05-10", "journées : une journée dupliquée garde sa date");
+
+/* ---------- Clôture automatique : 15 min après l'heure de fin, le dernier jour ---------- */
+{
+await as(T, "formateur@exemple.fr");
+const F1 = (await db.query(`insert into sessions (title, status, date, format, end_time) values ('Finie hier', 'live', current_date - 1, '1', '17:30') returning id`)).rows[0].id;
+const F2 = (await db.query(`insert into sessions (title, status, date, format, end_time) values ('Pas finie', 'live', current_date + 1, '1', '17:30') returning id`)).rows[0].id;
+const F3 = (await db.query(`insert into sessions (title, status, date, date2, format, end_time) values ('Jour 2 demain', 'draft', current_date - 1, current_date + 1, '2', '17:30') returning id`)).rows[0].id;
+const F4 = (await db.query(`insert into sessions (title, status, format) values ('Sans date', 'live', '1') returning id`)).rows[0].id;
+await su();
+await db.exec(`insert into access_codes (session_id, email, code_hash, expires_at) values ('${F1}', 'x@exemple.fr', 'h', now() + interval '1 day')`);
+await as(B, "bob@exemple.fr");
+const closedN = (await db.query(`select public.close_finished_sessions() n`)).rows[0].n;
+await as(T, "formateur@exemple.fr");
+const st = Object.fromEntries((await db.query(`select id, status from sessions where id in ('${F1}', '${F2}', '${F3}', '${F4}')`)).rows.map((r) => [r.id, r.status]));
+ok(closedN >= 1 && st[F1] === "closed", "clôture automatique : session finie la veille close (appelable par tout compte connecté)");
+ok(st[F2] === "live" && st[F3] === "draft" && st[F4] === "live", "clôture automatique : ni avant le dernier jour, ni sans date");
+await su();
+ok((await db.query(`select count(*)::int n from access_codes where session_id = '${F1}'`)).rows[0].n === 0, "clôture automatique : codes purgés comme à la main");
+await db.exec(`reset role; set test.uid=''; set role anon;`);
+await fails(`select public.close_finished_sessions()`, "clôture automatique : pas sans connexion");
+await su();
+}
+
+/* ---------- Trames de conducteur : lecture équipe, écriture admin ---------- */
+{
+  await as(T, "formateur@exemple.fr");
+  const tr1 = (await db.query(`insert into conducteur_templates (titre, content) values ('Une journée type', '{"nDays":1,"modules":[]}') returning id, updated_by`)).rows[0];
+  ok(tr1.updated_by === T, "trames : l'admin crée, auteur tenu par la base");
+  await db.exec(`update conducteur_templates set titre = 'Une journée type (v2)', updated_by = null where id = '${tr1.id}'`);
+  ok((await db.query(`select titre, updated_by from conducteur_templates where id = '${tr1.id}'`)).rows[0].updated_by === T, "trames : l'admin modifie, auteur non falsifiable");
+  await fails(`insert into conducteur_templates (titre, content) values ('', '{}')`, "trames : titre obligatoire");
+  await fails(`insert into conducteur_templates (titre, content) values ('Liste', '[]')`, "trames : contenu en objet");
+  await fails(`insert into conducteur_templates (titre, content) values ('Lourde', jsonb_build_object('x', repeat(md5(random()::text), 20000)))`, "trames : plus de 500 ko refusé");
+  await as(F2, "form2@exemple.fr");
+  ok((await db.query(`select count(*)::int n from conducteur_templates`)).rows[0].n === 1, "trames : un formateur les lit (pour les appliquer)");
+  await fails(`insert into conducteur_templates (titre, content) values ('Perso', '{}')`, "trames : un formateur n'en crée pas");
+  await db.exec(`update conducteur_templates set titre = 'Changée' where id = '${tr1.id}'`);
+  await db.exec(`delete from conducteur_templates where id = '${tr1.id}'`);
+  await as(B, "bob@exemple.fr");
+  ok((await db.query(`select count(*)::int n from conducteur_templates`)).rows[0].n === 0, "trames : un·e stagiaire ne lit rien");
+  await as(T, "formateur@exemple.fr");
+  ok((await db.query(`select titre from conducteur_templates where id = '${tr1.id}'`)).rows[0]?.titre === "Une journée type (v2)", "trames : un formateur ne modifie ni ne supprime");
+  await db.exec(`delete from conducteur_templates where id = '${tr1.id}'`);
+  ok((await db.query(`select count(*)::int n from conducteur_templates`)).rows[0].n === 0, "trames : l'admin supprime");
+  await su();
+}
+
 console.log(process.exitCode ? "\nDES TESTS ÉCHOUENT" : "\nTous les tests SQL passent.");

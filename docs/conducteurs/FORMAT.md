@@ -7,7 +7,7 @@ Un conducteur décrit le déroulé d'une session : journées, séquences, horair
 formation: Prendre en main les IA génératives      ← facultatif
 ---
 
-# Jour 1 · Comprendre, puis Gemini Notebook        ← une ligne par journée ; inutile pour une seule journée (2 journées au plus)
+# Jour 1 · Comprendre, puis Gemini Notebook        ← une ligne par journée ; inutile pour une seule journée (5 journées au plus)
 
 ## 09:30–09:40 · Accueil, objectifs, attentes      ← une séquence : début–fin, puis titre
 type: discussion                                   ← comprendre | pratique | discussion | pause
@@ -18,7 +18,7 @@ activité: niveau                                   ← activité en salle (nive
 quiz: llm                                          ← llm, redac, notebook, jargon, rmctf, sve, donnees
 fiches: notebook, donnees                          ← fiches pratiques liées
 exemples: oui                                      ← affiche la liste des exemples de rédactions
-outil: rmctf                                       ← outil d'exercice (rmctf ou sve) qui apparaît aux stagiaires quand la séquence est lancée
+outil: rmctf                                       ← outil d'exercice (rmctf, sve ou code couleur) qui apparaît aux stagiaires quand la séquence est lancée
 
 ### Objectifs
 - …
@@ -41,4 +41,13 @@ Règles : horaires en `09:30` ou `9h30`, séparés par un tiret ou « à ». Les
 
 Fichiers fournis :
 - `conducteur-1-jour.md` et `conducteur-2-jours.md` : les déroulés actuels, exportés tels quels (un import ne change rien, sert de modèle à modifier) ;
+- `conducteur-libe-1-jour.md` : la journée Libération, même déroulé qu’une journée avec les pages du deck Libé (positions dans le deck ; voir le commentaire en tête du fichier) ;
 - `conducteur-test-atelier.md` : une matinée-atelier plus courte, pour vérifier qu'un import modifie bien le parcours.
+
+## Ajouts (éditeur de trames)
+
+- `id: j1-accueil` : identifiant de la séquence, écrit à l'export pour qu'il survive à un aller-retour (activités placées, progression des stagiaires).
+- `activité: niveau, llm` : plusieurs quiz, sondages ou nuages joués en salle dans la séquence, dans l'ordre (clés de la bibliothèque « Quiz et sondages »).
+- `idées: oui` : affiche les pastilles d'aide (tâches pénibles, conducteurs assistés) dans la séquence.
+- En-tête : `slides: <lien Google Slides>` et `nombre de slides: 141`, pour l'aperçu et les tuiles de l'éditeur.
+- Jusqu'à cinq journées (`# Jour 1` à `# Jour 5`).

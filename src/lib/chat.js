@@ -6,6 +6,8 @@
 import { $, $$, T, esc, guard, debounce } from "./dom.js";
 
 const GENERAL = "Général";
+// Discussion ouverte aux stagiaires : seulement en formation en ligne, et jusqu'à la clôture (même règle que chat_open côté base)
+export const chatOn = (s) => !!s?.online && s.status !== "closed";
 const hm = (d) => new Date(d).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 const dayKey = (d) => new Date(d).toDateString();
 function dayLabel(d) {

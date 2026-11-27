@@ -1,6 +1,7 @@
 /* Parcours d'entrée du stagiaire, en slides plein écran :
    1. titre de la formation (logos, dates)
    2. connexion : prénom + e-mail → code personnel reçu par e-mail
+      (ou entrée immédiate si l'équipe a accordé un accès direct à cette adresse)
    3. émargement (QR code de l'organisme)
    4. support de formation (téléchargeable une heure avant la fin)
    → tableau de bord de la session. */
@@ -54,7 +55,11 @@ export async function viewEntry(root, [code], ctx) {
         first = $("#fn").value.trim(); email = $("#em").value.trim().toLowerCase();
         const btn = $("#reqF button"); btn.disabled = true; btn.textContent = "Envoi…";
         const r = await guard(() => api.requestAccess(pub.id, first, email));
-        if (r) { demoCode = r.demoCode || null; step = "code"; draw(); } else { btn.disabled = false; btn.textContent = "Recevoir mon code"; }
+        if (r?.direct) { // accès direct accordé par l'équipe : connecté·e sans code
+          await ctx.refreshMe?.();
+          const m = await api.myMembership(pub.id).catch(() => null);
+          step = m?.progress?.intro ? "done" : "emargement"; draw();
+        } else if (r) { demoCode = r.demoCode || null; step = "code"; draw(); } else { btn.disabled = false; btn.textContent = "Recevoir mon code"; }
       };
       $("#haveCode").onclick = () => { step = "code"; draw(); };
     } else if (step === "code") {
@@ -93,11 +98,12 @@ export async function viewEntry(root, [code], ctx) {
         <button class="btn light big" id="next">Continuer →</button>`);
       $("#next").onclick = () => { step = "support"; draw(); };
     } else if (step === "support") {
-      const st = await api.supportStatus(pub.id).catch(() => ({ unlocked: false }));
+      const [st, s] = await Promise.all([api.supportStatus(pub.id).catch(() => ({ unlocked: false })), api.getSession(pub.id).catch(() => null)]);
+      const m0 = await api.myMembership(pub.id).catch(() => null);
       root.innerHTML = slide(`
         <div class="slide-kick">Étape 2 sur 2</div>
         <div class="slide-title sm">Le support de la formation</div>
-        ${supportBlock(st, true)}
+        ${supportBlock(st, true, s?.evaluation_url && !m0?.progress?.eval ? "later" : null)}
         <button class="btn light big" id="next">Accéder à mon tableau de bord →</button>`);
       $("#next").onclick = async () => {
         const m = await api.myMembership(pub.id).catch(() => null);
@@ -116,10 +122,16 @@ export async function viewEntry(root, [code], ctx) {
 // Chaque slide porte le bandeau bleu avec le logo Samsa
 const slide = (inner, kind = "") => `<div class="slide-page ${kind}"><div class="slide-inner">${inner}</div><div class="slide-bar">${samsaHtml(true, "head")}<b>${esc(skinFooter().toUpperCase())} · ${new Date().getFullYear()}</b></div></div>`;
 
-// Bloc support, partagé avec la page « Support » du tableau de bord
-export function supportBlock(st, onDark = false) {
+// Bloc support, partagé avec la page « Évaluation et support » du tableau de bord
+/* gate : verrou d'évaluation (lien d'évaluation renseigné, pas encore touché par la personne)
+   - "eval" : l'évaluation est proposée juste au-dessus, le téléchargement apparaît au clic ;
+   - "later" : l'évaluation n'est pas encore proposée (fin de formation). */
+export function supportBlock(st, onDark = false, gate = null) {
+  const lockbox = (b, t) => `<div class="lockbox${onDark ? " dark" : ""}"><span class="lock" aria-hidden="true">🔒</span><div><b>${T(b)}</b><div>${T(t)}</div></div></div>`;
   const when = st.unlock_at ? new Date(st.unlock_at).toLocaleString("fr-FR", { timeZone: "Europe/Paris", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : null;
-  if (!st.configured) return `<p class="${onDark ? "slide-sub" : "muted"}">${T("Le support sera ajouté par le formateur. Vous le retrouverez dans le menu « Support ».")}</p>`;
-  if (st.unlocked && st.url) return `<p class="${onDark ? "slide-sub" : "muted"}">${T("Le support est disponible. Il reste accessible depuis le menu « Support ».")}</p><p><a class="btn ${onDark ? "light big" : ""}" href="${safeUrl(st.url)}" target="_blank" rel="noopener noreferrer" download>Télécharger le support ↓</a></p>`;
-  return `<div class="lockbox${onDark ? " dark" : ""}"><span class="lock" aria-hidden="true">🔒</span><div><b>Téléchargement disponible en fin de formation</b><div>${when ? T(`À partir de ${when}.`) : T("Une heure avant la fin de la formation.")} ${T("Vous le retrouverez dans le menu « Support ».")}</div></div></div>`;
+  if (!st.configured) return `<p class="${onDark ? "slide-sub" : "muted"}">${T("Le support sera ajouté par le formateur. Vous le retrouverez dans le menu « Évaluation et support ».")}</p>`;
+  if (gate === "eval") return lockbox("Le support se débloque avec l'évaluation", "Touchez « Remplir l'évaluation » : le téléchargement apparaît aussitôt. Vous le retrouverez dans le menu « Évaluation et support ».");
+  if (gate === "later") return lockbox("Téléchargement disponible en fin de formation", "Il se débloque quand vous remplissez l'évaluation de fin de stage. Vous le retrouverez dans le menu « Évaluation et support ».");
+  if (st.unlocked && st.url) return `<p class="${onDark ? "slide-sub" : "muted"}">${T("Le support est disponible. Il reste accessible depuis le menu « Évaluation et support ».")}</p><p><a class="btn ${onDark ? "light big" : ""}" href="${safeUrl(st.url)}" target="_blank" rel="noopener noreferrer" download>Télécharger le support ↓</a></p>`;
+  return `<div class="lockbox${onDark ? " dark" : ""}"><span class="lock" aria-hidden="true">🔒</span><div><b>Téléchargement disponible en fin de formation</b><div>${when ? T(`À partir de ${when}.`) : T("Une heure avant la fin de la formation.")} ${T("Vous le retrouverez dans le menu « Évaluation et support ».")}</div></div></div>`;
 }

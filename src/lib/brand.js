@@ -1,6 +1,7 @@
 /* Identité visuelle d'une session (logo client, organisme de formation),
    dates affichées, import d'images en data URL. */
 import QRCode from "qrcode";
+import { trainingDates } from "./archive.js";
 import { currentSkin, skinDark } from "./skin.js";
 import { T, esc, dateFr, safeUrl, safeImg } from "./dom.js";
 import samsaLogo from "../assets/samsa-logo.png";
@@ -53,21 +54,23 @@ export function logosHtml(br, cls = "", onDark = false, withOrg = false) {
   return client || org ? `<div class="logos">${org}${client}</div>` : "";
 }
 
-// « mardi 1er décembre 2026 » ou « 1er et 2 décembre 2026 »
+// « mardi 1er décembre 2026 », « 1er et 2 décembre 2026 », « 1er, 8 et 15 décembre 2026 », « 30 novembre et 1er décembre 2026 »
 export function datesFr(s) {
-  const d1 = s.date, d2 = s.format === "2" ? s.date2 : null;
-  if (!d1) return "Date à fixer";
-  const day = (d) => { const n = new Date(d + "T12:00:00").getDate(); return n === 1 ? "1er" : String(n); };
-  if (!d2) return dateFr(d1).replace(/^(\S+) 1 /, "$1 1er ");
-  const a = new Date(d1 + "T12:00:00"), b = new Date(d2 + "T12:00:00");
-  if (a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear())
-    return `${day(d1)} et ${day(d2)} ${b.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}`;
-  return `${dateFr(d1, { day: "numeric", month: "long" })} et ${dateFr(d2, { day: "numeric", month: "long", year: "numeric" })}`;
+  const ds = trainingDates(s);
+  if (!ds.length) return "Date à fixer";
+  if (ds.length === 1) return dateFr(ds[0]).replace(/^(\S+) 1 /, "$1 1er ");
+  const D = ds.map((d) => new Date(d + "T12:00:00"));
+  const day = (x) => (x.getDate() === 1 ? "1er" : String(x.getDate()));
+  const list = (a) => `${a.slice(0, -1).join(", ")} et ${a.at(-1)}`;
+  if (D.every((x) => x.getMonth() === D[0].getMonth() && x.getFullYear() === D[0].getFullYear()))
+    return `${list(D.map(day))} ${D.at(-1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}`;
+  const sameYear = D.every((x) => x.getFullYear() === D[0].getFullYear());
+  return list(D.map((x, i) => `${day(x)} ${x.toLocaleDateString("fr-FR", sameYear && i < D.length - 1 ? { month: "long" } : { month: "long", year: "numeric" })}`));
 }
 // Date de la slide de titre, sans heure : « 2 décembre 2026 » ou « 1 – 2 décembre 2026 »
 // (mois et année répétés seulement quand ils changent : « 30 novembre – 1 décembre 2026 »)
 export function titleDate(s) {
-  const d1 = s.date, d2 = s.format === "2" ? s.date2 : null;
+  const ds = trainingDates(s), d1 = ds[0] || null, d2 = ds.length > 1 ? ds.at(-1) : null;
   if (!d1) return "Date à fixer";
   const a = new Date(d1 + "T12:00:00");
   const full = (d) => d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
@@ -145,11 +148,11 @@ export async function evaluationQr(session, size = 520) {
   if (session.evaluation_url) return QRCode.toDataURL(session.evaluation_url, { width: size, margin: 1, color: { dark: "#000000", light: "#ffffff" } });
   return null;
 }
-// Bloc stagiaire : titre, texte, QR, lien
+// Bloc stagiaire : titre, texte, QR, lien (data-evalgo : le clic débloque le support de la personne, voir session.js)
 export function evaluationHtml(session, qr, onDark = false) {
   const e = evaluationInfo(session);
   if (!e.configured) return "";
   return `<div class="eval-block${onDark ? " dark" : ""}"><div class="eval-txt"><div class="em-h">${T(e.title)}</div><p>${T(e.text)}</p>
-    ${e.url ? `<a class="btn${onDark ? " light" : ""}" href="${safeUrl(e.url)}" target="_blank" rel="noopener noreferrer">Remplir l'évaluation ↗</a>` : ""}</div>
+    ${e.url ? `<a class="btn${onDark ? " light" : ""}" href="${safeUrl(e.url)}" target="_blank" rel="noopener noreferrer" data-evalgo>Remplir l'évaluation ↗</a>` : ""}</div>
     ${qr ? `<div class="em-qr"><img src="${safeImg(qr)}" alt="QR code de l'évaluation"></div>` : ""}</div>`;
 }

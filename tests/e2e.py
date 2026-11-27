@@ -178,7 +178,7 @@ async def main():
         await tr.click("[data-mod='j1-etat']"); await st.wait_for_timeout(1200)
         assert await st.locator("#navOutils:not([hidden])").count() == 1, "les outils restent disponibles"
         await st.goto(URL + f"#/s/{sid}/outils"); await st.wait_for_selector("#toolRmctf")
-        assert await st.locator("#toolRmctf:visible").count() == 1 and await st.locator("#toolSve:visible").count() == 0, "seul l'outil de l'exercice lancé"
+        assert await st.locator("#toolRmctf:visible").count() == 1 and await st.locator("#toolSve:visible").count() == 0 and await st.locator("#toolCc:visible").count() == 0, "seul l'outil de l'exercice lancé"
         await st.goto(URL + f"#/s/{sid}/direct"); await st.wait_for_selector("#liveCard")
         await tr.click("[data-a='niveau']"); await tr.wait_for_timeout(500)
         await st.wait_for_selector("#liveIn .opt", timeout=5000)
@@ -242,6 +242,10 @@ async def main():
         assert "100" in await st.inner_text(".prep-square")
         await st.goto(URL + f"#/s/{sid}/fiches"); await st.wait_for_selector(".fcard"); await shot(st, "12-fiches")
         await st.click(".fcard >> nth=0"); await st.wait_for_selector("article");
+        # Discussion : fermée aux stagiaires en salle, ouverte par l'interrupteur « Formation en ligne » du Jour J
+        assert await st.locator(".side-nav a[href$='/discussion']:visible").count() == 0, "discussion masquée en salle"
+        await tr.goto(URL + f"#/admin/s/{sid}/jour"); await tr.wait_for_selector("#chatOff:visible")
+        await tr.check("#onlineMode"); await tr.wait_for_selector("#chatAdm:visible", timeout=5000)
         # Messagerie : premier message → conversation « Général » créée, bulle à droite
         await st.goto(URL + f"#/s/{sid}/discussion"); await st.wait_for_selector(".chat .chat-compose textarea")
         await st.fill(".chat-compose textarea", "Gemini garde-t-il mes documents ?"); await st.press(".chat-compose textarea", "Enter")
@@ -280,7 +284,7 @@ async def main():
         await tr.goto(URL + f"#/admin/s/{sid}/jour"); await tr.wait_for_selector("#closeDay"); await tr.check("#closeDay"); await tr.wait_for_timeout(600)
         await st.goto(URL + f"#/s/{sid}/discussion"); await st.wait_for_url(f"**/#/s/{sid}/ressources", timeout=5000)
         nav = await st.inner_text(".side-nav")
-        assert "Discussion" not in nav and "Émargement" not in nav and "Fiches pratiques" in nav and "Support" in nav, "accès réduit après clôture : " + nav
+        assert "Discussion" not in nav and "Émargement" not in nav and "Glossaire" in nav and "Évaluation et support" in nav, "accès réduit après clôture : " + nav
         assert await st.locator("#parcours").count() == 0, "déroulé masqué après clôture"
         await shot(st, "18-stagiaire-apres-cloture")
         await tr.goto(URL + f"#/admin/s/{sid}/apres"); await tr.wait_for_selector("#chatAdm .chat-bubble", timeout=6000)

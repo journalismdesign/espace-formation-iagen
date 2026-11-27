@@ -2,9 +2,14 @@
    Toutes les règles d'accès sont dans la base (RLS) : ce fichier ne fait
    que traduire les appels de l'interface. */
 import { createClient } from "@supabase/supabase-js";
+import { bankFromData } from "../lib/quizzes.js";
 
 // Colonnes lisibles de trainers (login_email est réservé à l'équipe, lu par trainer_logins())
 const TRAINER_COLS = "id, name, photo, roles, tagline, tagline_sub, email, website, socials, created_at";
+// Bibliothèque « Quiz et sondages » : table absente tant que la migration n'est pas exécutée
+const BANK_COLS = "id, kind, titre, content, updated_at";
+const NO_BANK = /quiz_bank|schema cache|does not exist/i;
+const BANK_MIG = "Bibliothèque pas encore activée : la migration 20261126000000_quiz_sondages.sql doit être exécutée sur Supabase.";
 
 export function createSupabaseApi(url, anonKey) {
   const sb = createClient(url, anonKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce" } });
@@ -21,6 +26,13 @@ export function createSupabaseApi(url, anonKey) {
     }
     return data;
   };
+  // Jeton à usage unique de la fonction access → session Supabase dans ce navigateur
+  const openWith = async (token_hash) => {
+    let r = await sb.auth.verifyOtp({ token_hash, type: "email" });
+    if (r.error) r = await sb.auth.verifyOtp({ token_hash, type: "magiclink" });
+    if (r.error) throw new Error("Ouverture de session impossible : " + r.error.message);
+    profileCache = null;
+  };
 
   const api = {
     mode: "supabase",
@@ -29,13 +41,25 @@ export function createSupabaseApi(url, anonKey) {
     async sessionPublic(code) { return ok(await sb.rpc("session_public", { p_code: code }))?.[0] || null; },
     // Réveille la fonction Edge « access » (démarrage à froid) pendant que le stagiaire saisit son nom
     warmAccess() { fetch(`${url}/functions/v1/access`, { method: "OPTIONS" }).catch(() => {}); },
-    async requestAccess(sid, first_name, email) { return invoke("access", { action: "request", session_id: sid, first_name, email }); },
+    // Accès direct accordé par l'équipe : la fonction renvoie aussitôt un jeton de connexion ({ direct: true }), sans e-mail
+    async requestAccess(sid, first_name, email) {
+      const r = await invoke("access", { action: "request", session_id: sid, first_name, email });
+      if (r?.token_hash) { await openWith(r.token_hash); return { direct: true }; }
+      return r;
+    },
+    // Code remis à la main par l'équipe (adresse qui ne reçoit pas l'e-mail) : aucun envoi, le code revient en clair
+    async issueAccess(sid, first_name, email) {
+      try { return await invoke("access", { action: "issue", session_id: sid, first_name, email }); }
+      catch (e) { if (/action inconnue/i.test(e.message)) throw new Error("Générateur pas encore activé : la fonction access doit être redéployée sur Supabase."); throw e; }
+    },
+    // Accès direct : compte créé et inscrit, entrée sans code une seule fois (action « grant »)
+    async grantAccess(sid, first_name, email) {
+      try { return await invoke("access", { action: "grant", session_id: sid, first_name, email }); }
+      catch (e) { if (/action inconnue/i.test(e.message)) throw new Error("Accès direct pas encore activé : la fonction access doit être redéployée sur Supabase."); throw e; }
+    },
     async verifyAccess(sid, email, code) {
       const { token_hash } = await invoke("access", { action: "verify", session_id: sid, email, code });
-      let r = await sb.auth.verifyOtp({ token_hash, type: "email" });
-      if (r.error) r = await sb.auth.verifyOtp({ token_hash, type: "magiclink" });
-      if (r.error) throw new Error("Ouverture de session impossible : " + r.error.message);
-      profileCache = null;
+      await openWith(token_hash);
       return true;
     },
 
@@ -55,8 +79,22 @@ export function createSupabaseApi(url, anonKey) {
     },
     async deleteTrainer(id) { ok(await sb.from("trainers").delete().eq("id", id)); },
     /* ---------- Équipe (admin) ---------- */
-    async listStaff() { return ok(await sb.rpc("list_staff")) || []; },
-    async saveStaff(email, isAdmin) { ok(await sb.rpc("save_staff", { p_email: email, p_admin: !!isAdmin })); },
+    // Liste avec rôle et date de fin d'invitation (list_team) ; avant la migration …_invites_lecture : list_staff
+    async listStaff() {
+      const r = await sb.rpc("list_team");
+      if (!r.error) return r.data || [];
+      return (ok(await sb.rpc("list_staff")) || []).map((s) => ({ ...s, role: s.is_admin ? "admin" : "trainer", guest_until: null }));
+    },
+    // role : trainer, admin ou guest (invité·e : ses sessions de démo, jusqu'à `until`). L'ancienne signature sert pour
+    // formateur·ice et admin, ce qui marche avant comme après la migration.
+    async saveStaff(email, role, until = null) {
+      if (role === "guest") {
+        const r = await sb.rpc("save_staff", { p_email: email, p_role: "guest", p_until: until || null });
+        if (r.error && /function|schema cache/i.test(r.error.message)) throw new Error("Invité·es : exécutez d'abord la migration 20261128000000_invites_lecture.sql dans Supabase.");
+        ok(r); return;
+      }
+      ok(await sb.rpc("save_staff", { p_email: email, p_admin: role === "admin" }));
+    },
     async removeStaff(email) { ok(await sb.rpc("remove_staff", { p_email: email })); },
 
     /* ---------- Code d'accès formateur ---------- */
@@ -66,6 +104,11 @@ export function createSupabaseApi(url, anonKey) {
     /* Première connexion / code oublié : code à usage unique envoyé par Supabase Auth */
     async sendTrainerOtp(email) {
       ok(await sb.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { emailRedirectTo: redirect() + "#/formateur", shouldCreateUser: true } }));
+      return { sent: true };
+    },
+    // Invité·e : code par e-mail (le lien éventuel de l'e-mail mène au back-office)
+    async sendGuestOtp(email) {
+      ok(await sb.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { emailRedirectTo: redirect() + "#/admin", shouldCreateUser: true } }));
       return { sent: true };
     },
     async verifyEmailOtp(email, token) {
@@ -90,6 +133,30 @@ export function createSupabaseApi(url, anonKey) {
       return ok(await sb.from("skins").insert(row).select().single());
     },
     async deleteSkin(id) { ok(await sb.from("skins").delete().eq("id", id)); },
+    // Bibliothèque « Quiz et sondages ». Sans la migration : contenu de data.js en lecture seule (ready: false)
+    async listBank() {
+      const { data, error } = await sb.from("quiz_bank").select(BANK_COLS).order("titre");
+      if (error) { if (NO_BANK.test(error.message)) return { ready: false, items: bankFromData() }; throw new Error(error.message); }
+      return { ready: true, items: data || [] };
+    },
+    // Trames de conducteur (#/admin/trames) : lues par l'équipe, modifiées par l'administration. Sans la migration : ready false
+    async listTrames() {
+      const r = await sb.from("conducteur_templates").select("id, titre, content, updated_at").order("updated_at", { ascending: false });
+      if (r.error && /conducteur_templates|schema cache|does not exist/i.test(r.error.message)) return { ready: false, items: [] };
+      return { ready: true, items: ok(r) || [] };
+    },
+    async saveTrame({ id, titre, content }) {
+      const row = { titre, content };
+      return ok(id ? await sb.from("conducteur_templates").update(row).eq("id", id).select("id, titre, content, updated_at").single()
+        : await sb.from("conducteur_templates").insert(row).select("id, titre, content, updated_at").single());
+    },
+    async deleteTrame(id) { ok(await sb.from("conducteur_templates").delete().eq("id", id)); },
+    async saveBankItem(it) {
+      const { data, error } = await sb.from("quiz_bank").upsert({ id: it.id, kind: it.kind, titre: it.titre, content: it.content }).select(BANK_COLS).single();
+      if (error) throw new Error(NO_BANK.test(error.message) ? BANK_MIG : /row-level security/i.test(error.message) ? "Réservé à l'administration." : error.message);
+      return data;
+    },
+    async deleteBankItem(id) { ok(await sb.from("quiz_bank").delete().eq("id", id)); },
     async getSettings() { return Object.fromEntries(ok(await sb.from("app_settings").select("*")).map((r) => [r.key, r.value])); },
     async saveSetting(key, value) { ok(await sb.from("app_settings").upsert({ key, value })); },
 
@@ -122,6 +189,11 @@ export function createSupabaseApi(url, anonKey) {
       if (profileCache && !force) return profileCache;
       const u = await api.currentUser(); if (!u) return null;
       profileCache = ok(await sb.from("profiles").select("*").eq("id", u.id).single());
+      // Invité·e : date de fin et accès en cours (le bandeau l'affiche ; la base, elle, ferme tout à la date dite)
+      if (profileCache?.role === "guest") {
+        const g = (await sb.rpc("guest_status")).data?.[0];
+        profileCache = { ...profileCache, guest_until: g?.until || null, guest_active: !!g?.active };
+      }
       return profileCache;
     },
     async updateMe(patch) {
@@ -138,6 +210,8 @@ export function createSupabaseApi(url, anonKey) {
     async getSession(id) { return ok(await sb.from("sessions").select("*").eq("id", id).maybeSingle()); },
     async createSession(s) { return ok(await sb.from("sessions").insert(s).select().single()); },
     async updateSession(id, patch) { return ok(await sb.from("sessions").update(patch).eq("id", id).select().single()); },
+    // Clôture automatique des sessions finies (15 min après l'heure de fin, le dernier jour) ; sans la migration : rien
+    async closeFinished() { const r = await sb.rpc("close_finished_sessions"); return r.error ? 0 : r.data || 0; },
     async deleteSession(id) { ok(await sb.from("sessions").delete().eq("id", id)); },
     // opts : { title, date, date2, invites (mêmes stagiaires), secretValues (valeurs des codes d'accès) }
     async duplicateSession(id, o = {}) {

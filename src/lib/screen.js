@@ -6,12 +6,15 @@
    Les tailles sont exprimées en cqw (largeur du conteneur) : la même
    maquette sert à l'écran plein et à l'aperçu du back-office. */
 import { T, esc, safeImg } from "./dom.js";
-import { QUIZ } from "../data.js";
-import { currentAct, quizQ, countOf } from "./activities.js";
+import { currentAct, countOf } from "./activities.js";
+import { quizFor, quizQ } from "./quizzes.js";
 import { datesFr, hhmm, titleDate, samsaHtml, pickLogo, emargementLabels, MAIL_ICON, evaluationInfo } from "./brand.js";
 import { modulesFor, typeLabel } from "./content.js";
+import { stepLive, modPages, skipSet } from "./steps.js";
+export { stepLive, nextPage, pageKey, modPages, skipSet } from "./steps.js"; // navigation du pilotage (pages, séquences, activités)
 import { slideEmbedUrl, deckEmbedUrl, deckKind, parsePages } from "../deck.js";
 import { skinFooter } from "./skin.js";
+import pauseGif from "../assets/pause.gif";
 
 const LETTERS = "ABCDEFGHIJKL";
 const year = (s) => (s.date ? s.date.slice(0, 4) : String(new Date().getFullYear()));
@@ -73,81 +76,6 @@ export function trainerSlideHtml(session, t, cls = "", right = "") {
 }
 
 // d = { session, rows, participants, qrUrl, projects, branding, emQr, support, trainer }
-/* Pages masquées du support (sessions.skip_pages, ex. « 12, 40 à 45 ») : Google Slides affiche une slide
-   masquée quand on l'appelle, le pilotage les saute donc lui-même. */
-export const skipSet = (session) => new Set(parsePages(session?.skip_pages));
-// Pages d'une séquence, sans les pages masquées
-export const modPages = (session, mod) => { const s = skipSet(session); return mod ? parsePages(mod.pages).filter((p) => !s.has(p)) : []; };
-// Page ±1 hors liste, par-dessus les pages masquées (null avant la page 1)
-function freeStep(session, p, dir) {
-  const s = skipSet(session); let n = (p || 1) + dir;
-  while (n >= 1 && s.has(n)) n += dir;
-  return n >= 1 ? n : null;
-}
-
-// Séquence voisine dans le déroulé, sans changer de journée
-function neighbourModule(session, mod, dir) {
-  const mods = modulesFor(session), n = mods[mods.findIndex((m) => m.id === mod.id) + dir];
-  return n && (n.day || 1) === (mod.day || 1) ? n : null;
-}
-// Entrer dans une séquence au clavier : sa première page (sa dernière en reculant), ou son écran si elle n'a pas de pages.
-// Son outil d'exercice est débloqué, comme quand on la lance depuis le pilotage.
-function enterModule(session, live, m, dir, now) {
-  const pages = session.slides_url ? modPages(session, m) : [];
-  const tools = m.outil ? [...new Set([...(live.tools || []), m.outil])] : live.tools;
-  const base = { ...live, module: m.id, started_at: now, ...(tools ? { tools } : {}) };
-  return pages.length ? { ...base, view: "slide", slide: dir > 0 ? pages[0] : pages[pages.length - 1] } : { ...base, view: "module" };
-}
-
-/* Avancer ou reculer d'une page (flèches du clavier, télécommande, boutons ← →) : nouvel état « live » ou null.
-   Page du support : pages de la séquence (ou ±1 hors liste) ; arrivé au bout, on passe à la séquence
-   voisine de la même journée (première page, ou dernière en reculant) ; séquence → sa première page ;
-   présentation Google Slides : page ±1. */
-export function stepLive(session, dir) {
-  const live = session.live || {}, now = new Date().toISOString();
-  const mod = live.module ? modulesFor(session).find((m) => m.id === live.module) : null;
-  const pages = mod && session.slides_url ? modPages(session, mod) : [];
-  // page projetée hors de la liste de la séquence : on avance page par page (en sautant les pages masquées)
-  if (live.view === "slide" && pages.length && !pages.includes(live.slide)) { const p = freeStep(session, live.slide, dir); return p ? { ...live, slide: p, started_at: now } : null; }
-  if (mod && (live.view === "module" || (live.view === "slide" && pages.length))) {
-    const j = live.view === "slide" ? pages.indexOf(live.slide) + dir : -1;
-    if (j >= 0 && j < pages.length) return { ...live, view: "slide", slide: pages[j], started_at: now };
-    if (live.view === "module" && dir > 0 && pages.length) return { ...live, view: "slide", slide: pages[0], started_at: now };
-    const n = neighbourModule(session, mod, dir);
-    return n ? enterModule(session, live, n, dir, now) : null;
-  }
-  if (live.view === "slide" && session.slides_url) { const p = freeStep(session, live.slide, dir); return p ? { ...live, slide: p, started_at: now } : null; }
-  if (live.view === "deck") {
-    const d = (session.decks || []).find((x) => x.id === live.deck);
-    if (d && deckKind(d.url) === "slides") { const p = Math.max(1, (live.page || 1) + dir); return p === (live.page || 1) ? null : { ...live, page: p, started_at: now }; }
-  }
-  return null;
-}
-// Touches de pilotage : flèches, Page suivante/précédente (télécommandes de présentation), espace
-export function pageKey(e) {
-  const t = e.target, tag = t?.tagName;
-  if (e.altKey || e.ctrlKey || e.metaKey || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return 0;
-  if (["ArrowRight", "PageDown", "ArrowDown"].includes(e.key)) return 1;
-  if (["ArrowLeft", "PageUp", "ArrowUp"].includes(e.key)) return -1;
-  return 0;
-}
-
-/* Ce qu'afficherait la flèche droite : { src, label } ou null (src vide pour l'écran d'une séquence sans pages).
-   Même règle que stepLive, séquence suivante comprise. */
-export function nextPage(session) {
-  const live = session.live || {}, nl = stepLive(session, 1);
-  if (!nl) return null;
-  const m = nl.module !== live.module ? modulesFor(session).find((x) => x.id === nl.module) : null;
-  const seq = m ? `Séquence suivante : ${m.titre}` : "";
-  if (nl.view === "slide") return { src: slideEmbedUrl(session.slides_url, nl.slide), label: [seq, `page ${nl.slide} du support`].filter(Boolean).join(" · ").replace(/^p/, "P") };
-  if (nl.view === "module") return { src: null, label: seq || "Écran de la séquence" };
-  if (nl.view === "deck") {
-    const d = (session.decks || []).find((x) => x.id === nl.deck);
-    if (d) return { src: deckEmbedUrl(d.url, nl.page), label: `${d.title} · page ${nl.page}` };
-  }
-  return null;
-}
-
 export function screenHtml(d, compact = false) {
   const { session, rows = [], participants = 0, qrUrl = "", projects = [], branding = null, emQr = null, support = null, evalQr = null, trainer = null, forTrainee = false, joinLabel = "" } = d;
   const cls = compact ? "compact" : "";
@@ -155,7 +83,7 @@ export function screenHtml(d, compact = false) {
   const isLive = session.status === "live";
   const act = isLive ? currentAct(session) : null;
   // salle fermée : seuls les écrans d'ouverture et de clôture se projettent (les stagiaires, eux, ne les voient pas)
-  const view = isLive || ["title", "trainer", "emargement", "support", "evaluation", "qr"].includes(live.view) ? live.view : null;
+  const view = isLive || ["title", "trainer", "emargement", "support", "evaluation", "qr", "pause"].includes(live.view) ? live.view : null;
   const mod = live.module ? modulesFor(session).find((m) => m.id === live.module) : null;
   const right = forTrainee ? "" : `Code ${esc(session.code)} · ${participants} participant${participants > 1 ? "s" : ""}`;
 
@@ -223,8 +151,12 @@ export function screenHtml(d, compact = false) {
 
   if (view === "support") {
     const when = support?.unlock_at ? new Date(support.unlock_at).toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).replace(":", " h ") : null;
-    return light(session, `<div class="ds-kick">Le support</div><div class="ds-title">${support?.unlocked ? "Le support est disponible" : "Le support vous attend"}</div><p class="ds-text">${T("Dans votre espace, menu « Support de formation ».")}</p>`,
-      `<div class="ds-bignote"><span class="ds-letter big">${support?.unlocked ? "↓" : "🔒"}</span><div>${support?.unlocked ? "Téléchargeable dès maintenant" : `Téléchargeable${when ? ` à partir de <b>${when}</b>` : " en fin de formation"}`}</div></div>`, right, cls);
+    // lien d'évaluation renseigné : chaque stagiaire débloque le support en touchant « Remplir l'évaluation »
+    const gated = !!session.evaluation_url, open = !!support?.unlocked;
+    const note = gated ? (open ? "Téléchargeable dès que vous remplissez l'évaluation" : "Téléchargeable après l'évaluation de fin de stage")
+      : open ? "Téléchargeable dès maintenant" : `Téléchargeable${when ? ` à partir de <b>${when}</b>` : " en fin de formation"}`;
+    return light(session, `<div class="ds-kick">Le support</div><div class="ds-title">${open && !gated ? "Le support est disponible" : "Le support vous attend"}</div><p class="ds-text">${T("Dans votre espace, menu « Évaluation et support ».")}</p>`,
+      `<div class="ds-bignote"><span class="ds-letter big">${open ? "↓" : "🔒"}</span><div>${note}</div></div>`, right, cls);
   }
 
   if (act?.type === "projects") {
@@ -236,11 +168,11 @@ export function screenHtml(d, compact = false) {
     const n = countOf(rows);
     let kick = act.titre, q = act.q || act.titre, main;
     if (act.type === "quiz") {
-      const Q = quizQ(act, live);
-      kick = `${QUIZ[act.quiz]?.titre || "Quiz"} · question ${(live.qi || 0) + 1} sur ${QUIZ[act.quiz]?.q.length || 0}`;
-      q = Q?.[0] || "";
-      const counts = (Q?.[1] || []).map((_, i) => rows.filter((r) => r.value === i).reduce((a, r) => a + r.n, 0));
-      main = Q ? deckBars(Q[1], counts, live.reveal ? Q[2] : -1) + (live.reveal ? `<div class="ds-expl">${T(Q[3])}</div>` : "") : "";
+      const Q = quizQ(act, live, session), QZ = quizFor(session, act.quiz);
+      kick = QZ ? `${QZ.titre} · question ${(live.qi || 0) + 1} sur ${QZ.questions.length}` : act.titre;
+      q = Q?.q || "";
+      const counts = (Q?.o || []).map((_, i) => rows.filter((r) => r.value === i).reduce((a, r) => a + r.n, 0));
+      main = Q ? deckBars(Q.o, counts, live.reveal ? Q.ok : -1) + (live.reveal && Q.why ? `<div class="ds-expl">${T(Q.why)}</div>` : "") : "";
     } else if (act.type === "cloud") {
       main = deckCloud(rows);
     } else {
@@ -253,7 +185,7 @@ export function screenHtml(d, compact = false) {
       n || act.type === "cloud" ? main : `<div class="ds-wait">En attente des premières réponses…</div>${main}`, right, cls);
   }
 
-  // Accueil en salle : grand QR code, lien court et étapes de connexion (vue « qr » et écran d'attente)
+  // Accueil en salle : grand QR code, lien court et étapes de connexion (vue « qr », et rien de projeté avant la première ouverture du jour)
   // L'adresse tient sur une ligne : au-delà de 36 caractères, la police rétrécit (chasse fixe : 0,6 em par caractère)
   const addr = joinLabel || session.code || "";
   const addrSize = Math.min(2.4, 52 / (Math.max(addr.length, 1) * 0.6)).toFixed(2);
@@ -262,10 +194,17 @@ export function screenHtml(d, compact = false) {
         <ol class="ds-steps"><li>${T("Scannez le QR code, ou tapez l'adresse :")}<b class="mono ds-addr" style="font-size:${addrSize}cqw">${esc(addr)}</b></li><li>${T("Indiquez votre prénom et votre e-mail")}</li><li>${T("Saisissez le code reçu par e-mail")}</li></ol></div>
       ${qrUrl ? `<div class="ds-joinbig-qr"><img src="${qrUrl}" alt="QR code pour rejoindre"><b class="mono">${esc(session.code)}</b></div>` : ""}
     </div>`, right, cls);
-  if (view === "qr") return joinSlide("Rejoindre l'espace de formation", "Connectez-vous", session.title);
+  if (view === "qr") return joinSlide("Rejoindre l'espace de formation", "La formation va commencer", session.title);
 
-  // Rien de lancé : écran d'attente
-  if (session.status !== "closed" && qrUrl) return joinSlide("En attente", "La formation va commencer", session.title);
+  // Pause (bouton « Pause » du pilotage) : la tasse de café animée, et le QR en coin pour un·e retardataire
+  const pauseSlide = () => dark(session, `<div class="ds-center"><img class="ds-pause" src="${pauseGif}" alt=""><div class="ds-title xxl">Pause</div><div class="ds-sub">${T(session.title)}</div></div>${joinBox(session, qrUrl)}`, right, cls);
+  if (view === "pause") return pauseSlide();
+
+  // Rien de projeté : salle déjà ouverte aujourd'hui puis refermée (pause, déjeuner), écran de pause ;
+  // sinon, avant la première ouverture du jour, la slide « Rejoindre » (comme le QR projeté)
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
+  if (session.status !== "closed" && live.started?.day === today) return pauseSlide();
+  if (session.status !== "closed" && qrUrl) return joinSlide("Rejoindre l'espace de formation", "La formation va commencer", session.title);
   const next = session.activities?.[0];
   return dark(session, `<div class="ds-left">
       <div class="ds-kick">${session.status === "closed" ? "Fin de la formation" : "En attente"}</div>

@@ -3,6 +3,7 @@
    - version sombre (logo) pour les fonds clairs ;
    - version claire (logo_light) pour les fonds marine. */
 import { $, $$, T, esc, guard } from "../lib/dom.js";
+import { settingsHead } from "../lib/adminNav.js";
 import { fileToDataUrl, samsaHtml } from "../lib/brand.js";
 import { applySkin, invalidateSkins, isHex, mix } from "../lib/skin.js";
 import { MAIL_DEFAULTS, MAIL_FIELDS, renderCodeMail } from "../lib/codeMail.js";
@@ -36,9 +37,7 @@ export async function viewSettings(root, [tab = "organisme"], { api, go }) {
   const def = settings.default_skin || "";
   const part = (k) => `data-stab="${k}"${k === tab ? "" : " hidden"}`;
   root.innerHTML = `
-    <p><a href="#/admin">← Sessions</a></p>
-    <div class="pagehead"><div><div class="kicker-d">Back-office</div><h1>Réglages généraux</h1></div></div>
-    <div class="phases">${STABS.map(([k, l]) => `<a href="#/admin/reglages/${k}"${k === tab ? ' aria-current="page"' : ""}>${l}</a>`).join("")}</div>
+    ${settingsHead(tab)}
     ${tab !== "mail" ? `<p class="muted settings-help">${T(LOGO_HELP)}</p>` : ""}
     <section ${part("habillages")}>
     <div class="card" id="skinsCard"><h3>Habillages · centres de formation</h3>

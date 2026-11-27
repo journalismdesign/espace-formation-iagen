@@ -8,10 +8,10 @@ import "@fontsource/ibm-plex-mono/500.css";
 import "./style.css";
 
 import { api } from "./api/index.js";
-import { $, esc, toast } from "./lib/dom.js";
+import { $, esc, toast, dateFr } from "./lib/dom.js";
 import { samsaHtml } from "./lib/brand.js";
 import { closeSheet } from "./lib/content.js";
-import { viewLogin, viewTrainerLogin, viewSetTrainerCode, RESET } from "./views/login.js";
+import { viewLogin, viewTrainerLogin, viewSetTrainerCode, viewGuestLogin, RESET, GUEST_TRY, GUEST_REFUSED } from "./views/login.js";
 import { viewEntry } from "./views/entry.js";
 import { viewHome } from "./views/home.js";
 import { viewProfile } from "./views/profile.js";
@@ -20,9 +20,11 @@ import { viewAdmin } from "./views/admin.js";
 import { viewAdminSession } from "./views/adminSession.js";
 import { viewScreen } from "./views/screen.js";
 import { viewStaff } from "./views/staff.js";
-import { isStaff, isAdmin } from "./lib/roles.js";
+import { isAdmin, isGuest, canView } from "./lib/roles.js";
 import { viewSettings } from "./views/settings.js";
 import { viewTrainers } from "./views/trainers.js";
+import { viewQuizBank } from "./views/quizBank.js";
+import { viewTrames } from "./views/trames.js";
 import { skinFooter, skinForRoute, applySkin, currentSkin } from "./lib/skin.js";
 
 const app = $("#app");
@@ -34,13 +36,16 @@ const ROUTES = [
   [/^#\/login$/, viewLogin, { public: true }],
   [/^#\/formateur$/, viewTrainerLogin, { public: true }],
   [/^#\/formateur\/code$/, viewSetTrainerCode, {}],
+  [/^#\/invitation$/, viewGuestLogin, { public: true }], // invité·es : code par e-mail, puis leurs sessions de démo
   [/^#\/join\/([A-Za-z0-9]+)$/, viewEntry, { any: true, bare: true }],
   [/^#\/profil$/, viewProfile],
   [/^#\/s\/([\w-]+)(?:\/([\w-]+))?(?:\/([\w-]+))?$/, viewSession],
-  [/^#\/admin$/, viewAdmin, { trainer: true }],
+  [/^#\/admin(?:\/(archives))?$/, viewAdmin, { trainer: true }], // sessions à venir, ou archivées
   [/^#\/admin\/reglages(?:\/(\w+))?$/, viewSettings, { trainer: true, admin: true }],
   [/^#\/admin\/formateurs(?:\/([\w-]+))?$/, viewTrainers, { trainer: true, admin: true }],
-  [/^#\/admin\/equipe$/, viewStaff, { trainer: true, admin: true }],
+  [/^#\/admin\/quiz(?:\/([\w-]+))?$/, viewQuizBank, { trainer: true, admin: true }],
+  [/^#\/admin\/trames(?:\/([\w-]+))?$/, viewTrames, { trainer: true, admin: true }], // trames de conducteur (éditeur)
+  [/^#\/admin\/equipe(?:\/(comptes|fiches))?(?:\/([\w-]+))?$/, viewStaff, { trainer: true, admin: true }],
   [/^#\/admin\/s\/([\w-]+)(?:\/(\w+))?$/, viewAdminSession, { trainer: true }],
   [/^#\/ecran\/([\w-]+)$/, viewScreen, { trainer: true, bare: true }],
   [/^#?\/?$/, viewHome],
@@ -48,18 +53,30 @@ const ROUTES = [
 
 function header(route) {
   if (route?.bare || !me) return "";
-  const trainer = isStaff(me);
+  const trainer = canView(me); // équipe et invité·es : lien vers le back-office
   const h = location.hash;
   const link = (href, label, on) => `<a href="${href}"${on ? ' aria-current="page"' : ""}>${label}</a>`;
+  // Vue stagiaire d'une session (aperçu formateur) : « Back-office » ramène au Jour J de cette session
+  const inSession = h.match(/^#\/s\/([\w-]+)/)?.[1];
   return `<header class="top"><div class="hwrap">
     <a class="brand-wrap" href="#/">${samsaHtml(true, "head")}<span class="brand"><span class="kicker">Espace formation · ${esc(currentSkin()?.name || "Journalisme & IA")}</span><b>Prendre en main les IA génératives</b></span></a>
     <nav class="topnav">
-      ${trainer ? link("#/admin", "Back-office", h.startsWith("#/admin")) : link("#/", "Mon espace", h === "#/" || h === "" || h.startsWith("#/s/"))}
+      ${trainer ? link(inSession ? `#/admin/s/${inSession}/jour` : "#/admin", "Back-office", h.startsWith("#/admin")) : link("#/", "Mon espace", h === "#/" || h === "" || h.startsWith("#/s/"))}
       ${link("#/profil", esc(me.full_name || me.email.split("@")[0]), h === "#/profil")}
       <button class="linkbtn" id="logout">Se déconnecter</button>
     </nav></div>
-    ${api.mode === "demo" ? `<div class="demo-band">Mode démonstration : données stockées dans ce navigateur uniquement. <button class="linkbtn" id="demoReset">Réinitialiser</button></div>` : ""}
+    ${api.mode === "demo" ? `<div class="demo-band">Mode démonstration : données stockées dans ce navigateur uniquement.${isGuest(me) ? "" : ` <button class="linkbtn" id="demoReset">Réinitialiser</button>`}</div>` : ""}
+    ${isGuest(me) ? guestBand(me) : ""}
   </header>`;
+}
+
+// Bandeau de l'invité·e : sessions de démonstration, date de fin (ou accès terminé)
+function guestBand(me) {
+  const until = me.guest_until ? dateFr(me.guest_until, { day: "numeric", month: "long", year: "numeric" }).replace(/^1 /, "1er ") : "";
+  const txt = me.guest_active === false
+    ? `Votre accès invité a pris fin${until ? ` le ${until}` : ""}. Demandez à l'équipe de le prolonger.`
+    : `Invitation · démonstration${until ? ` jusqu'au ${until}` : ""} : manipulez librement vos deux sessions de démo, aucune vraie session n'est concernée.`;
+  return `<div class="guest-band${me.guest_active === false ? " over" : ""}" role="status">${esc(txt)}</div>`;
 }
 
 async function render() {
@@ -85,8 +102,15 @@ async function render() {
   if (user && route.public) { go("#/"); return; }
   me = user ? await api.me() : null;
   if (tok !== renderTok) return;
-  if (user && !booted) { booted = true; try { await api.claimInvites(); } catch (e) { console.warn(e); } }
-  if (route.trainer && !isStaff(me)) { go("#/"); return; }
+  // Connexion par la page d'invitation d'une adresse sans invitation : pas d'espace stagiaire, retour à la page avec un message
+  let tried = null; try { tried = sessionStorage.getItem(GUEST_TRY); sessionStorage.removeItem(GUEST_TRY); } catch {}
+  if (user && tried && !canView(me)) {
+    await api.signOut(); me = null; booted = false;
+    try { sessionStorage.setItem(GUEST_REFUSED, tried); } catch {}
+    go("#/invitation"); return;
+  }
+  if (user && !booted) { booted = true; if (!isGuest(me)) { try { await api.claimInvites(); } catch (e) { console.warn(e); } } }
+  if (route.trainer && !canView(me)) { go("#/"); return; }
   if (route.admin && !isAdmin(me)) { go("#/admin"); return; } // pages réservées à l'administration
   // Anti-cadre : le back-office et l'écran projeté ne s'affichent pas dans une page tierce (détournement de clics).
   // GitHub Pages ne permet pas l'en-tête frame-ancestors, d'où ce contrôle en JS.
