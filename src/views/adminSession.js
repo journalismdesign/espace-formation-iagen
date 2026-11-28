@@ -169,13 +169,20 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       <p class="muted" style="margin:4px 0">${sessionNo(session) ? `N° <b class="mono">${esc(sessionNo(session))}</b> · ` : ""}${T(session.formation)} · ${T(datesFr(session))} · code <b class="mono">${esc(session.code)}</b></p>
     </div>
     <div class="head-actions">${session.status !== "closed" ? `<button class="btn ghost sm" id="addBtn" title="Faire entrer une personne qui ne reçoit pas l'e-mail : accès direct ou code à transmettre">Ajouter un·e stagiaire</button>` : ""}<a class="btn ghost sm" href="#/s/${sid}" title="Voir l'espace tel que le voient les stagiaires">Voir côté stagiaire</a>
-      ${session.status === "draft" ? `<button class="btn sm" data-status="live">Ouvrir la salle</button>` : session.status === "live" ? `<button class="btn sm ghost" data-status="draft">Fermer la salle</button>` : `<button class="btn sm ghost" data-status="live">Rouvrir</button>`}</div></div>
+      ${session.status === "draft" ? `<button class="btn sm" data-status="live">Ouvrir la salle</button>` : session.status === "live" ? `<button type="button" class="state live room-btn room-head" data-status="draft" title="${esc(fr("Salle ouverte : cliquer pour fermer la salle"))}" aria-label="Salle ouverte : fermer la salle"><span class="rb-l"><span class="rb-txt">En direct</span><span class="rb-hint">Fermer la salle</span><span class="rb-arm">${T("Confirmer ?")}</span></span></button>` : `<button class="btn sm ghost" data-status="live">Rouvrir</button>`}</div></div>
     <div class="phases">${PHASES.map(([k, l]) => `<a href="#/admin/s/${sid}/${k}"${k === phase ? ' aria-current="page"' : ""}>${phaseLabel(k, l, session)}</a>`).join("")}</div>
     ${phase === "jour" ? `<div class="head-live"><div class="clock" id="clock" aria-live="off"></div>
         <div class="joinbox"><img src="${qrUrl}" alt="QR code de la session"><span class="jb-txt"><span class="small">Rejoindre la session</span><b class="mono">${esc(session.code)}</b></span><button class="btn sm ghost" id="pjQ" title="Afficher le QR code sur l'écran projeté (salle ouverte ou non)">Projeter le QR code</button></div>
         <label class="onlinebox${session.online ? " on" : ""}" id="onlineLbl" title="${esc(fr("Formation à distance : les stagiaires voient dans leur espace ce que montre l'écran projeté (pages du support, présentations, séquences, émargement) et peuvent écrire dans la discussion. En salle, la discussion leur reste fermée."))}"><input type="checkbox" role="switch" id="onlineMode"${session.online ? " checked" : ""}><span class="ob-txt"><b>Formation en ligne</b><span class="small" id="onlineSub">${onlineSub(session.online)}</span></span></label></div>` : ""}
     <div id="phase"></div>`;
   $$("[data-status]", root).forEach((b) => (b.onclick = async () => {
+    // « En direct » : fermer la salle en deux clics (« Confirmer ? » pendant 4 s), comme dans la liste des sessions
+    if (b.classList.contains("room-btn") && !b.classList.contains("armed")) {
+      b.classList.add("armed"); clearTimeout(b._disarm);
+      b._disarm = setTimeout(() => b.classList.remove("armed"), 4000);
+      return;
+    }
+    clearTimeout(b._disarm); b.disabled = true;
     const st = b.dataset.status;
     await guard(() => api.updateSession(sid, { status: st, live: st === "live" ? { ...(session.live || {}), ...(!session.live?.view && !session.live?.act ? { view: "title", started_at: new Date().toISOString() } : {}), started: stamp(session.live) } : (session.live?.started ? { started: session.live.started } : {}) }), st === "live" ? "Salle ouverte : les stagiaires peuvent répondre." : "Salle fermée.");
     go(location.hash);
@@ -205,8 +212,9 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     const el = $("#clock", root); if (!el) return;
     const dur = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m} min`);
     const nowMin = parisMin(new Date()), ref = clockRef(), on = session.status === "live";
-    // Pastille d'état toujours au même gabarit (rond + libellé) et seconde ligne toujours présente : le pavé ne change pas de hauteur
-    const state = on ? `<span class="state live">En direct</span>` : `<span class="state off">${session.status === "closed" ? "Session terminée" : "Salle fermée"}</span>`;
+    /* Pastille d'état : « En direct » ou « Session terminée » ; rien quand la salle est simplement fermée (le bouton
+       « Ouvrir la salle » de l'en-tête le dit déjà). Seconde ligne toujours présente. */
+    const state = on ? `<span class="state live">En direct</span>` : session.status === "closed" ? `<span class="state off">Session terminée</span>` : "";
     const sub = session.status === "closed" ? "" : ref === null ? `début prévu à ${plannedTxt()}`
       : on ? `écoulé ${dur(Math.max(0, nowMin - ref))} · depuis ${hmMin(ref)}` : `journée commencée à ${hmMin(ref)}`;
     const html = `<span class="clk-lbl">${state}<span class="clk-sub">${sub ? fr(sub) : "&nbsp;"}</span></span><b class="t">${hm2(Math.floor(nowMin / 60), nowMin % 60)}</b>`
@@ -647,7 +655,7 @@ $("#condSaveTrame", box)?.addEventListener("click", async () => {
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="kicker-d live-tag"><span class="dot on"></span>Écran projeté · en direct</div><button class="btn sm" id="openScr">Ouvrir l'écran projeté</button></div>
           <div id="preview" class="preview"></div>
           <div id="nextBox" class="next-box" hidden><div class="kicker-d">À suivre · <span id="nextLbl"></span></div><div id="nextPrev" class="preview"></div></div>
-          <div class="card chat-card" style="margin-top:14px"><h3>Discussion des stagiaires</h3><p class="small muted" id="chatOff" style="margin:0" hidden></p><div id="chatAdm"></div></div>
+          <div class="card chat-card" style="margin-top:14px"><h3>Discussion des stagiaires</h3><p class="small muted chat-note" id="chatOff" hidden></p><div id="chatAdm"></div></div>
         </aside>
       </div>`;
     /* Discussion : ouverte aux stagiaires en formation en ligne seulement (chat_open côté base). En salle, le widget
@@ -1151,7 +1159,7 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
         <div class="chips" style="margin-top:12px"><button class="btn sm" id="csv">Exporter le bilan (CSV)</button>${admin ? `<button class="btn sm ghost" id="dup">Dupliquer la session</button>` : ""}</div>
         <p class="small muted">${T("Le bilan reprend présence, profil, état du cadrage, progression dans le déroulé et scores aux quiz. La duplication reprend la séquence, les ressources et les intitulés des accès (sans les valeurs), sans participant·es.")}</p></div>
 
-      <div class="card chat-card" id="discussion" style="margin-top:14px"><h3>Discussion des stagiaires</h3><p class="small muted" style="margin-top:0">${T("Ouverte aux stagiaires en formation en ligne, jusqu'à la clôture. Vous gardez l'historique.")}</p><div id="chatAdm"></div></div>
+      <div class="card chat-card" id="discussion" style="margin-top:14px"><h3>Discussion des stagiaires</h3><p class="small muted chat-note">${T("Ouverte aux stagiaires en formation en ligne, jusqu'à la clôture. Vous gardez l'historique.")}</p><div id="chatAdm"></div></div>
 
       <div class="card" id="resultats" style="margin-top:14px"><h3>Résultats des activités</h3><div id="resBox" class="grid g2"><p class="small muted">Chargement…</p></div></div>
 

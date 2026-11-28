@@ -1297,3 +1297,8 @@ body.trv-on{overflow:hidden}
 .room-btn:not(.armed):hover{box-shadow:0 0 0 3px var(--tint)}
 .room-btn.armed{background:var(--ko);color:#fff}
 .room-btn.armed .dot{background:#fff}
+/* En-tête de session : « En direct » à la taille des boutons voisins */
+.room-btn.room-head{font-size:13px;padding:5px 12px;border-radius:8px;justify-content:center}
+/* Cartes de discussion (sans marge intérieure, pour que la messagerie remplisse la carte) : la ligne d'explication garde la sienne */
+.chat-card>.chat-note{margin:0;padding:12px 16px 14px;line-height:1.5}
+.chat-card>.chat-note:not([hidden])+div:not(:empty){border-top:1px solid var(--line)}
