@@ -67,7 +67,7 @@ Supabase fournit l'authentification, la base Postgres, le temps réel et les fon
 11. **Support PDF généré depuis les slides (facultatif)** : bouton « Générer le PDF » de Réglages → Support à télécharger. Il copie le deck Google Slides de la session, met la date de la session sur la page de garde (slide 1 seulement), exporte le PDF dans le dossier Drive des slides et l'enregistre comme support. Mise en place une fois :
    - Jeton : `openssl rand -hex 24` (à garder pour les deux étapes suivantes, jamais dans le dépôt).
    - Google : sur script.google.com, avec le compte propriétaire des decks, nouveau projet « Support PDF ». Coller `google/support-pdf.gs`. Dans Paramètres du projet → Propriétés de script, ajouter `TOKEN` = le jeton. `ALLOWED_FOLDERS` est facultatif : vide, toute présentation de ce compte est acceptée, quel que soit son dossier. Puis Déployer → Nouveau déploiement → Application Web, « Exécuter en tant que : moi », « Accès : tout le monde ». Autoriser Drive et Slides, puis copier l'URL `/exec`.
-   - Supabase : Edge Functions → Secrets : `SUPPORT_SCRIPT_URL` = l'URL `/exec`, `SUPPORT_SCRIPT_TOKEN` = le jeton. Puis `supabase functions deploy support-pdf`.
+   - Supabase : Edge Functions → Secrets : `SUPPORT_SCRIPT_URL` = l'URL `/exec`, `SUPPORT_SCRIPT_TOKEN` = le jeton. Puis `supabase functions deploy support-pdf --no-verify-jwt`.
    - Sans ces étapes, le bouton répond « pas encore activé ». Après une modification de `google/support-pdf.gs` : Déployer → Gérer les déploiements → modifier → nouvelle version.
 10. **Ou héberger ailleurs** : `npm run build`, puis publier le dossier `dist/` sur n'importe quel hébergement statique (Netlify, Vercel, GitHub Pages, OVH…). Le routage par ancre (`#/…`) ne demande aucune règle de réécriture.
 

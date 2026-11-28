@@ -12,7 +12,8 @@
 //
 // Secrets : SUPPORT_SCRIPT_URL (URL /exec de l'application Web Apps Script), SUPPORT_SCRIPT_TOKEN (même valeur que
 //   la propriété TOKEN du script), ALLOWED_ORIGIN (déjà posé pour la fonction access).
-// Déploiement : supabase functions deploy support-pdf
+// Déploiement : supabase functions deploy support-pdf --no-verify-jwt (la fonction vérifie elle-même le jeton de
+//   l'appelant ; la vérification de la passerelle bloquerait la requête de contrôle CORS du navigateur)
 // =====================================================================
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
