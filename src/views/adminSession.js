@@ -21,7 +21,6 @@ import { isLunch, pauseTargets, movePause, shiftPause, pauseAlert, pauseAlertTex
 import { loadSkins, skinFor, applySkin, currentSkin } from "../lib/skin.js";
 import { samsaHtml } from "../lib/brand.js";
 import { isAdmin } from "../lib/roles.js";
-import { sessionNo } from "../lib/presence.js";
 import { ICON } from "../lib/adminNav.js";
 import { popIn } from "../lib/motion.js";
 import { dateOfDay, MAX_DAYS } from "../lib/archive.js";
@@ -172,7 +171,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     <p><a href="#/admin">← Sessions</a></p>
     <div class="pagehead sess-head"><div>
       <h1 style="margin:0">${T(session.title)}</h1>
-      <p class="muted" style="margin:4px 0">${sessionNo(session) ? `N° <b class="mono">${esc(sessionNo(session))}</b> · ` : ""}${T(session.formation)} · ${T(datesFr(session))} · code <b class="mono">${esc(session.code)}</b></p>
+      <p class="muted" style="margin:4px 0">${T(session.formation)} · ${T(datesFr(session))} · code <b class="mono">${esc(session.code)}</b></p>
     </div>
     <div class="head-actions">${session.status !== "closed" ? `<button class="btn ghost sm" id="addBtn" title="Faire entrer une personne qui ne reçoit pas l'e-mail : accès direct ou code à transmettre">Ajouter un·e stagiaire</button>` : ""}<a class="btn ghost sm" href="#/s/${sid}" title="Voir l'espace tel que le voient les stagiaires">Voir côté stagiaire</a>
       <span class="room-box" id="roomBox">${roomBtnHtml()}</span></div></div>
@@ -251,9 +250,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     const el = $("#clock", root); if (!el) return;
     const dur = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m} min`);
     const nowMin = parisMin(new Date()), ref = clockRef(), on = session.status === "live";
-    /* Pastille d'état : « En direct » ou « Session terminée » ; rien quand la salle est simplement fermée (le bouton
-       « Ouvrir la salle » de l'en-tête le dit déjà). Seconde ligne toujours présente. */
-    const state = on ? `<span class="state live">En direct</span>` : session.status === "closed" ? `<span class="state off">Session terminée</span>` : "";
+    // Pastille d'état toujours au même gabarit (rond + libellé) et seconde ligne toujours présente : le pavé ne change pas de hauteur
+    const state = on ? `<span class="state live">En direct</span>` : `<span class="state off">${session.status === "closed" ? "Session terminée" : "Salle fermée"}</span>`;
     const sub = session.status === "closed" ? "" : ref === null ? `début prévu à ${plannedTxt()}`
       : on ? `écoulé ${dur(Math.max(0, nowMin - ref))} · depuis ${hmMin(ref)}` : `journée commencée à ${hmMin(ref)}`;
     const html = `<span class="clk-lbl">${state}<span class="clk-sub">${sub ? fr(sub) : "&nbsp;"}</span></span><b class="t">${hm2(Math.floor(nowMin / 60), nowMin % 60)}</b>`

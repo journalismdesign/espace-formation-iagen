@@ -27,7 +27,7 @@ import { viewQuizBank } from "./views/quizBank.js";
 import { viewTrames } from "./views/trames.js";
 import { viewParticipants } from "./views/participants.js";
 import { MAIN_TABS, mainTabOf, ICON } from "./lib/adminNav.js";
-import { initMotion, placeIndicator, enterView } from "./lib/motion.js";
+import { initMotion, placeIndicator, enterView, initTabs } from "./lib/motion.js";
 import { morph } from "./lib/morph.js";
 import { skinFooter, skinForRoute, applySkin, currentSkin } from "./lib/skin.js";
 
@@ -91,6 +91,28 @@ function guestBand(me) {
   return `<div class="guest-band${me.guest_active === false ? " over" : ""}" role="status">${esc(txt)}</div>`;
 }
 
+/* Barres d'onglets (.phases) : si la nouvelle page a une barre aux mêmes liens que l'ancienne, l'ancienne est gardée
+   (même élément, pastille comprise) ; on n'y reprend que les libellés, pastilles « à régler » et l'onglet actif. */
+function keepTabs(oldView, view) {
+  if (!oldView) return [];
+  const links = (bar) => [...bar.querySelectorAll(":scope > a")];
+  const sig = (bar) => links(bar).map((a) => a.getAttribute("href")).join("|");
+  const olds = [...oldView.querySelectorAll(".phases")], kept = [];
+  view.querySelectorAll(".phases").forEach((nb) => {
+    const ob = olds.find((b) => !kept.includes(b) && sig(b) === sig(nb));
+    if (!ob) return;
+    const oa = links(ob);
+    links(nb).forEach((a, i) => {
+      if (oa[i].innerHTML !== a.innerHTML) oa[i].innerHTML = a.innerHTML;
+      if (a.hasAttribute("aria-current")) oa[i].setAttribute("aria-current", "page"); else oa[i].removeAttribute("aria-current");
+    });
+    if (nb.getAttribute("style") !== ob.getAttribute("style")) ob.setAttribute("style", nb.getAttribute("style") || "");
+    nb.replaceWith(ob);
+    kept.push(ob);
+  });
+  return kept;
+}
+
 async function render() {
   const tok = ++renderTok; // un rendu plus récent annule celui-ci
   closeSheet();
@@ -138,23 +160,38 @@ async function render() {
   morph($("#hdr"), header(route));
   const view = document.createElement("main");
   view.id = "view";
-  $("#view").replaceWith(view);
+  /* La nouvelle page se dessine hors de l'écran pendant que l'ancienne reste affichée, puis les deux sont échangées d'un
+     coup : pas d'écran vide ni d'effet de chargement. Une barre d'onglets identique (mêmes liens) n'est pas redessinée :
+     l'ancienne est gardée telle quelle, seul l'onglet actif change (keepTabs), et seuls les modules sous la barre
+     apparaissent. Pages plein écran (entrée stagiaire, écran projeté) et premier affichage : comme avant. Page lente
+     (plus de 700 ms) : l'échange se fait quand même, avec « Chargement » si elle est encore vide. */
+  const oldView = $("#view"), offscreen = !route.bare && !!oldView?.childElementCount;
+  let kept = [], swapped = false;
+  const swap = () => {
+    if (swapped || tok !== renderTok) return;
+    swapped = true;
+    kept = keepTabs(oldView, view);
+    $("#view").replaceWith(view);
+    initTabs(view);
+  };
+  if (!offscreen) swap();
   placeIndicator($(".maintabs")); // le trait glisse de l'onglet précédent au nouveau
   const logout = $("#logout"), demoReset = $("#demoReset"); // onclick (et non addEventListener) : l'en-tête reste, un seul écouteur
   if (logout) logout.onclick = async () => { await api.signOut(); me = null; booted = false; go("#/login"); };
   if (demoReset) demoReset.onclick = () => confirm("Effacer toutes les données de démonstration ?") && api.reset();
   const ctx = { api, me, go, refreshMe: async () => (me = await api.me(true)) };
   ctx.me = me || {};
-  // Page lente (plus de 150 ms) : « Chargement » dans la zone utile, la navigation ne bouge pas
-  const slow = setTimeout(() => { if (!view.childElementCount) view.innerHTML = LOADING; }, 150);
+  const slow = setTimeout(() => { swap(); if (swapped && !view.childElementCount) view.innerHTML = LOADING; }, offscreen ? 700 : 150);
   try {
     cleanup = (await route.view(view, m.slice(1), ctx)) || null;
-    if (tok === renderTok && !route.bare && (/^#\/admin\b/.test(h) || h === "#/" || h === "")) enterView(view);
+    swap();
+    if (tok === renderTok && !route.bare && (/^#\/admin\b/.test(h) || h === "#/" || h === "")) enterView(view, kept);
   } catch (e) {
     console.error(e);
+    swap();
     view.innerHTML = `<div class="card"><h2>Impossible d'afficher cette page</h2><p class="muted">${esc(e.message)}</p><a class="btn" href="#/">Retour à mon espace</a></div>`;
   } finally { clearTimeout(slow); }
-  window.scrollTo(0, 0);
+  if (tok === renderTok && !kept.length) window.scrollTo(0, 0); // même barre d'onglets : on reste où l'on est
 }
 
 // Lien court …/CODE6 (serveur de développement, hébergements qui renvoient index.html)

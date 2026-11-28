@@ -1352,3 +1352,9 @@ body.trv-on{overflow:hidden}
   #tRoles .row3-head>span:nth-child(3){display:none}
   #tRoles .row3:not(.row3-head){margin-bottom:12px}
 }
+
+/* Barres d'onglets : pastille blanche qui glisse sous l'onglet survolé (motion.js, initTabs) ; sans elle, le style habituel */
+.phases{position:relative}
+.phases>a{position:relative;z-index:1}
+.phases>.ph-pill{position:absolute;left:0;top:0;width:0;height:0;background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.08);pointer-events:none;z-index:0;opacity:0}
+.phases.ph-on>a[aria-current=page]{background:transparent;box-shadow:none}
