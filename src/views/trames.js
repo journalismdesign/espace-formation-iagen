@@ -15,13 +15,15 @@ import { parsePages, formatPages, slideEmbedUrl, deckId, DECK_PAGES, DEFAULT_DEC
 import { parseConducteur, conducteurMarkdown } from "../lib/conducteur.js";
 import { typeLabel, TOOL_LABELS } from "../lib/content.js";
 import { studioHead, ICON } from "../lib/adminNav.js";
+import { morph } from "../lib/morph.js";
+import { popIn } from "../lib/motion.js";
 import {
   fromProgramme, toProgramme, timeline, moveItem, addItem, updateItem, removeItem, duplicateItem, updateDay, addDay, removeDay,
   find, pagesUsage, blankTrame, BLOCKS, MAX_DAYS,
 } from "../lib/trame.js";
 
 const BASE = "#/admin/trames";
-const MIG = "Trames pas encore activées : la migration 20261129010000_trames.sql doit être exécutée dans Supabase.";
+const MIG = "Création de programmes pas encore activée : la migration 20261129010000_trames.sql doit être exécutée dans Supabase.";
 const DRAFT = (id) => `iagen-draft:trame:${id}`;
 const hfr = (t) => String(t || "").slice(0, 5).replace(/^0/, "").replace(":", " h ");
 const durTxt = (n) => (n >= 60 ? `${Math.floor(n / 60)} h${n % 60 ? ` ${String(n % 60).padStart(2, "0")}` : ""}` : `${n} min`);
@@ -39,19 +41,19 @@ export async function viewTrames(root, [id], ctx) {
     ${studioHead("trames")}
     <div class="pagehead studio-sub"><div><p class="muted" style="margin:0;max-width:760px">${T("Des déroulés réutilisables, de une à cinq journées : séquences, slides, quiz et sondages. Construisez-les ici au glisser-déposer, puis appliquez-les à une session dans ses réglages (Conducteur).")}</p></div>
       ${list.ready ? `<div class="head-actions">
-        <a class="btn" href="${BASE}/nouvelle">+ Nouvelle trame</a>
+        <a class="btn" href="${BASE}/nouvelle">+ Nouveau programme</a>
         <button class="btn ghost" type="button" data-from="1">À partir du déroulé d'une journée</button>
         <button class="btn ghost" type="button" data-from="2">… de deux journées</button>
         <label class="btn ghost" style="cursor:pointer">Importer un .md<input type="file" id="trImp" accept=".md,.markdown,.txt" hidden></label></div>` : ""}</div>
     ${list.ready ? "" : `<div class="warn small" style="margin-bottom:14px">${T(MIG)}</div>`}
-    <div class="card table-card">${list.items.length ? `<table class="tbl"><thead><tr><th>Trame</th><th>Journées</th><th>Séquences</th><th>Modifiée</th><th></th></tr></thead><tbody>
+    <div class="card table-card">${list.items.length ? `<table class="tbl"><thead><tr><th>Programme</th><th>Journées</th><th>Séquences</th><th>Modifiée</th><th></th></tr></thead><tbody>
       ${list.items.map((t) => `<tr><td><a href="${BASE}/${t.id}"><b>${T(t.titre)}</b></a>${t.content?.formation ? `<div class="small muted">${T(t.content.formation)}</div>` : ""}</td>
         <td>${t.content?.nDays || 1}</td><td>${countSeq(t.content)}</td><td class="small muted">${when(t.updated_at)}</td>
         <td class="actions"><button class="iconbtn" data-exp="${t.id}" title="Exporter en .md" aria-label="Exporter « ${esc(t.titre)} » en .md">⤓</button><button class="iconbtn" data-dup="${t.id}" title="Dupliquer" aria-label="Dupliquer « ${esc(t.titre)} »">⧉</button><button class="iconbtn danger" data-del="${t.id}" title="Supprimer" aria-label="Supprimer « ${esc(t.titre)} »">✕</button></td></tr>`).join("")}
-      </tbody></table>` : `<p class="empty">${T(list.ready ? "Aucune trame pour l'instant. Créez la première, ou partez du déroulé par défaut." : "Les trames apparaîtront ici une fois la migration exécutée.")}</p>`}</div>`;
+      </tbody></table>` : `<p class="empty">${T(list.ready ? "Aucun programme pour l'instant. Créez le premier, ou partez du déroulé par défaut." : "Les programmes apparaîtront ici une fois la migration exécutée.")}</p>`}</div>`;
 
   const byId = (x) => list.items.find((t) => t.id === x);
-  const create = async (titre, content) => { const row = await guard(() => api.saveTrame({ titre, content }), "Trame créée."); if (row) go(`${BASE}/${row.id}`); };
+  const create = async (titre, content) => { const row = await guard(() => api.saveTrame({ titre, content }), "Programme créé."); if (row) go(`${BASE}/${row.id}`); };
   $$("[data-from]", root).forEach((b) => (b.onclick = () => {
     const two = b.dataset.from === "2";
     create(two ? "Deux journées (déroulé par défaut)" : "Une journée (déroulé par défaut)", toProgramme(fromProgramme({ formation: "Prendre en main les IA génératives", nDays: two ? 2 : 1, modules: two ? D2 : D1, slides_url: `https://docs.google.com/presentation/d/${DEFAULT_DECK_ID}/edit`, slides_n: DECK_PAGES.length })));
@@ -68,8 +70,8 @@ export async function viewTrames(root, [id], ctx) {
   $$("[data-dup]", root).forEach((b) => (b.onclick = () => { const t = byId(b.dataset.dup); create(`${t.titre} (copie)`.slice(0, 120), JSON.parse(JSON.stringify(t.content))); }));
   $$("[data-del]", root).forEach((b) => (b.onclick = async () => {
     const t = byId(b.dataset.del);
-    if (!confirm(`Supprimer la trame « ${t.titre} » ?\nLes sessions où elle a été appliquée gardent leur déroulé.`)) return;
-    if (await guard(() => api.deleteTrame(t.id).then(() => true), "Trame supprimée.")) go(BASE);
+    if (!confirm(`Supprimer le programme « ${t.titre} » ?\nLes sessions où il a été appliqué gardent leur déroulé.`)) return;
+    if (await guard(() => api.deleteTrame(t.id).then(() => true), "Programme supprimé.")) go(BASE);
   }));
 }
 
@@ -77,7 +79,7 @@ export async function viewTrames(root, [id], ctx) {
 const knownOf = (bank) => ({ quizzes: bank.items.filter((b) => b.kind === "quiz").map((b) => b.id), live: bank.items.filter((b) => b.kind !== "quiz").map((b) => b.id) });
 function exportMd(titre, model) {
   const p = toProgramme(model);
-  download(`trame-${String(titre).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "conducteur"}.md`,
+  download(`programme-${String(titre).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "conducteur"}.md`,
     conducteurMarkdown(p.modules, { formation: p.formation, days: p.days, slides_url: p.slides_url, slides_n: p.slides_n }), "text/markdown;charset=utf-8");
 }
 
@@ -85,12 +87,12 @@ function exportMd(titre, model) {
 function editor(root, id, list, bank, { api, go }) {
   const isNew = id === "nouvelle";
   const row = isNew ? null : list.items.find((t) => t.id === id);
-  if (!isNew && !row) { root.innerHTML = `<div class="card"><h2>Trame introuvable</h2><p class="muted">Elle a peut-être été supprimée.</p><a class="btn" href="${BASE}">Trames</a></div>`; return; }
+  if (!isNew && !row) { root.innerHTML = `<div class="card"><h2>Programme introuvable</h2><p class="muted">Il a peut-être été supprimé.</p><a class="btn" href="${BASE}">Programmes</a></div>`; return; }
   if (!list.ready) { root.innerHTML = `<div class="warn">${T(MIG)}</div>`; return; }
 
   // État : titre de la trame + modèle ; brouillon repris s'il existe
-  let titre = row?.titre || "Nouvelle trame", model = row ? fromProgramme(row.content) : blankTrame("Prendre en main les IA génératives");
-  let saved = JSON.stringify({ titre, model }), sel = null, dirty = false, palette = "blocs", preview = 0, filter = "";
+  let titre = row?.titre || "Nouveau programme", model = row ? fromProgramme(row.content) : blankTrame("Prendre en main les IA génératives");
+  let saved = JSON.stringify({ titre, model }), sel = null, dirty = false, palette = "blocs", preview = 0, filter = "", viewer = false, pvDir = 1;
   try { const d = JSON.parse(localStorage.getItem(DRAFT(id)) || "null"); if (d?.model?.days?.length && JSON.stringify(d) !== saved) { ({ titre, model } = d); dirty = true; } } catch {}
   const bankById = new Map(bank.items.map((b) => [b.id, b]));
   const actTitle = (k) => bankById.get(k)?.titre || QUIZ[k]?.titre || k;
@@ -101,8 +103,8 @@ function editor(root, id, list, bank, { api, go }) {
   const change = (m, select) => { model = m; if (select !== undefined) sel = select; dirty = JSON.stringify({ titre, model }) !== saved; keepDraft(); draw(); };
 
   root.innerHTML = `
-    <div class="pagehead tr-head"><div style="flex:1;min-width:0"><a href="${BASE}" class="small">← Trames</a>
-      <input class="tr-title" id="trT" maxlength="120" value="${esc(titre)}" aria-label="Titre de la trame">
+    <div class="pagehead tr-head"><div style="flex:1;min-width:0"><a href="${BASE}" class="small">← Programmes</a>
+      <input class="tr-title" id="trT" maxlength="120" value="${esc(titre)}" aria-label="Titre du programme">
       <input class="tr-formation" id="trF" maxlength="140" value="${esc(model.formation)}" placeholder="Intitulé de la formation" aria-label="Intitulé de la formation"></div>
       <div class="head-actions"><span class="small muted" id="trState"></span>
         <label class="btn ghost sm" style="cursor:pointer">Importer .md<input type="file" id="trImp2" accept=".md,.markdown,.txt" hidden></label>
@@ -112,8 +114,9 @@ function editor(root, id, list, bank, { api, go }) {
       <aside class="tr-palette card" id="trPal"></aside>
       <section class="tr-days" id="trDays" aria-label="Journées"></section>
       <aside class="tr-insp card" id="trInsp"></aside>
-    </div>`;
-  const pal = $("#trPal", root), days = $("#trDays", root), insp = $("#trInsp", root);
+    </div>
+    <div class="tr-viewer" id="trViewer" hidden></div>`;
+  const pal = $("#trPal", root), days = $("#trDays", root), insp = $("#trInsp", root), viewerBox = $("#trViewer", root);
 
   /* ---------- Journées ---------- */
   function cardHtml(m, t) {
@@ -237,8 +240,10 @@ function editor(root, id, list, bank, { api, go }) {
         <label class="f" for="trN">Nombre de slides</label><input type="number" id="trN" min="0" max="400" value="${n || ""}" placeholder="ex. 141">
         ${url && deckId(url) ? (n ? `<p class="small muted">${T("Glissez une slide sur une séquence, ou touchez-la pour la voir ; « Ajouter » la met dans la séquence choisie.")}</p>
           <div class="tr-tiles">${Array.from({ length: n }, (_, i) => i + 1).map((p) => `<button type="button" class="tr-tile${preview === p ? " on" : ""}${used.has(p) ? " used" : ""}" draggable="true" data-page="${p}" title="${used.has(p) ? `Slide ${p} · déjà dans ${used.get(p).length} séquence(s)` : `Slide ${p}`}">${p}</button>`).join("")}</div>
-          ${preview ? `<div class="tr-prev"><div class="tr-prevbox"><iframe src="${esc(slideEmbedUrl(url, preview))}" title="Slide ${preview}" loading="lazy"></iframe></div>
+          ${preview ? `<div class="tr-prev">${viewer ? `<div class="tr-prevbox tr-prevoff"><span class="small muted">Aperçu ouvert en grand</span></div>`
+              : `<div class="tr-prevbox"><iframe src="${esc(slideEmbedUrl(url, preview))}" title="Slide ${preview}" loading="lazy"></iframe><button type="button" class="tr-prevzoom" data-zoom aria-label="Agrandir la slide ${preview}"><span>⤢ Agrandir</span></button></div>`}
             <div class="tr-prevbar"><button class="btn sm ghost" type="button" data-pv="-1" aria-label="Slide précédente">←</button><b class="small">Slide ${preview}</b><button class="btn sm ghost" type="button" data-pv="1" aria-label="Slide suivante">→</button>
+            <button class="btn sm ghost" type="button" data-zoom>⤢ Agrandir</button>
             <button class="btn sm" type="button" id="trAddPage"${sel ? "" : " disabled"}>Ajouter à la séquence</button></div></div>` : ""}`
           : `<p class="small muted">Indiquez le nombre de slides pour afficher les tuiles.</p>`) : `<p class="small muted">${T("Collez le lien de la présentation (elle doit être visible de votre navigateur) pour voir et glisser ses slides.")}</p>`}`;
     }
@@ -255,13 +260,79 @@ function editor(root, id, list, bank, { api, go }) {
     $$("[data-page]", pal).forEach((b) => {
       b.ondragstart = (e) => { e.dataTransfer.setData("text/x-trame-page", b.dataset.page); e.dataTransfer.effectAllowed = "copy"; };
       b.onclick = () => { preview = +b.dataset.page; drawPalette(); };
+      b.ondblclick = () => { preview = +b.dataset.page; viewer = true; drawPalette(); }; // double clic : en grand
     });
-    $$("[data-pv]", pal).forEach((b) => (b.onclick = () => { const n = model.slides_n || DECK_PAGES.length; preview = Math.min(Math.max(1, preview + +b.dataset.pv), n); drawPalette(); }));
+    $$("[data-pv]", pal).forEach((b) => (b.onclick = () => { const n = model.slides_n || DECK_PAGES.length; pvDir = +b.dataset.pv; preview = Math.min(Math.max(1, preview + pvDir), n); drawPalette(); }));
     $("#trAddPage", pal)?.addEventListener("click", () => sel && addPage(sel, preview));
     $("#trQ", pal)?.addEventListener("input", debounce((e) => { filter = e.target.value; drawPalette(); $("#trQ", pal)?.focus(); }, 250));
     $("#trDeck", pal)?.addEventListener("change", (e) => { const v = e.target.value.trim(); if (v && !deckId(v)) return toast("Lien Google Slides non reconnu.", "ko"); preview = 0; change({ ...model, slides_url: v }); palette = "slides"; });
     $("#trN", pal)?.addEventListener("change", (e) => change({ ...model, slides_n: Math.max(0, Math.min(400, parseInt(e.target.value, 10) || 0)) }));
+    $$("[data-zoom]", pal).forEach((b) => (b.onclick = () => { viewer = true; drawPalette(); }));
+    root.querySelector(".tr-grid")?.classList.toggle("pal-wide", palette === "slides"); // onglet Slides : palette plus large
+    drawViewer();
   }
+
+  /* ---------- Visionneuse des slides : la slide en grand, la suivante préchargée (morph, comme l'écran projeté) ---------- */
+  const deckCount = () => model.slides_n || (deckId(model.slides_url) === DEFAULT_DECK_ID ? DECK_PAGES.length : 0);
+  function viewerHtml() {
+    const url = model.slides_url, n = deckCount(), used = pagesUsage(model, parsePages);
+    const inSeq = (used.get(preview) || []).map((x) => find(model, x)?.item?.titre).filter(Boolean);
+    const at = sel && find(model, sel), already = at && parsePages(at.item.pages).includes(preview);
+    const nxt = Math.min(Math.max(1, preview + pvDir), n);
+    return `<div class="trv-card" role="dialog" aria-modal="true" aria-labelledby="trvT">
+      <div class="trv-head"><h3 id="trvT">Slide ${preview} <span class="muted">sur ${n}</span></h3>
+        <span class="small muted">${T(inSeq.length ? `Déjà dans : ${inSeq.join(", ")}` : "Dans aucune séquence")}</span>
+        <button type="button" class="iconbtn" data-trv="close" aria-label="Fermer l'aperçu" title="Fermer (Échap)">✕</button></div>
+      <div class="trv-frame frame"><iframe src="${esc(slideEmbedUrl(url, preview))}" title="Slide ${preview}"></iframe>${nxt !== preview ? `<iframe src="${esc(slideEmbedUrl(url, nxt))}" title="Slide ${nxt} (préchargée)" data-preload aria-hidden="true" tabindex="-1"></iframe>` : ""}</div>
+      <div class="trv-bar">
+        <button type="button" class="btn ghost" data-trv="-1"${preview <= 1 ? " disabled" : ""}>← Précédente</button>
+        <label class="small trv-go">Slide <input type="number" id="trvN" min="1" max="${n}" value="${preview}"></label>
+        <button type="button" class="btn ghost" data-trv="1"${preview >= n ? " disabled" : ""}>Suivante →</button>
+        <span class="trv-sp"></span>
+        ${at ? `<button type="button" class="btn" data-trv="add"${already ? " disabled" : ""}>${T(already ? `Déjà dans « ${at.item.titre} »` : `Ajouter à « ${at.item.titre} »`)}</button>`
+          : `<span class="small muted">${T("Choisissez une séquence pour y ajouter cette slide.")}</span>`}</div>
+      <div class="trv-strip" aria-label="Slides">${Array.from({ length: n }, (_, i) => i + 1).map((p) => `<button type="button" class="tr-tile${p === preview ? " on" : ""}${used.has(p) ? " used" : ""}" data-trv-page="${p}"${p === preview ? ' aria-current="true"' : ""}>${p}</button>`).join("")}</div>
+    </div>`;
+  }
+  function drawViewer() {
+    const open = viewer && preview && deckCount() && deckId(model.slides_url);
+    if (!open) {
+      viewer = false;
+      if (!viewerBox.hidden) { viewerBox.hidden = true; viewerBox.innerHTML = ""; viewerBox.__html = ""; document.body.classList.remove("trv-on"); }
+      return;
+    }
+    const first = viewerBox.hidden;
+    viewerBox.hidden = false; document.body.classList.add("trv-on");
+    morph(viewerBox, viewerHtml()); // seules les parties changées bougent ; la page préchargée s'affiche aussitôt
+    const cur = viewerBox.querySelector(".trv-strip .tr-tile.on"), strip = viewerBox.querySelector(".trv-strip");
+    if (cur && strip) strip.scrollLeft = cur.offsetLeft - strip.clientWidth / 2 + cur.offsetWidth / 2;
+    if (first) { popIn(viewerBox.querySelector(".trv-card"), viewerBox); viewerBox.querySelector('[data-trv="close"]')?.focus(); }
+  }
+  const closeViewer = () => { viewer = false; drawPalette(); };
+  const goPage = (p, dir) => {
+    const q = Math.min(Math.max(1, p | 0), deckCount());
+    if (!q || q === preview) return;
+    pvDir = dir ?? (q > preview ? 1 : -1); preview = q; drawPalette();
+  };
+  viewerBox.addEventListener("click", (e) => {
+    if (e.target === viewerBox) return closeViewer(); // clic sur le fond
+    const b = e.target.closest("[data-trv], [data-trv-page]");
+    if (!b || b.disabled) return;
+    if (b.dataset.trvPage) return goPage(+b.dataset.trvPage);
+    if (b.dataset.trv === "close") return closeViewer();
+    if (b.dataset.trv === "add") return sel && addPage(sel, preview);
+    goPage(preview + +b.dataset.trv, +b.dataset.trv);
+  });
+  viewerBox.addEventListener("change", (e) => { if (e.target.id === "trvN") goPage(parseInt(e.target.value, 10) || preview); });
+  // Clavier : flèches pour changer de slide, Échap pour fermer
+  const viewerKeys = (e) => {
+    if (viewerBox.hidden) return;
+    if (e.key === "Escape") { e.preventDefault(); closeViewer(); }
+    else if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && e.target.id !== "trvN") {
+      e.preventDefault(); const d = e.key === "ArrowRight" ? 1 : -1; goPage(preview + d, d);
+    }
+  };
+  document.addEventListener("keydown", viewerKeys);
 
   /* ---------- Inspecteur ---------- */
   function drawInsp() {
@@ -331,15 +402,15 @@ function editor(root, id, list, bank, { api, go }) {
     if (f.size > 300000) return toast("Fichier trop lourd (300 ko au plus).", "ko");
     const r = parseConducteur(await f.text(), knownOf(bank));
     if (r.errors.length) return toast(`Import impossible : ${r.errors[0]}`, "ko");
-    if (!confirm(`Remplacer le contenu de la trame par « ${f.name} » (${r.programme.modules.filter((x) => x.type !== "pause").length} séquences, ${r.programme.nDays} journée(s)) ?`)) return;
+    if (!confirm(`Remplacer le contenu du programme par « ${f.name} » (${r.programme.modules.filter((x) => x.type !== "pause").length} séquences, ${r.programme.nDays} journée(s)) ?`)) return;
     if (r.warnings.length) toast(`${r.warnings.length} remarque(s) : ${r.warnings[0]}`, "");
     change(fromProgramme(r.programme), null);
     $("#trF", root).value = model.formation;
   };
   $("#trSave", root).onclick = async () => {
     const t = $("#trT", root).value.trim();
-    if (!t) return toast("Donnez un titre à la trame.", "ko");
-    const out = await guard(() => api.saveTrame({ id: isNew ? undefined : id, titre: t, content: toProgramme(model) }), "Trame enregistrée.");
+    if (!t) return toast("Donnez un titre au programme.", "ko");
+    const out = await guard(() => api.saveTrame({ id: isNew ? undefined : id, titre: t, content: toProgramme(model) }), "Programme enregistré.");
     if (!out) return;
     try { localStorage.removeItem(DRAFT(id)); } catch {}
     if (isNew) return go(`${BASE}/${out.id}`);
@@ -349,5 +420,5 @@ function editor(root, id, list, bank, { api, go }) {
   window.addEventListener("beforeunload", leave);
   draw();
   if (dirty && !isNew) toast("Brouillon repris : modifications non enregistrées.");
-  return () => window.removeEventListener("beforeunload", leave);
+  return () => { window.removeEventListener("beforeunload", leave); document.removeEventListener("keydown", viewerKeys); document.body.classList.remove("trv-on"); };
 }

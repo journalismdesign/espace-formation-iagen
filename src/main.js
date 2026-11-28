@@ -25,9 +25,14 @@ import { viewSettings } from "./views/settings.js";
 import { viewTrainers } from "./views/trainers.js";
 import { viewQuizBank } from "./views/quizBank.js";
 import { viewTrames } from "./views/trames.js";
+import { viewParticipants } from "./views/participants.js";
+import { MAIN_TABS, mainTabOf, ICON } from "./lib/adminNav.js";
+import { initMotion, placeIndicator, enterView, initTabs } from "./lib/motion.js";
+import { morph } from "./lib/morph.js";
 import { skinFooter, skinForRoute, applySkin, currentSkin } from "./lib/skin.js";
 
 const app = $("#app");
+const LOADING = `<div class="tab-loading" role="status">Chargement<span class="dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></div>`;
 let cleanup = null, me = null, booted = false, renderTok = 0, currentRoute = null;
 
 export const go = (h) => { if (location.hash === h) render(); else location.hash = h; };
@@ -46,6 +51,7 @@ const ROUTES = [
   [/^#\/admin\/quiz(?:\/([\w-]+))?$/, viewQuizBank, { trainer: true, admin: true }],
   [/^#\/admin\/trames(?:\/([\w-]+))?$/, viewTrames, { trainer: true, admin: true }], // trames de conducteur (éditeur)
   [/^#\/admin\/equipe(?:\/(comptes|fiches))?(?:\/([\w-]+))?$/, viewStaff, { trainer: true, admin: true }],
+  [/^#\/admin\/participants(?:\/(emargements|stagiaires))?(?:\/([\w-]+))?$/, viewParticipants, { trainer: true }], // émargements, adresses des stagiaires
   [/^#\/admin\/s\/([\w-]+)(?:\/(\w+))?$/, viewAdminSession, { trainer: true }],
   [/^#\/ecran\/([\w-]+)$/, viewScreen, { trainer: true, bare: true }],
   [/^#?\/?$/, viewHome],
@@ -58,13 +64,19 @@ function header(route) {
   const link = (href, label, on) => `<a href="${href}"${on ? ' aria-current="page"' : ""}>${label}</a>`;
   // Vue stagiaire d'une session (aperçu formateur) : « Back-office » ramène au Jour J de cette session
   const inSession = h.match(/^#\/s\/([\w-]+)/)?.[1];
+  // Équipe (pas les invité·es) : trois onglets principaux sous le bandeau, et l'engrenage des réglages généraux
+  const staffNav = trainer && !isGuest(me), mt = staffNav ? mainTabOf(h) : "";
+  const mainbar = staffNav ? `<div class="mainbar"><div class="hwrap"><nav class="maintabs" aria-label="Back-office">${MAIN_TABS.filter(([k]) => k !== "studio" || isAdmin(me))
+    .map(([k, l, href]) => `<a class="maintab" href="${k === "sessions" && inSession ? `#/admin/s/${inSession}/jour` : href}"${k === mt ? ' aria-current="page"' : ""}>${l}</a>`).join("")}<span class="mt-ind" aria-hidden="true"></span></nav>
+    ${isAdmin(me) ? `<a class="iconbtn gear-btn" href="#/admin/reglages" title="Réglages généraux : organisme, habillages, entreprises clientes, e-mail des stagiaires" aria-label="Réglages généraux"${mt === "reglages" ? ' aria-current="page"' : ""}>${ICON.gear}</a>` : ""}</div></div>` : "";
   return `<header class="top"><div class="hwrap">
     <a class="brand-wrap" href="#/">${samsaHtml(true, "head")}<span class="brand"><span class="kicker">Espace formation · ${esc(currentSkin()?.name || "Journalisme & IA")}</span><b>Prendre en main les IA génératives</b></span></a>
     <nav class="topnav">
-      ${trainer ? link(inSession ? `#/admin/s/${inSession}/jour` : "#/admin", "Back-office", h.startsWith("#/admin")) : link("#/", "Mon espace", h === "#/" || h === "" || h.startsWith("#/s/"))}
+      ${staffNav ? "" : trainer ? link("#/admin", "Back-office", h.startsWith("#/admin")) : link("#/", "Mon espace", h === "#/" || h === "" || h.startsWith("#/s/"))}
       ${link("#/profil", esc(me.full_name || me.email.split("@")[0]), h === "#/profil")}
       <button class="linkbtn" id="logout">Se déconnecter</button>
     </nav></div>
+    ${mainbar}
     ${api.mode === "demo" ? `<div class="demo-band">Mode démonstration : données stockées dans ce navigateur uniquement.${isGuest(me) ? "" : ` <button class="linkbtn" id="demoReset">Réinitialiser</button>`}</div>` : ""}
     ${isGuest(me) ? guestBand(me) : ""}
   </header>`;
@@ -77,6 +89,28 @@ function guestBand(me) {
     ? `Votre accès invité a pris fin${until ? ` le ${until}` : ""}. Demandez à l'équipe de le prolonger.`
     : `Invitation · démonstration${until ? ` jusqu'au ${until}` : ""} : manipulez librement vos deux sessions de démo, aucune vraie session n'est concernée.`;
   return `<div class="guest-band${me.guest_active === false ? " over" : ""}" role="status">${esc(txt)}</div>`;
+}
+
+/* Barres d'onglets (.phases) : si la nouvelle page a une barre aux mêmes liens que l'ancienne, l'ancienne est gardée
+   (même élément, pastille comprise) ; on n'y reprend que les libellés, pastilles « à régler » et l'onglet actif. */
+function keepTabs(oldView, view) {
+  if (!oldView) return [];
+  const links = (bar) => [...bar.querySelectorAll(":scope > a")];
+  const sig = (bar) => links(bar).map((a) => a.getAttribute("href")).join("|");
+  const olds = [...oldView.querySelectorAll(".phases")], kept = [];
+  view.querySelectorAll(".phases").forEach((nb) => {
+    const ob = olds.find((b) => !kept.includes(b) && sig(b) === sig(nb));
+    if (!ob) return;
+    const oa = links(ob);
+    links(nb).forEach((a, i) => {
+      if (oa[i].innerHTML !== a.innerHTML) oa[i].innerHTML = a.innerHTML;
+      if (a.hasAttribute("aria-current")) oa[i].setAttribute("aria-current", "page"); else oa[i].removeAttribute("aria-current");
+    });
+    if (nb.getAttribute("style") !== ob.getAttribute("style")) ob.setAttribute("style", nb.getAttribute("style") || "");
+    nb.replaceWith(ob);
+    kept.push(ob);
+  });
+  return kept;
 }
 
 async function render() {
@@ -122,18 +156,45 @@ async function render() {
   if (tok !== renderTok) return;
   applySkin(skin);
   document.body.classList.toggle("bare", !!route.bare);
-  app.innerHTML = header(route) + `<main id="view"></main>`;
-  $("#logout")?.addEventListener("click", async () => { await api.signOut(); me = null; booted = false; go("#/login"); });
-  $("#demoReset")?.addEventListener("click", () => confirm("Effacer toutes les données de démonstration ?") && api.reset());
+  /* En-tête et barre des onglets gardés en place d'une page à l'autre : morph() ne touche qu'à ce qui change (onglet
+     actif, nom, bandeaux), sans rien redessiner ni faire clignoter. Seule la zone utile (#view) est remplacée, par un
+     élément neuf : les écouteurs posés par la vue précédente partent avec elle. */
+  if (!$("#hdr")) app.innerHTML = `<div id="hdr"></div><main id="view"></main>`;
+  morph($("#hdr"), header(route));
+  const view = document.createElement("main");
+  view.id = "view";
+  /* La nouvelle page se dessine hors de l'écran pendant que l'ancienne reste affichée, puis les deux sont échangées d'un
+     coup : pas d'écran vide ni d'effet de chargement. Une barre d'onglets identique (mêmes liens) n'est pas redessinée :
+     l'ancienne est gardée telle quelle, seul l'onglet actif change (keepTabs), et seuls les modules sous la barre
+     apparaissent. Pages plein écran (entrée stagiaire, écran projeté) et premier affichage : comme avant. Page lente
+     (plus de 700 ms) : l'échange se fait quand même, avec « Chargement » si elle est encore vide. */
+  const oldView = $("#view"), offscreen = !route.bare && !!oldView?.childElementCount;
+  let kept = [], swapped = false;
+  const swap = () => {
+    if (swapped || tok !== renderTok) return;
+    swapped = true;
+    kept = keepTabs(oldView, view);
+    $("#view").replaceWith(view);
+    initTabs(view);
+  };
+  if (!offscreen) swap();
+  placeIndicator($(".maintabs")); // le trait glisse de l'onglet précédent au nouveau
+  const logout = $("#logout"), demoReset = $("#demoReset"); // onclick (et non addEventListener) : l'en-tête reste, un seul écouteur
+  if (logout) logout.onclick = async () => { await api.signOut(); me = null; booted = false; go("#/login"); };
+  if (demoReset) demoReset.onclick = () => confirm("Effacer toutes les données de démonstration ?") && api.reset();
   const ctx = { api, me, go, refreshMe: async () => (me = await api.me(true)) };
   ctx.me = me || {};
+  const slow = setTimeout(() => { swap(); if (swapped && !view.childElementCount) view.innerHTML = LOADING; }, offscreen ? 700 : 150);
   try {
-    cleanup = (await route.view($("#view"), m.slice(1), ctx)) || null;
+    cleanup = (await route.view(view, m.slice(1), ctx)) || null;
+    swap();
+    if (tok === renderTok && !route.bare && (/^#\/admin\b/.test(h) || h === "#/" || h === "")) enterView(view, kept);
   } catch (e) {
     console.error(e);
-    $("#view").innerHTML = `<div class="card"><h2>Impossible d'afficher cette page</h2><p class="muted">${esc(e.message)}</p><a class="btn" href="#/">Retour à mon espace</a></div>`;
-  }
-  window.scrollTo(0, 0);
+    swap();
+    view.innerHTML = `<div class="card"><h2>Impossible d'afficher cette page</h2><p class="muted">${esc(e.message)}</p><a class="btn" href="#/">Retour à mon espace</a></div>`;
+  } finally { clearTimeout(slow); }
+  if (tok === renderTok && !kept.length) window.scrollTo(0, 0); // même barre d'onglets : on reste où l'on est
 }
 
 // Lien court …/CODE6 (serveur de développement, hébergements qui renvoient index.html)
@@ -157,4 +218,5 @@ api.onAuthChange((u) => {
   render();
 });
 window.addEventListener("hashchange", render);
+initMotion(); // animations des boutons et onglets (GSAP, src/lib/motion.js)
 render();

@@ -9,6 +9,7 @@ import { currentAct, renderInput, renderResults, respKey } from "../lib/activiti
 import { renderCadrage } from "./cadrage.js";
 import { STATUS } from "./home.js";
 import { modulesFor, emargementOpen } from "../lib/content.js";
+import { signHtml, signError } from "../lib/presence.js";
 import { resolveBranding, logosHtml, datesFr, emargementQr, emargementLabels, emargementStepsHtml, evaluationQr, evaluationHtml } from "../lib/brand.js";
 import { supportBlock } from "./entry.js";
 import { mountChat, chatOn } from "../lib/chat.js";
@@ -490,8 +491,17 @@ ${hasCadrage(session) ? `        <a href="#/s/${sid}/cadrage" class="${tab === "
   /* ---------------- Émargement ---------------- */
   async function tabEmargement() {
     const qr = await emargementQr(session);
+    // Créneau ouvert : « J'ai émargé » (feuille d'émargement de l'équipe, migration …_numeros_emargements.sql)
+    const slot = closedView ? null : emargementOpen(session);
+    const mine = slot && !trainerPreview ? (await api.myMembership(sid).catch(() => null))?.presence || {} : {};
     body.innerHTML = `<div class="pagehead"><div><div class="kicker-d">${T(session.title)}</div><h1>Émargement</h1><p class="muted">${T("Deux étapes, à chaque demi-journée : l'émargement de l'organisme de formation, puis celui de votre entreprise.")}</p></div></div>
-      <div class="card" style="max-width:820px">${emargementStepsHtml(session, qr, emargementLabels(session, br))}</div>`;
+      <div class="card" style="max-width:820px">${emargementStepsHtml(session, qr, emargementLabels(session, br))}${signHtml(slot, mine, T, { preview: trainerPreview })}</div>`;
+    $$("[data-sign]", body).forEach((b) => (b.onclick = async () => {
+      if (trainerPreview) return toast("Aperçu formateur : rien n'est enregistré.");
+      b.disabled = true;
+      try { await api.signPresence(sid, b.dataset.sign); toast("Émargement enregistré.", "ok"); await tabEmargement(); }
+      catch (e) { b.disabled = false; toast(signError(e), "ko"); }
+    }));
   }
 
 

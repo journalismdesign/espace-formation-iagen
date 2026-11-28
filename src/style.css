@@ -1201,3 +1201,160 @@ main .linkbtn.danger,.sheet .linkbtn.danger{color:var(--ko)}
 .tr-ico{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer}
 .tr-ico:hover{background:var(--light);color:var(--ink)}
 .tr-ico.danger:hover{color:var(--ko);background:var(--kotint)}
+
+/* ---------- Onglets principaux du back-office (adminNav.js) : barre sous le bandeau, trait de l'onglet actif animé (motion.js) ---------- */
+.mainbar{margin:12px -20px -14px;padding:0 20px;border-top:1px solid rgba(255,255,255,.12)}
+.mainbar .hwrap{display:flex;align-items:center;gap:8px}
+.maintabs{position:relative;display:flex;gap:2px;flex-wrap:wrap;margin-top:0;overflow:visible}
+.maintabs .maintab{color:var(--on-dark);text-decoration:none;font-weight:700;font-size:14.5px;padding:12px 14px 13px;opacity:.8;display:inline-block;border-radius:0}
+.maintab:hover{opacity:1;color:#fff}
+.maintabs .maintab[aria-current=page]{opacity:1;color:#fff;background:transparent}
+.mt-ind{position:absolute;left:0;top:0;height:3px;width:0;background:var(--yel);border-radius:3px 3px 0 0;opacity:0;pointer-events:none}
+html:not(.gsap-on) .maintab[aria-current=page]{box-shadow:inset 0 -3px 0 var(--yel)}
+.mainbar .gear-btn{margin-left:auto;color:var(--on-dark);background:transparent;border:1px solid transparent;border-radius:8px;width:38px;height:38px}
+.mainbar .gear-btn:hover,.mainbar .gear-btn[aria-current=page]{background:rgba(255,255,255,.14);color:#fff}
+/* GSAP gère l'appui des boutons : pas de décalage CSS en plus */
+.gsap-on .btn:not(:disabled):active,.gsap-on .iconbtn:not(:disabled):active,.gsap-on .chip:active{transform:none}
+.num-cell{white-space:nowrap;color:var(--muted)}
+
+/* ---------- Participants et formateurs : feuille d'émargement par demi-journée, adresses des stagiaires ---------- */
+.pa-layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;align-items:start}
+.pa-list{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;padding:12px}
+.pa-list .f,.pa-select{display:none}
+.pa-items{display:flex;flex-direction:column;gap:2px}
+.pa-item{display:flex;flex-direction:column;gap:1px;padding:8px 10px;border-radius:8px;text-decoration:none;color:var(--ink);border:1px solid transparent}
+.pa-item:hover{background:var(--light)}
+.pa-item.on{background:var(--tint);border-color:var(--line)}
+.pa-item b{font-size:14px;line-height:1.25}
+.pa-head{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin-bottom:14px}
+.table-scroll{overflow-x:auto}
+.pres-tbl th,.pres-tbl td{vertical-align:middle}
+.pres-h{text-align:center;white-space:nowrap;font-size:12px;line-height:1.25}
+.pres-h b,.pres-h span{display:block}
+.pres-c,.pres-total{text-align:center}
+.pres-total{font-weight:700;font-size:13px}
+.pres{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--muted);font-size:15px;font-weight:800;cursor:pointer;padding:0;vertical-align:middle}
+.pres:disabled{cursor:default}
+.pres.present{background:var(--ok);border-color:var(--ok);color:#fff}
+.pres.self{background:var(--oktint);border-color:var(--ok);color:var(--ok)}
+.pres.absent{background:var(--kotint);border-color:var(--ko);color:var(--ko)}
+.pres:not(:disabled):hover{box-shadow:0 0 0 3px var(--tint)}
+.pres-legend{margin-top:14px;line-height:2}
+.pres-legend .pres{width:22px;height:22px;font-size:12px;cursor:default;margin:0 4px 0 10px}
+.pres-legend .pres:first-child{margin-left:0}
+.pa-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.pa-tools input[type=search]{flex:1;min-width:220px}
+.pill.ok{background:var(--oktint);color:var(--ok)}
+.sign-box{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.sign-box.dark{border-top-color:rgba(255,255,255,.2);margin:6px 0 18px;justify-content:center;text-align:center}
+@media (max-width:820px){
+  .pa-layout{grid-template-columns:1fr}
+  .pa-list{position:static;max-height:none}
+  .pa-items{display:none}
+  .pa-list .f,.pa-select{display:block;width:100%}
+  .maintabs .maintab{padding:10px 10px 11px;font-size:13.5px}
+}
+/* Bouton en <label> (choix de fichier) : texte centré comme un <button> quand la rangée l'étire */
+label.btn{display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+/* Texte d'état à côté des boutons d'en-tête (« Enregistré », « Modifications non enregistrées ») : centré sur leur ligne */
+.head-actions>span{align-self:center}
+
+/* ---------- Éditeur de programmes : palette élargie sur l'onglet Slides, aperçu à agrandir, visionneuse ---------- */
+.tr-grid.pal-wide{grid-template-columns:380px minmax(0,1fr) 320px}
+@media (max-width:1100px){.tr-grid.pal-wide{grid-template-columns:1fr}}
+.tr-prevzoom{position:absolute;inset:0;z-index:2;border:0;padding:8px;background:transparent;cursor:zoom-in;display:flex;align-items:flex-end;justify-content:flex-end}
+.tr-prevzoom span{background:var(--navy);color:#fff;font-size:12px;font-weight:700;padding:4px 8px;border-radius:6px;opacity:0;transition:opacity .15s}
+.tr-prevzoom:hover span,.tr-prevzoom:focus-visible span{opacity:.92}
+.tr-prevoff{display:grid;place-items:center}
+.tr-viewer{position:fixed;inset:0;z-index:60;background:rgba(6,20,36,.74);display:flex;align-items:center;justify-content:center;padding:16px}
+.tr-viewer[hidden]{display:none}
+.trv-card{background:#fff;border-radius:14px;padding:16px 18px 12px;width:min(1240px,100%,calc((100vh - 220px) * 16 / 9 + 36px));max-height:calc(100vh - 32px);box-shadow:0 24px 70px rgba(0,0,0,.4);display:flex;flex-direction:column;gap:10px;box-sizing:border-box}
+.trv-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.trv-head h3{margin:0}
+.trv-head .iconbtn{margin-left:auto;align-self:center}
+.trv-frame{position:relative;width:100%;aspect-ratio:16/9;border-radius:8px;overflow:hidden;background:#000;flex:none}
+.trv-frame>iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.trv-frame>iframe[data-preload]{opacity:0;pointer-events:none;z-index:0}
+.trv-frame>iframe:not([data-preload]){z-index:1}
+.trv-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.trv-go{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.trv-go input{width:76px}
+.trv-sp{flex:1}
+.trv-strip{display:flex;gap:5px;overflow-x:auto;padding:2px 2px 6px;scroll-behavior:smooth;min-width:0;max-width:100%}
+.trv-strip .tr-tile{flex:0 0 40px;cursor:pointer}
+body.trv-on{overflow:hidden}
+@media (prefers-reduced-motion:reduce){.trv-strip{scroll-behavior:auto}}
+
+/* Liste des sessions : l'indicateur d'une salle ouverte ferme la salle (survol « Fermer la salle », puis « Confirmer ? »).
+   Les trois libellés occupent la même case : la colonne ne change pas de largeur. */
+.room-btn{border:0;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;line-height:inherit}
+.room-btn .rb-l{display:inline-grid}
+.room-btn .rb-l>span{grid-area:1/1;visibility:hidden}
+.room-btn .rb-l>.rb-txt{visibility:visible}
+.room-btn:hover .rb-txt,.room-btn:focus-visible .rb-txt,.room-btn.armed .rb-txt{visibility:hidden}
+.room-btn:not(.armed):hover .rb-hint,.room-btn:not(.armed):focus-visible .rb-hint{visibility:visible}
+.room-btn.armed .rb-arm{visibility:visible}
+.room-btn:not(.armed):hover{box-shadow:0 0 0 3px var(--tint)}
+.room-btn.armed{background:var(--ko);color:#fff}
+.room-btn.armed .dot{background:#fff}
+/* En-tête de session : « En direct » à la taille des boutons voisins */
+.room-btn.room-head{font-size:13px;padding:5px 12px;border-radius:8px;justify-content:center}
+/* Cartes de discussion (sans marge intérieure, pour que la messagerie remplisse la carte) : la ligne d'explication garde la sienne */
+.chat-card>.chat-note{margin:0;padding:12px 16px 14px;line-height:1.5}
+.chat-card>.chat-note:not([hidden])+div:not(:empty){border-top:1px solid var(--line)}
+
+/* Bouton de la salle de l'en-tête de session : mis à jour sur place, l'enveloppe ne compte pas dans la mise en page */
+.room-box{display:contents}
+
+/* Minuteur du Jour J : boutons agrandir et remise à zéro ; agrandi, toute la largeur de la colonne Pilotage, chiffres en
+   grand, collé au bord supérieur de la fenêtre quand on fait défiler (sticky) */
+.clock .clk-btns{display:flex;flex-direction:column;align-self:stretch;justify-content:space-between;align-items:center;gap:2px;margin:-4px -8px -4px -4px}
+.clock .clk-btns .clk-reset{margin:0;align-self:auto}
+.clock .clk-size{display:inline-grid;place-items:center;padding:3px;background:none;border:0;border-radius:4px;color:rgba(255,255,255,.45);cursor:pointer}
+.clock .clk-size:hover,.clock .clk-size:focus-visible{color:#fff;background:rgba(255,255,255,.14)}
+.clock .clk-size:active{background:rgba(255,255,255,.3)}
+.clock-slot:empty{display:none}
+.clock-slot{position:sticky;top:0;z-index:25;margin-bottom:14px}
+.clock.big{width:100%;box-sizing:border-box;padding:16px 22px;gap:20px;min-height:0;transition:border-radius .15s,box-shadow .15s}
+.clock.big .clk-lbl{flex:1;font-size:14px;gap:7px}
+.clock.big .state{font-size:13px;padding:3px 10px}
+.clock.big .t{font-size:clamp(44px,5.2vw,76px);font-weight:600;letter-spacing:-.01em}
+.clock.big .clk-btns{margin:-8px -12px -8px 0}
+.clock.big .clk-size svg{width:18px;height:18px}
+.clock.big .clk-reset{font-size:15px}
+.clock-slot.stuck .clock.big{border-radius:0 0 12px 12px;box-shadow:0 8px 20px rgba(0,0,0,.22)}
+@media (prefers-reduced-motion:reduce){.clock.big{transition:none}}
+/* Minuteur agrandi : libellé et boutons en haut, l'heure dessous sur toute la largeur, taille calée sur la colonne */
+.clock-slot{container-type:inline-size}
+.clock.big{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"lbl btns" "t t";align-items:start;row-gap:4px;padding:14px 20px 16px}
+.clock.big .clk-lbl{grid-area:lbl}
+.clock.big .clk-btns{grid-area:btns;flex-direction:row;align-self:start;margin:-6px -12px 0 0}
+.clock.big .t{grid-area:t;justify-self:center;font-size:clamp(40px,17cqw,112px);line-height:1.05}
+
+/* Fiche intervenant·e : lignes de fonctions et de réseaux contenues dans la carte, photo et ses boutons */
+.row3{align-items:stretch}
+.row3>input{min-width:0;width:100%}
+.row3>.iconbtn{margin:0;width:auto;height:auto;min-height:38px}
+.row3-head{margin:0 0 2px;font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.row3-head>span{padding-left:2px}
+.photo-row{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.photo-box{display:grid;place-items:center;width:120px;height:120px;flex:none;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--light)}
+.photo-box img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-actions{display:flex;flex-direction:column;gap:8px;min-width:0;flex:1}
+.photo-actions .chips{margin:0}
+.jour2.tr-edit{grid-template-columns:minmax(0,1.3fr) minmax(300px,1fr)}
+@media (max-width:980px){.jour2.tr-edit{grid-template-columns:1fr}}
+#tRoles{container-type:inline-size}
+@container (max-width:520px){
+  #tRoles .row3{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 38px}
+  #tRoles .row3>.ru{grid-column:1 / 3}
+  #tRoles .row3>.iconbtn{grid-column:3;grid-row:1 / 3}
+  #tRoles .row3-head>span:nth-child(3){display:none}
+  #tRoles .row3:not(.row3-head){margin-bottom:12px}
+}
+
+/* Barres d'onglets : pastille blanche qui glisse sous l'onglet survolé (motion.js, initTabs) ; sans elle, le style habituel */
+.phases{position:relative}
+.phases>a{position:relative;z-index:1}
+.phases>.ph-pill{position:absolute;left:0;top:0;width:0;height:0;background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.08);pointer-events:none;z-index:0;opacity:0}
+.phases.ph-on>a[aria-current=page]{background:transparent;box-shadow:none}

@@ -21,6 +21,8 @@ import { isLunch, pauseTargets, movePause, shiftPause, pauseAlert, pauseAlertTex
 import { loadSkins, skinFor, applySkin, currentSkin } from "../lib/skin.js";
 import { samsaHtml } from "../lib/brand.js";
 import { isAdmin } from "../lib/roles.js";
+import { ICON } from "../lib/adminNav.js";
+import { popIn } from "../lib/motion.js";
 import { dateOfDay, MAX_DAYS } from "../lib/archive.js";
 import { morph } from "../lib/morph.js";
 import { parsePages, formatPages, slideEmbedUrl, deckId, deckKind } from "../deck.js";
@@ -161,6 +163,10 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
   if (!PHASES.some(([k]) => k === phase)) phase = "avant";
   const qrUrl = await qr(joinUrl(session.code), 480);
 
+  // Bouton de la salle : « Ouvrir la salle », pastille rouge « En direct » (ferme en deux clics) ou « Rouvrir »
+  const roomBtnHtml = () => session.status === "draft" ? `<button class="btn sm" data-status="live">Ouvrir la salle</button>`
+    : session.status === "live" ? `<button type="button" class="state live room-btn room-head" data-status="draft" title="${esc(fr("Salle ouverte : cliquer pour fermer la salle"))}" aria-label="Salle ouverte : fermer la salle"><span class="rb-l"><span class="rb-txt">En direct</span><span class="rb-hint">Fermer la salle</span><span class="rb-arm">${T("Confirmer ?")}</span></span></button>`
+    : `<button class="btn sm ghost" data-status="live">Rouvrir</button>`;
   root.innerHTML = `
     <p><a href="#/admin">← Sessions</a></p>
     <div class="pagehead sess-head"><div>
@@ -168,17 +174,36 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       <p class="muted" style="margin:4px 0">${T(session.formation)} · ${T(datesFr(session))} · code <b class="mono">${esc(session.code)}</b></p>
     </div>
     <div class="head-actions">${session.status !== "closed" ? `<button class="btn ghost sm" id="addBtn" title="Faire entrer une personne qui ne reçoit pas l'e-mail : accès direct ou code à transmettre">Ajouter un·e stagiaire</button>` : ""}<a class="btn ghost sm" href="#/s/${sid}" title="Voir l'espace tel que le voient les stagiaires">Voir côté stagiaire</a>
-      ${session.status === "draft" ? `<button class="btn sm" data-status="live">Ouvrir la salle</button>` : session.status === "live" ? `<button class="btn sm ghost" data-status="draft">Fermer la salle</button>` : `<button class="btn sm ghost" data-status="live">Rouvrir</button>`}</div></div>
+      <span class="room-box" id="roomBox">${roomBtnHtml()}</span></div></div>
     <div class="phases">${PHASES.map(([k, l]) => `<a href="#/admin/s/${sid}/${k}"${k === phase ? ' aria-current="page"' : ""}>${phaseLabel(k, l, session)}</a>`).join("")}</div>
     ${phase === "jour" ? `<div class="head-live"><div class="clock" id="clock" aria-live="off"></div>
         <div class="joinbox"><img src="${qrUrl}" alt="QR code de la session"><span class="jb-txt"><span class="small">Rejoindre la session</span><b class="mono">${esc(session.code)}</b></span><button class="btn sm ghost" id="pjQ" title="Afficher le QR code sur l'écran projeté (salle ouverte ou non)">Projeter le QR code</button></div>
         <label class="onlinebox${session.online ? " on" : ""}" id="onlineLbl" title="${esc(fr("Formation à distance : les stagiaires voient dans leur espace ce que montre l'écran projeté (pages du support, présentations, séquences, émargement) et peuvent écrire dans la discussion. En salle, la discussion leur reste fermée."))}"><input type="checkbox" role="switch" id="onlineMode"${session.online ? " checked" : ""}><span class="ob-txt"><b>Formation en ligne</b><span class="small" id="onlineSub">${onlineSub(session.online)}</span></span></label></div>` : ""}
     <div id="phase"></div>`;
-  $$("[data-status]", root).forEach((b) => (b.onclick = async () => {
-    const st = b.dataset.status;
-    await guard(() => api.updateSession(sid, { status: st, live: st === "live" ? { ...(session.live || {}), ...(!session.live?.view && !session.live?.act ? { view: "title", started_at: new Date().toISOString() } : {}), started: stamp(session.live) } : (session.live?.started ? { started: session.live.started } : {}) }), st === "live" ? "Salle ouverte : les stagiaires peuvent répondre." : "Salle fermée.");
-    go(location.hash);
-  }));
+  /* Ouvrir ou fermer la salle sans redessiner la page : seul le bouton change (syncRoom, aussi appelé par tick quand
+     le statut change ailleurs : lancement d'une séquence, écran projeté, autre onglet), puis l'horloge et le pilotage
+     suivent. Rouvrir une session close redessine tout (l'écran change de nature). */
+  const roomBox = $("#roomBox", root);
+  roomBox._html = roomBtnHtml();
+  const syncRoom = () => { const h = roomBtnHtml(); if (roomBox._html !== h) { roomBox.innerHTML = h; roomBox._html = h; } };
+  roomBox.onclick = async (e) => {
+    const b = e.target.closest("[data-status]");
+    if (!b || b.disabled) return;
+    // « En direct » : fermer la salle en deux clics (« Confirmer ? » pendant 4 s), comme dans la liste des sessions
+    if (b.classList.contains("room-btn") && !b.classList.contains("armed")) {
+      b.classList.add("armed"); clearTimeout(b._disarm);
+      b._disarm = setTimeout(() => b.classList.remove("armed"), 4000);
+      return;
+    }
+    clearTimeout(b._disarm); b.disabled = true;
+    const st = b.dataset.status, was = session.status;
+    const s2 = await guard(() => api.updateSession(sid, { status: st, live: st === "live" ? { ...(session.live || {}), ...(!session.live?.view && !session.live?.act ? { view: "title", started_at: new Date().toISOString() } : {}), started: stamp(session.live) } : (session.live?.started ? { started: session.live.started } : {}) }), st === "live" ? "Salle ouverte : les stagiaires peuvent répondre." : "Salle fermée.");
+    if (!s2) { b.disabled = false; b.classList.remove("armed"); return; }
+    session = s2;
+    if (was === "closed") return go(location.hash);
+    syncRoom(); tick(); afterLive();
+    popIn(roomBox.firstElementChild);
+  };
   $("#addBtn", root)?.addEventListener("click", () => openAccessSheet(api, session));
 
   const box = $("#phase", root);
@@ -200,7 +225,28 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     return null;
   };
   const plannedTxt = () => { const [h, m] = String(session.start_time || "09:30").split(":").map(Number); return hm2(h || 0, m || 0); };
+  /* Minuteur agrandi (icône ⤢ du pavé) : il passe en tête de la colonne Pilotage, sur toute sa largeur, chiffres en
+     grand, et reste collé au bord supérieur de la fenêtre quand on fait défiler la page (sticky). Choix gardé dans ce
+     navigateur. Réduit, il revient dans le bandeau du Jour J. */
+  const CLOCK_BIG = "iagen-clock-big";
+  let clockBig = false; try { clockBig = localStorage.getItem(CLOCK_BIG) === "1"; } catch {}
+  const unplaceClock = () => { const el = $("#clock", root), bar = $(".head-live", root); if (el && bar && el.parentNode !== bar) bar.prepend(el); };
+  const placeClock = () => {
+    const el = $("#clock", root), bar = $(".head-live", root), slot = $("#clockSlot", root);
+    if (!el || !bar) return;
+    const big = clockBig && !!slot;
+    if (big && el.parentNode !== slot) slot.appendChild(el);
+    if (!big) unplaceClock();
+    el.classList.toggle("big", big);
+    // Collé en haut : coins du haut carrés et ombre légère (IntersectionObserver, une seule fois par emplacement)
+    if (big && !slot._io && typeof IntersectionObserver === "function") {
+      slot._io = new IntersectionObserver(([en]) => slot.classList.toggle("stuck", en.intersectionRatio < 1), { threshold: [1], rootMargin: "-1px 0px 0px 0px" });
+      slot._io.observe(slot);
+      cleanups.push(() => slot._io?.disconnect());
+    }
+  };
   const tick = () => {
+    syncRoom();
     const el = $("#clock", root); if (!el) return;
     const dur = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m} min`);
     const nowMin = parisMin(new Date()), ref = clockRef(), on = session.status === "live";
@@ -209,12 +255,18 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     const sub = session.status === "closed" ? "" : ref === null ? `début prévu à ${plannedTxt()}`
       : on ? `écoulé ${dur(Math.max(0, nowMin - ref))} · depuis ${hmMin(ref)}` : `journée commencée à ${hmMin(ref)}`;
     const html = `<span class="clk-lbl">${state}<span class="clk-sub">${sub ? fr(sub) : "&nbsp;"}</span></span><b class="t">${hm2(Math.floor(nowMin / 60), nowMin % 60)}</b>`
-      + `<button type="button" class="clk-reset" data-clk-reset title="Remettre le minuteur à zéro : le temps écoulé repart de maintenant" aria-label="Remettre le minuteur à zéro">↺</button>`;
-    if (el.innerHTML !== html) el.innerHTML = html;
+      + `<span class="clk-btns"><button type="button" class="clk-size" data-clk-size aria-pressed="${clockBig}" title="${clockBig ? "Réduire le minuteur" : "Agrandir le minuteur : toute la largeur de la colonne Pilotage, toujours visible en haut de la fenêtre"}" aria-label="${clockBig ? "Réduire le minuteur" : "Agrandir le minuteur"}">${clockBig ? ICON.shrink : ICON.expand}</button>`
+      + `<button type="button" class="clk-reset" data-clk-reset title="Remettre le minuteur à zéro : le temps écoulé repart de maintenant" aria-label="Remettre le minuteur à zéro">↺</button></span>`;
+    if (el._html !== html) { el.innerHTML = html; el._html = html; } // comparaison au dernier rendu (le SVG ne se relit pas à l'identique)
     qrBtn(); // l'écran a pu changer depuis le pilotage ou l'écran projeté
   };
   // ↺ du minuteur (délégation : le contenu du pavé est réécrit à chaque minute)
   if ($("#clock", root)) $("#clock", root).onclick = async (e) => { // pavé présent dans l'onglet Jour J seulement
+    if (e.target.closest("[data-clk-size]")) { // agrandir ou réduire
+      clockBig = !clockBig; try { localStorage.setItem(CLOCK_BIG, clockBig ? "1" : "0"); } catch {}
+      placeClock(); tick(); popIn($("#clock", root)); $("#clock [data-clk-size]", root)?.focus();
+      return;
+    }
     if (!e.target.closest("[data-clk-reset]")) return;
     const live = { ...(session.live || {}), clock: { day: parisDay(), at: new Date().toISOString() } };
     session = await guard(() => api.updateSession(sid, { live }), "Minuteur remis à zéro : le temps écoulé repart de maintenant.") || session;
@@ -304,8 +356,8 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
             <button type="button" class="linkbtn" id="condReset"${session.programme?.modules?.length ? "" : " hidden"}>Revenir au déroulé par défaut</button>
           </div>
           <div class="cond-actions" id="condTrames" hidden>
-            <select id="condTrame" aria-label="Appliquer une trame"><option value="">Appliquer une trame…</option></select>
-            ${admin ? `<button type="button" class="btn sm ghost" id="condSaveTrame">Enregistrer comme trame</button>` : ""}
+            <select id="condTrame" aria-label="Appliquer un programme"><option value="">Appliquer un programme…</option></select>
+            ${admin ? `<button type="button" class="btn sm ghost" id="condSaveTrame">Enregistrer comme programme</button>` : ""}
           </div>
           <div id="condPrev"></div>
         </div>
@@ -522,7 +574,7 @@ function showPreview(programme, { title, errors = [], warnings = [], bank }) {
     ${errors.length ? `<div class="warn small"><b>${errors.length} erreur${errors.length > 1 ? "s" : ""} à corriger avant d'appliquer :</b><ul>${errors.map((x) => `<li>${T(x)}</li>`).join("")}</ul></div>` : ""}
     ${warnings.length ? `<details class="small cond-warn"><summary>${warnings.length} remarque${warnings.length > 1 ? "s" : ""} (sans blocage)</summary><ul>${warnings.map((x) => `<li>${T(x)}</li>`).join("")}</ul></details>` : ""}
     ${programme.modules.length ? `<div class="cond-table"><table class="tbl small"><thead><tr><th>Horaires</th><th>Type</th><th>Séquence</th><th>Contenu</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
-    ${slidesOpt ? `<label class="f inline small"><input type="checkbox" id="condSlides"${session.slides_url ? "" : " checked"}> ${T("Utiliser aussi le support de la trame (lien Google Slides) pour cette session")}</label>` : ""}
+    ${slidesOpt ? `<label class="f inline small"><input type="checkbox" id="condSlides"${session.slides_url ? "" : " checked"}> ${T("Utiliser aussi le support du programme (lien Google Slides) pour cette session")}</label>` : ""}
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
       <button type="button" class="btn sm" id="condApply"${errors.length ? " disabled" : ""}>Appliquer (${programme.nDays} journée${programme.nDays > 1 ? "s" : ""})</button>
       <button type="button" class="btn sm ghost" id="condCancel">Annuler</button>
@@ -541,7 +593,7 @@ api.listTrames().then((tl) => {
   if (!tl.ready || !$("#condTrames", box)) return;
   $("#condTrames", box).hidden = false;
   const sel = $("#condTrame", box);
-  sel.insertAdjacentHTML("beforeend", tl.items.map((t) => `<option value="${t.id}">${T(t.titre)} · ${t.content?.nDays || 1} j.</option>`).join("") || `<option value="" disabled>Aucune trame : créez-en dans « Trames de conducteur »</option>`);
+  sel.insertAdjacentHTML("beforeend", tl.items.map((t) => `<option value="${t.id}">${T(t.titre)} · ${t.content?.nDays || 1} j.</option>`).join("") || `<option value="" disabled>Aucun programme : créez-en dans Studio, « Création de programmes »</option>`);
   sel.onchange = async () => {
     const t = tl.items.find((x) => x.id === sel.value); if (!t) return ($("#condPrev", box).innerHTML = "");
     const bank = await api.listBank().catch(() => ({ ready: false, items: [] }));
@@ -549,9 +601,9 @@ api.listTrames().then((tl) => {
   };
 }).catch(() => {});
 $("#condSaveTrame", box)?.addEventListener("click", async () => {
-  const titre = prompt("Titre de la nouvelle trame :", `${session.title}`.slice(0, 120));
+  const titre = prompt("Titre du nouveau programme :", `${session.title}`.slice(0, 120));
   if (!titre?.trim()) return;
-  const row = await guard(() => api.saveTrame({ titre: titre.trim(), content: trameFromSession(session) }), "Trame enregistrée : retrouvez-la dans « Trames de conducteur ».");
+  const row = await guard(() => api.saveTrame({ titre: titre.trim(), content: trameFromSession(session) }), "Programme enregistré : retrouvez-le dans Studio, « Création de programmes ».");
   if (row) go(`#/admin/trames/${row.id}`);
 });
   }
@@ -624,9 +676,11 @@ $("#condSaveTrame", box)?.addEventListener("click", async () => {
   async function phaseJour() {
     let dragPause = null; // pause en cours de glisser-déposer : le redessin temps réel attend
     let bank = { ready: false, items: [] }; // bibliothèque « Quiz et sondages » (chargée après l'affichage)
+    unplaceClock(); // le minuteur agrandi vit dans la colonne : il revient au bandeau avant le redessin
     box.innerHTML = `
       <div class="grid jour2">
         <div>
+          <div class="clock-slot" id="clockSlot"></div>
           <div class="card">
             <h3>Pilotage</h3>
             <p class="small muted" id="hint" style="margin-top:0"></p>
@@ -651,9 +705,10 @@ $("#condSaveTrame", box)?.addEventListener("click", async () => {
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="kicker-d live-tag"><span class="dot on"></span>Écran projeté · en direct</div><button class="btn sm" id="openScr">Ouvrir l'écran projeté</button></div>
           <div id="preview" class="preview"></div>
           <div id="nextBox" class="next-box" hidden><div class="kicker-d">À suivre · <span id="nextLbl"></span></div><div id="nextPrev" class="preview"></div></div>
-          <div class="card chat-card" style="margin-top:14px"><h3>Discussion des stagiaires</h3><p class="small muted" id="chatOff" style="margin:0" hidden></p><div id="chatAdm"></div></div>
+          <div class="card chat-card" style="margin-top:14px"><h3>Discussion des stagiaires</h3><p class="small muted chat-note" id="chatOff" hidden></p><div id="chatAdm"></div></div>
         </aside>
       </div>`;
+    placeClock();
     /* Discussion : ouverte aux stagiaires en formation en ligne seulement (chat_open côté base). En salle, le widget
        laisse la place à une ligne d'explication ; il se monte quand on active « Formation en ligne ». */
     let chatStop = null;
@@ -674,7 +729,7 @@ $("#condSaveTrame", box)?.addEventListener("click", async () => {
     $("#resetLive", box).onclick = async () => {
       if (!confirm("Remettre le direct à zéro ?\n\nLa salle sera fermée. La séquence lancée, les outils d'exercice débloqués, les émargements déjà projetés et l'heure d'ouverture du jour seront effacés. Les inscrit·es, les réponses et la discussion sont conservés.")) return;
       session = await guard(() => api.updateSession(sid, { status: "draft", live: {} }), "Direct remis à zéro : salle fermée.") || session;
-      go(location.hash); // l'en-tête (horloge, bouton de la salle) suit
+      draw(); // l'en-tête suit : draw appelle tick, qui met à jour l'horloge et le bouton de la salle
     };
     $("#closeDay", box).onchange = async (e) => { session = await guard(() => api.updateSession(sid, e.target.checked ? { status: "closed", live: {} } : { status: "live", live: { ...(session.live || {}), started: stamp(session.live) } }), e.target.checked ? "Journée close." : "Session rouverte.") || session; draw(); drawChat(); };
 
@@ -1145,7 +1200,7 @@ $("#condSaveTrame", box)?.addEventListener("click", async () => {
     const validated = projects.filter((p) => p.status === "validated");
     box.innerHTML = `
       <div class="card"><p style="margin:0 0 10px">${roster.length} participant·es · ${hasCadrage(session) ? `${validated.length} cadrage(s) validé(s) · ` : ""}${roster.filter((r) => r.attended).length} présent·es émargé·es. ${T("Les projets, retours et résultats restent consultables après la session.")}</p>
-        <div class="chips">${hasCadrage(session) ? `<a class="btn sm" href="#projets">Voir les projets</a>` : ""}<a class="btn sm ghost" href="#emarg">Émargement, bilan et duplication</a><a class="btn sm ghost" href="#resultats">Résultats à l'écran</a></div></div>
+        <div class="chips">${hasCadrage(session) ? `<a class="btn sm" href="#projets">Voir les projets</a>` : ""}<a class="btn sm ghost" href="#/admin/participants/emargements/${sid}">Feuille d'émargement</a><a class="btn sm ghost" href="#emarg">Présences, bilan et duplication</a><a class="btn sm ghost" href="#resultats">Résultats à l'écran</a></div></div>
 
 ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:14px"><h3>Projets (${projects.length})</h3>
         ${projects.length ? `<div class="grid g2">${projects.map((p) => `<div class="proj-card"><span class="tag${p.status === "validated" ? " ok" : ""}">${p.status === "validated" ? "✓ Validé" : "En cours"}</span><b>${T(p.data?.retenu?.titre || "Sans titre")}</b><div class="small muted">${T(by[p.user_id]?.full_name || by[p.user_id]?.email || "")}</div><p class="small">${T((p.data?.retenu?.description || "").slice(0, 260))}</p>${p.trainer_comment ? `<p class="small"><b>Votre retour :</b> ${T(p.trainer_comment)}</p>` : ""}</div>`).join("")}</div>` : `<p class="empty">Aucun cadrage.</p>`}</div>` : ""}
@@ -1155,7 +1210,7 @@ ${hasCadrage(session) ? `      <div class="card" id="projets" style="margin-top:
         <div class="chips" style="margin-top:12px"><button class="btn sm" id="csv">Exporter le bilan (CSV)</button>${admin ? `<button class="btn sm ghost" id="dup">Dupliquer la session</button>` : ""}</div>
         <p class="small muted">${T("Le bilan reprend présence, profil, état du cadrage, progression dans le déroulé et scores aux quiz. La duplication reprend la séquence, les ressources et les intitulés des accès (sans les valeurs), sans participant·es.")}</p></div>
 
-      <div class="card chat-card" id="discussion" style="margin-top:14px"><h3>Discussion des stagiaires</h3><p class="small muted" style="margin-top:0">${T("Ouverte aux stagiaires en formation en ligne, jusqu'à la clôture. Vous gardez l'historique.")}</p><div id="chatAdm"></div></div>
+      <div class="card chat-card" id="discussion" style="margin-top:14px"><h3>Discussion des stagiaires</h3><p class="small muted chat-note">${T("Ouverte aux stagiaires en formation en ligne, jusqu'à la clôture. Vous gardez l'historique.")}</p><div id="chatAdm"></div></div>
 
       <div class="card" id="resultats" style="margin-top:14px"><h3>Résultats des activités</h3><div id="resBox" class="grid g2"><p class="small muted">Chargement…</p></div></div>
 

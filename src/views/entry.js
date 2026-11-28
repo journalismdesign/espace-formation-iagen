@@ -8,6 +8,8 @@
 import { $, T, esc, guard, toast, safeUrl } from "../lib/dom.js";
 import { resolveBranding, logosHtml, datesFr, hhmm, titleDate, emargementQr, samsaHtml, emargementLabels, emargementStepsHtml } from "../lib/brand.js";
 import { skinFooter } from "../lib/skin.js";
+import { emargementOpen } from "../lib/content.js";
+import { signHtml, signError } from "../lib/presence.js";
 
 export async function viewEntry(root, [code], ctx) {
   const { api, go } = ctx;
@@ -91,12 +93,20 @@ export async function viewEntry(root, [code], ctx) {
     } else if (step === "emargement") {
       const s = await api.getSession(pub.id);
       const qr = s ? await emargementQr(s) : null;
+      const slot = s ? emargementOpen(s) : null; // créneau ouvert : « J'ai émargé »
+      const mine = slot ? (await api.myMembership(pub.id).catch(() => null))?.presence || {} : {};
       root.innerHTML = slide(`
         <div class="slide-kick">Étape 1 sur 2</div>
         <div class="slide-title sm">${s && emargementLabels(s, br).second && emargementLabels(s, br).client ? "Deux étapes pour émarger" : "Émargement"}</div>
         ${s ? emargementStepsHtml(s, qr, emargementLabels(s, br), true) : ""}
+        ${signHtml(slot, mine, T, { dark: true })}
         <button class="btn light big" id="next">Continuer →</button>`);
       $("#next").onclick = () => { step = "support"; draw(); };
+      root.querySelector("[data-sign]")?.addEventListener("click", async (e) => {
+        e.currentTarget.disabled = true;
+        try { await api.signPresence(pub.id, e.currentTarget.dataset.sign); toast("Émargement enregistré.", "ok"); draw(); }
+        catch (err) { e.currentTarget.disabled = false; toast(signError(err), "ko"); }
+      });
     } else if (step === "support") {
       const [st, s] = await Promise.all([api.supportStatus(pub.id).catch(() => ({ unlocked: false })), api.getSession(pub.id).catch(() => null)]);
       const m0 = await api.myMembership(pub.id).catch(() => null);

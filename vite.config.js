@@ -27,5 +27,8 @@ function csp(env) {
   };
 }
 
+// Remise en ligne en deux lots (28 novembre 2026) : lot 1, les protections sans la CSP ; lot 2, CSP_ACTIVE = true
+const CSP_ACTIVE = false;
+
 // base relative : le site fonctionne dans un sous-dossier (GitHub Pages, Netlify…)
-export default defineConfig(({ mode }) => ({ base: "./", build: { target: "es2022" }, plugins: [csp(loadEnv(mode, process.cwd(), "VITE_"))] }));
+export default defineConfig(({ mode }) => ({ base: "./", build: { target: "es2022" }, plugins: CSP_ACTIVE ? [csp(loadEnv(mode, process.cwd(), "VITE_"))] : [] }));
