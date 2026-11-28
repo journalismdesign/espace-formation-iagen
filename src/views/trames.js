@@ -15,6 +15,8 @@ import { parsePages, formatPages, slideEmbedUrl, deckId, DECK_PAGES, DEFAULT_DEC
 import { parseConducteur, conducteurMarkdown } from "../lib/conducteur.js";
 import { typeLabel, TOOL_LABELS } from "../lib/content.js";
 import { studioHead, ICON } from "../lib/adminNav.js";
+import { morph } from "../lib/morph.js";
+import { popIn } from "../lib/motion.js";
 import {
   fromProgramme, toProgramme, timeline, moveItem, addItem, updateItem, removeItem, duplicateItem, updateDay, addDay, removeDay,
   find, pagesUsage, blankTrame, BLOCKS, MAX_DAYS,
@@ -90,7 +92,7 @@ function editor(root, id, list, bank, { api, go }) {
 
   // État : titre de la trame + modèle ; brouillon repris s'il existe
   let titre = row?.titre || "Nouveau programme", model = row ? fromProgramme(row.content) : blankTrame("Prendre en main les IA génératives");
-  let saved = JSON.stringify({ titre, model }), sel = null, dirty = false, palette = "blocs", preview = 0, filter = "";
+  let saved = JSON.stringify({ titre, model }), sel = null, dirty = false, palette = "blocs", preview = 0, filter = "", viewer = false, pvDir = 1;
   try { const d = JSON.parse(localStorage.getItem(DRAFT(id)) || "null"); if (d?.model?.days?.length && JSON.stringify(d) !== saved) { ({ titre, model } = d); dirty = true; } } catch {}
   const bankById = new Map(bank.items.map((b) => [b.id, b]));
   const actTitle = (k) => bankById.get(k)?.titre || QUIZ[k]?.titre || k;
@@ -112,8 +114,9 @@ function editor(root, id, list, bank, { api, go }) {
       <aside class="tr-palette card" id="trPal"></aside>
       <section class="tr-days" id="trDays" aria-label="Journées"></section>
       <aside class="tr-insp card" id="trInsp"></aside>
-    </div>`;
-  const pal = $("#trPal", root), days = $("#trDays", root), insp = $("#trInsp", root);
+    </div>
+    <div class="tr-viewer" id="trViewer" hidden></div>`;
+  const pal = $("#trPal", root), days = $("#trDays", root), insp = $("#trInsp", root), viewerBox = $("#trViewer", root);
 
   /* ---------- Journées ---------- */
   function cardHtml(m, t) {
@@ -237,8 +240,10 @@ function editor(root, id, list, bank, { api, go }) {
         <label class="f" for="trN">Nombre de slides</label><input type="number" id="trN" min="0" max="400" value="${n || ""}" placeholder="ex. 141">
         ${url && deckId(url) ? (n ? `<p class="small muted">${T("Glissez une slide sur une séquence, ou touchez-la pour la voir ; « Ajouter » la met dans la séquence choisie.")}</p>
           <div class="tr-tiles">${Array.from({ length: n }, (_, i) => i + 1).map((p) => `<button type="button" class="tr-tile${preview === p ? " on" : ""}${used.has(p) ? " used" : ""}" draggable="true" data-page="${p}" title="${used.has(p) ? `Slide ${p} · déjà dans ${used.get(p).length} séquence(s)` : `Slide ${p}`}">${p}</button>`).join("")}</div>
-          ${preview ? `<div class="tr-prev"><div class="tr-prevbox"><iframe src="${esc(slideEmbedUrl(url, preview))}" title="Slide ${preview}" loading="lazy"></iframe></div>
+          ${preview ? `<div class="tr-prev">${viewer ? `<div class="tr-prevbox tr-prevoff"><span class="small muted">Aperçu ouvert en grand</span></div>`
+              : `<div class="tr-prevbox"><iframe src="${esc(slideEmbedUrl(url, preview))}" title="Slide ${preview}" loading="lazy"></iframe><button type="button" class="tr-prevzoom" data-zoom aria-label="Agrandir la slide ${preview}"><span>⤢ Agrandir</span></button></div>`}
             <div class="tr-prevbar"><button class="btn sm ghost" type="button" data-pv="-1" aria-label="Slide précédente">←</button><b class="small">Slide ${preview}</b><button class="btn sm ghost" type="button" data-pv="1" aria-label="Slide suivante">→</button>
+            <button class="btn sm ghost" type="button" data-zoom>⤢ Agrandir</button>
             <button class="btn sm" type="button" id="trAddPage"${sel ? "" : " disabled"}>Ajouter à la séquence</button></div></div>` : ""}`
           : `<p class="small muted">Indiquez le nombre de slides pour afficher les tuiles.</p>`) : `<p class="small muted">${T("Collez le lien de la présentation (elle doit être visible de votre navigateur) pour voir et glisser ses slides.")}</p>`}`;
     }
@@ -255,13 +260,79 @@ function editor(root, id, list, bank, { api, go }) {
     $$("[data-page]", pal).forEach((b) => {
       b.ondragstart = (e) => { e.dataTransfer.setData("text/x-trame-page", b.dataset.page); e.dataTransfer.effectAllowed = "copy"; };
       b.onclick = () => { preview = +b.dataset.page; drawPalette(); };
+      b.ondblclick = () => { preview = +b.dataset.page; viewer = true; drawPalette(); }; // double clic : en grand
     });
-    $$("[data-pv]", pal).forEach((b) => (b.onclick = () => { const n = model.slides_n || DECK_PAGES.length; preview = Math.min(Math.max(1, preview + +b.dataset.pv), n); drawPalette(); }));
+    $$("[data-pv]", pal).forEach((b) => (b.onclick = () => { const n = model.slides_n || DECK_PAGES.length; pvDir = +b.dataset.pv; preview = Math.min(Math.max(1, preview + pvDir), n); drawPalette(); }));
     $("#trAddPage", pal)?.addEventListener("click", () => sel && addPage(sel, preview));
     $("#trQ", pal)?.addEventListener("input", debounce((e) => { filter = e.target.value; drawPalette(); $("#trQ", pal)?.focus(); }, 250));
     $("#trDeck", pal)?.addEventListener("change", (e) => { const v = e.target.value.trim(); if (v && !deckId(v)) return toast("Lien Google Slides non reconnu.", "ko"); preview = 0; change({ ...model, slides_url: v }); palette = "slides"; });
     $("#trN", pal)?.addEventListener("change", (e) => change({ ...model, slides_n: Math.max(0, Math.min(400, parseInt(e.target.value, 10) || 0)) }));
+    $$("[data-zoom]", pal).forEach((b) => (b.onclick = () => { viewer = true; drawPalette(); }));
+    root.querySelector(".tr-grid")?.classList.toggle("pal-wide", palette === "slides"); // onglet Slides : palette plus large
+    drawViewer();
   }
+
+  /* ---------- Visionneuse des slides : la slide en grand, la suivante préchargée (morph, comme l'écran projeté) ---------- */
+  const deckCount = () => model.slides_n || (deckId(model.slides_url) === DEFAULT_DECK_ID ? DECK_PAGES.length : 0);
+  function viewerHtml() {
+    const url = model.slides_url, n = deckCount(), used = pagesUsage(model, parsePages);
+    const inSeq = (used.get(preview) || []).map((x) => find(model, x)?.item?.titre).filter(Boolean);
+    const at = sel && find(model, sel), already = at && parsePages(at.item.pages).includes(preview);
+    const nxt = Math.min(Math.max(1, preview + pvDir), n);
+    return `<div class="trv-card" role="dialog" aria-modal="true" aria-labelledby="trvT">
+      <div class="trv-head"><h3 id="trvT">Slide ${preview} <span class="muted">sur ${n}</span></h3>
+        <span class="small muted">${T(inSeq.length ? `Déjà dans : ${inSeq.join(", ")}` : "Dans aucune séquence")}</span>
+        <button type="button" class="iconbtn" data-trv="close" aria-label="Fermer l'aperçu" title="Fermer (Échap)">✕</button></div>
+      <div class="trv-frame frame"><iframe src="${esc(slideEmbedUrl(url, preview))}" title="Slide ${preview}"></iframe>${nxt !== preview ? `<iframe src="${esc(slideEmbedUrl(url, nxt))}" title="Slide ${nxt} (préchargée)" data-preload aria-hidden="true" tabindex="-1"></iframe>` : ""}</div>
+      <div class="trv-bar">
+        <button type="button" class="btn ghost" data-trv="-1"${preview <= 1 ? " disabled" : ""}>← Précédente</button>
+        <label class="small trv-go">Slide <input type="number" id="trvN" min="1" max="${n}" value="${preview}"></label>
+        <button type="button" class="btn ghost" data-trv="1"${preview >= n ? " disabled" : ""}>Suivante →</button>
+        <span class="trv-sp"></span>
+        ${at ? `<button type="button" class="btn" data-trv="add"${already ? " disabled" : ""}>${T(already ? `Déjà dans « ${at.item.titre} »` : `Ajouter à « ${at.item.titre} »`)}</button>`
+          : `<span class="small muted">${T("Choisissez une séquence pour y ajouter cette slide.")}</span>`}</div>
+      <div class="trv-strip" aria-label="Slides">${Array.from({ length: n }, (_, i) => i + 1).map((p) => `<button type="button" class="tr-tile${p === preview ? " on" : ""}${used.has(p) ? " used" : ""}" data-trv-page="${p}"${p === preview ? ' aria-current="true"' : ""}>${p}</button>`).join("")}</div>
+    </div>`;
+  }
+  function drawViewer() {
+    const open = viewer && preview && deckCount() && deckId(model.slides_url);
+    if (!open) {
+      viewer = false;
+      if (!viewerBox.hidden) { viewerBox.hidden = true; viewerBox.innerHTML = ""; viewerBox.__html = ""; document.body.classList.remove("trv-on"); }
+      return;
+    }
+    const first = viewerBox.hidden;
+    viewerBox.hidden = false; document.body.classList.add("trv-on");
+    morph(viewerBox, viewerHtml()); // seules les parties changées bougent ; la page préchargée s'affiche aussitôt
+    const cur = viewerBox.querySelector(".trv-strip .tr-tile.on"), strip = viewerBox.querySelector(".trv-strip");
+    if (cur && strip) strip.scrollLeft = cur.offsetLeft - strip.clientWidth / 2 + cur.offsetWidth / 2;
+    if (first) { popIn(viewerBox.querySelector(".trv-card"), viewerBox); viewerBox.querySelector('[data-trv="close"]')?.focus(); }
+  }
+  const closeViewer = () => { viewer = false; drawPalette(); };
+  const goPage = (p, dir) => {
+    const q = Math.min(Math.max(1, p | 0), deckCount());
+    if (!q || q === preview) return;
+    pvDir = dir ?? (q > preview ? 1 : -1); preview = q; drawPalette();
+  };
+  viewerBox.addEventListener("click", (e) => {
+    if (e.target === viewerBox) return closeViewer(); // clic sur le fond
+    const b = e.target.closest("[data-trv], [data-trv-page]");
+    if (!b || b.disabled) return;
+    if (b.dataset.trvPage) return goPage(+b.dataset.trvPage);
+    if (b.dataset.trv === "close") return closeViewer();
+    if (b.dataset.trv === "add") return sel && addPage(sel, preview);
+    goPage(preview + +b.dataset.trv, +b.dataset.trv);
+  });
+  viewerBox.addEventListener("change", (e) => { if (e.target.id === "trvN") goPage(parseInt(e.target.value, 10) || preview); });
+  // Clavier : flèches pour changer de slide, Échap pour fermer
+  const viewerKeys = (e) => {
+    if (viewerBox.hidden) return;
+    if (e.key === "Escape") { e.preventDefault(); closeViewer(); }
+    else if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && e.target.id !== "trvN") {
+      e.preventDefault(); const d = e.key === "ArrowRight" ? 1 : -1; goPage(preview + d, d);
+    }
+  };
+  document.addEventListener("keydown", viewerKeys);
 
   /* ---------- Inspecteur ---------- */
   function drawInsp() {
@@ -349,5 +420,5 @@ function editor(root, id, list, bank, { api, go }) {
   window.addEventListener("beforeunload", leave);
   draw();
   if (dirty && !isNew) toast("Brouillon repris : modifications non enregistrées.");
-  return () => window.removeEventListener("beforeunload", leave);
+  return () => { window.removeEventListener("beforeunload", leave); document.removeEventListener("keydown", viewerKeys); document.body.classList.remove("trv-on"); };
 }

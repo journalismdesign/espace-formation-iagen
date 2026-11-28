@@ -79,3 +79,10 @@ export function pop(el) {
   if (!el || reduce()) return;
   gsap.fromTo(el, { scale: 0.7 }, { scale: 1, duration: 0.4, ease: "back.out(3)", clearProps: "transform" });
 }
+
+// Ouverture d'une fenêtre par-dessus la page (visionneuse des slides…) : fond en fondu, carte qui se pose
+export function popIn(card, backdrop) {
+  if (!card || reduce()) return;
+  if (backdrop) gsap.fromTo(backdrop, { opacity: 0 }, { opacity: 1, duration: 0.2, ease: "power1.out", clearProps: "opacity" });
+  gsap.fromTo(card, { opacity: 0, scale: 0.96, y: 10 }, { opacity: 1, scale: 1, y: 0, duration: 0.32, ease: "power3.out", clearProps: "opacity,transform" });
+}
