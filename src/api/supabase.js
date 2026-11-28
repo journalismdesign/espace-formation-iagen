@@ -57,6 +57,11 @@ export function createSupabaseApi(url, anonKey) {
       try { return await invoke("access", { action: "grant", session_id: sid, first_name, email }); }
       catch (e) { if (/action inconnue/i.test(e.message)) throw new Error("Accès direct pas encore activé : la fonction access doit être redéployée sur Supabase."); throw e; }
     },
+// Support PDF depuis le deck Google Slides de la session (fonction support-pdf → Apps Script google/support-pdf.gs)
+    async supportPdf(sid, { label, skip = [], dropSkipped = true }) {
+      try { return await invoke("support-pdf", { session_id: sid, label, skip, drop_skipped: dropSkipped }); }
+      catch (e) { if (/not found|failed to send|404/i.test(e.message)) throw new Error("Génération du support pas encore activée : la fonction support-pdf doit être déployée sur Supabase."); throw e; }
+    },
     async verifyAccess(sid, email, code) {
       const { token_hash } = await invoke("access", { action: "verify", session_id: sid, email, code });
       await openWith(token_hash);

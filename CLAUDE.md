@@ -103,6 +103,18 @@ Plateforme de formation de Gerald Holubowicz (journalism.design). Elle comprend 
 - **Stagiaires** (administration) : `list_trainees()` (une ligne par personne et par session : inscrit·es, et invité·es pas encore entré·es ; hors démos), regroupé par adresse (`groupTrainees`, `src/lib/stagiaires.js`) ; recherche, copie des adresses, tableur (`traineesCsv`, cellules protégées contre les formules).
 - Sans la migration : numéros absents (« — ») et liste des stagiaires remplacée par un message.
 
+## Support PDF depuis les slides (fonction `support-pdf`, Apps Script `google/support-pdf.gs`)
+- Réglages → Support à télécharger : « Générer le PDF », pour n'importe quelle session (ancienne ou créée de zéro), d'après **le lien des slides enregistré** (`sessions.slides_url`, lu par la fonction, jamais envoyé par le navigateur), ses dates et ses pages masquées. Pas pour les invité·es (bloc masqué, et refus côté fonction).
+- Date de la page de garde : `coverDate(session)` (`src/lib/coverDate.js`, pur, testé dans `tests/coverDate.test.mjs`), au style des decks : « 27 novembre 2026 », « 19 - 20 novembre 2026 », « 1er - 2 décembre 2026 », « 30 novembre - 1er décembre 2026 » ; journées non consécutives ou plus de deux, en liste (« 1er, 8 et 15 décembre 2026 »).
+- Apps Script (compte propriétaire des decks, application Web « tout le monde », jeton `TOKEN`) :
+  - n'accepte que les présentations Google Slides de son propre compte (`ALLOWED_FOLDERS` facultatif pour restreindre) ;
+  - copie le deck dans son dossier, l'original n'est jamais touché ;
+  - remplace sur la **slide 1 seulement** la première date trouvée (motif `COVER_DATE_SOURCE`, recopié de `coverDate.js` entre repères, identité vérifiée par le test). Sans date sur la slide 1, rien n'est créé ;
+  - retire les pages masquées de la session et, case « Sans les slides masquées » cochée, les slides masquées dans Google Slides ;
+  - exporte « <titre du deck> – <date>.pdf » dans le dossier du deck (même nom remplacé, partage par lien en lecture), puis met la copie à la corbeille.
+- Fonction `support-pdf` : jeton de l'appelant, rôle trainer ou admin, `manages(sid)`, 6 générations par 10 minutes et par compte (`throttle_hit`), puis appel de l'Apps Script avec les secrets `SUPPORT_SCRIPT_URL` et `SUPPORT_SCRIPT_TOKEN`. Le navigateur enregistre ensuite le lien renvoyé comme support (`api.setSupport`). Installation : README, étape 11. Démo : message « non disponible ».
+  - **À terme (demande de Gerald, 28 novembre 2026)** : utilisable par n’importe quel formateur, sur son propre Google Drive. Piste : connexion Google de chaque formateur dans le navigateur (OAuth, portée `drive.file` et Google Picker pour choisir le deck, sans vérification lourde de Google), copie, date et export faits avec ses propres droits. Ni Apps Script ni secrets ; la CSP devra autoriser les scripts et appels Google (accounts.google.com, apis.google.com, www.googleapis.com).
+
 ## Trames de conducteur, ou « Création de programmes » (migration `…_trames.sql`)
 - Dans l'interface, les trames s'appellent désormais des **programmes** (« + Nouveau programme », « Appliquer un programme… », « Enregistrer comme programme ») ; le code, la table et les adresses gardent le mot « trame ».
 - Déroulés réutilisables de 1 à 5 journées, construits dans l'éditeur `#/admin/trames` (administration, onglet du Studio ; `src/views/trames.js`), rangés dans `conducteur_templates` (`{id, titre, content}`, `content` au schéma de `sessions.programme` + `slides_url`, `slides_n` ; lue par l'équipe, modifiée par l'administration, auteur et date tenus par la base). API `listTrames`, `saveTrame`, `deleteTrame` (Supabase et démo).

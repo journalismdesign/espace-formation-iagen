@@ -20,7 +20,8 @@ import { applyPatch, trameFromSession } from "../lib/applyProgramme.js";
 import { isLunch, pauseTargets, movePause, shiftPause, pauseAlert, pauseAlertText, endBounds, dayEnd } from "../lib/programme.js";
 import { loadSkins, skinFor, applySkin, currentSkin } from "../lib/skin.js";
 import { samsaHtml } from "../lib/brand.js";
-import { isAdmin } from "../lib/roles.js";
+import { isAdmin, isGuest } from "../lib/roles.js";
+import { coverDate } from "../lib/coverDate.js";
 import { ICON } from "../lib/adminNav.js";
 import { popIn } from "../lib/motion.js";
 import { dateOfDay, MAX_DAYS } from "../lib/archive.js";
@@ -416,6 +417,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
         <details class="card acc-set" name="regacc" data-acc="su"><summary><h3>Support à télécharger</h3></summary>
           <label class="f" for="gSu">Lien du support (PDF sur Drive, etc.)</label><input type="url" id="gSu" placeholder="https://…">
           <p class="small muted" id="supInfo"></p>
+          <div class="sup-gen" id="supGen"></div>
           <label class="f inline"><input type="checkbox" id="gSuF"${session.support_unlocked ? " checked" : ""}> Débloquer dès maintenant</label>
         
         </details>
@@ -485,7 +487,37 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       if (session.evaluation_url) return T(`Chaque stagiaire le débloque en touchant « Remplir l'évaluation ». L'évaluation lui est proposée dès que vous la projetez${at ? `, ou à partir du ${at} (une heure avant la fin)` : ""}. « Débloquer dès maintenant » la propose tout de suite. La page Support reste visible dans le menu des stagiaires.`);
       return at ? T(`Téléchargeable par les stagiaires dès que vous projetez l'évaluation, ou à partir du ${at} (une heure avant la fin). La page Support reste visible dans leur menu.`) : T("Renseignez la date et l'heure de fin pour programmer le déblocage, ou projetez l'évaluation le moment venu.");
     };
-    $("#supInfo", box).innerHTML = supInfo(sup);
+$("#supInfo", box).innerHTML = supInfo(sup);
+    /* Support PDF généré depuis les slides de la session (fonction support-pdf → Apps Script) : copie du deck avec la date
+       de la session en page de garde (slide 1 seulement), PDF dans le dossier Drive des slides, puis lien enregistré
+       comme support. D'après les réglages enregistrés (lien des slides, dates, pages masquées). Pas pour les invité·es. */
+    const drawSupGen = () => {
+      const el = $("#supGen", box);
+      if (!el) return;
+      if (isGuest(ctx.me)) { el.innerHTML = ""; return; }
+      const slides = deckKind(session.slides_url || "") === "slides" && !String(deckId(session.slides_url)).startsWith("e/");
+      const label = coverDate(session);
+      el.innerHTML = `<div class="sup-gen-box"><b>Générer le PDF depuis les slides</b>
+        <p class="small muted" style="margin:4px 0 8px">${!slides ? T("Indiquez d'abord le lien Google Slides dans « Slides projetées », puis enregistrez les réglages.")
+          : !label ? T("Indiquez d'abord la ou les dates de la session, puis enregistrez les réglages.")
+          : T(`Une copie des slides, avec en page de garde (slide 1) la date « ${label} », exportée en PDF dans le dossier Drive des slides. Le PDF devient le support de la session.`)}</p>
+        <div class="sup-gen-row"><label class="f inline small" style="margin:0"><input type="checkbox" id="supSkip" checked> Sans les slides masquées</label>
+          <button type="button" class="btn sm" id="supGo"${slides && label ? "" : " disabled"}>Générer le PDF</button><span class="small muted" id="supWait" aria-live="polite"></span></div></div>`;
+      $("#supGo", el).onclick = async (e) => {
+        const b = e.currentTarget, drop = $("#supSkip", el).checked;
+        b.disabled = true; $("#supWait", el).textContent = "Génération en cours (environ une minute)…";
+        try {
+          const r = await api.supportPdf(sid, { label: coverDate(session), skip: drop ? parsePages(session.skip_pages) : [], dropSkipped: drop });
+          $("#gSu", box).value = r.url;
+          await api.setSupport(sid, r.url);
+          $("#supInfo", box).innerHTML = supInfo(await api.supportStatus(sid).catch(() => ({})));
+          $("#supWait", el).innerHTML = `<a href="${safeUrl(r.url)}" target="_blank" rel="noopener noreferrer">Ouvrir le PDF ↗</a>`;
+          toast(`Support créé et enregistré : ${r.name}${r.removed ? ` (${r.removed} slide${r.removed > 1 ? "s" : ""} masquée${r.removed > 1 ? "s" : ""} retirée${r.removed > 1 ? "s" : ""})` : ""}.`, "ok");
+        } catch (err) { $("#supWait", el).textContent = ""; toast(err.message, "ko"); }
+        finally { b.disabled = false; }
+      };
+    };
+    drawSupGen();
     bindConducteur();
     keepDraft($("#regF", box), `reglages:${sid}`, { saveLabel: "Enregistrer les réglages" }); // brouillon automatique + « Tout réinitialiser »
     $("#regF", box).onsubmit = async (e) => {
@@ -526,6 +558,7 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       await guard(() => api.setSupport(sid, $("#gSu", box).value.trim() || null));
       const st = await api.supportStatus(sid).catch(() => ({}));
       $("#supInfo", box).innerHTML = supInfo(st);
+      drawSupGen(); // lien des slides ou dates changés : le bouton suit
       toast(fmtChanged ? "Réglages enregistrés : déroulé et activités adaptés au nouveau format." : "Réglages enregistrés.", "ok");
     };
   }

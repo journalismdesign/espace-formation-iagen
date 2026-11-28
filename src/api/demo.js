@@ -305,6 +305,7 @@ if (pass) {
       const url = db.support[sid] || null;
       return { unlocked, unlock_at: at, url: manages(sid) || (unlocked && !memberLocked(sid)) ? url : null, configured: !!url };
     },
+    async supportPdf() { throw new Error("Non disponible en démonstration : la génération du PDF passe par Google Drive."); },
     async setSupport(sid, url) { needTrainer(); if (url) db.support[sid] = url; else delete db.support[sid]; commit(); },
 
     async currentUser() { return user(); },
