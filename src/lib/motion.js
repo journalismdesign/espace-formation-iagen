@@ -9,7 +9,7 @@ import { gsap } from "gsap";
 import { hooks } from "./dom.js";
 
 const reduce = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-const PRESS = ".btn, .iconbtn, .chip, .maintab, .phases a, .linkbtn, .side-em";
+const PRESS = ".btn, .iconbtn, .chip, .maintab, .phases a, .linkbtn, .side-em, .room-btn";
 const LIFT = -1.5;
 let hovered = null, started = false, lastInd = null;
 

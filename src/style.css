@@ -1284,3 +1284,16 @@ label.btn{display:inline-flex;align-items:center;justify-content:center;cursor:p
 .trv-strip .tr-tile{flex:0 0 40px;cursor:pointer}
 body.trv-on{overflow:hidden}
 @media (prefers-reduced-motion:reduce){.trv-strip{scroll-behavior:auto}}
+
+/* Liste des sessions : l'indicateur d'une salle ouverte ferme la salle (survol « Fermer la salle », puis « Confirmer ? »).
+   Les trois libellés occupent la même case : la colonne ne change pas de largeur. */
+.room-btn{border:0;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;line-height:inherit}
+.room-btn .rb-l{display:inline-grid}
+.room-btn .rb-l>span{grid-area:1/1;visibility:hidden}
+.room-btn .rb-l>.rb-txt{visibility:visible}
+.room-btn:hover .rb-txt,.room-btn:focus-visible .rb-txt,.room-btn.armed .rb-txt{visibility:hidden}
+.room-btn:not(.armed):hover .rb-hint,.room-btn:not(.armed):focus-visible .rb-hint{visibility:visible}
+.room-btn.armed .rb-arm{visibility:visible}
+.room-btn:not(.armed):hover{box-shadow:0 0 0 3px var(--tint)}
+.room-btn.armed{background:var(--ko);color:#fff}
+.room-btn.armed .dot{background:#fff}

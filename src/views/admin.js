@@ -1,6 +1,6 @@
 /* Back-office : liste des sessions, création, QR code, suppression. */
 import QRCode from "qrcode";
-import { $, $$, T, esc, guard, toast, dateFr } from "../lib/dom.js";
+import { $, $$, T, esc, fr, guard, toast, dateFr } from "../lib/dom.js";
 import { defaultActivities } from "../lib/activities.js";
 import { quizKeysOf, snapshotQuizzes } from "../lib/quizzes.js";
 import { modulesFor } from "../lib/content.js";
@@ -37,9 +37,12 @@ export async function viewAdmin(root, [view], { api, go, me }) {
   const sessions = archivedTab ? archived : all.filter((s) => !isArchived(s))
     .sort((a, b) => group(a) - group(b) || (group(a) === 2 ? byDate(b, a) : byDate(a, b)));
   const shortFr = (d) => new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" }).replace(/^1 /, "1er ");
+  // Salle ouverte : l'indicateur ferme la salle sans entrer dans la session (deux clics, comme « Fermer la salle »)
+  const roomBtn = (s, cls, label) => `<button type="button" class="state ${cls} room-btn" data-room="${s.id}" title="${esc(fr("Salle ouverte : cliquer pour fermer la salle"))}" aria-label="${esc(`${s.title}${sessionNo(s) ? " (" + sessionNo(s) + ")" : ""} : salle ouverte, fermer la salle`)}">${cls === "current" ? `<span class="dot on"></span>` : ""}<span class="rb-l"><span class="rb-txt">${label}</span><span class="rb-hint">Fermer la salle</span><span class="rb-arm">${T("Confirmer ?")}</span></span></button>`;
   const stateHtml = (s) => isArchived(s) ? `<span class="state archived">Archivée</span>`
     : sessionEnded(s) ? `<span class="state closed">Terminée</span>${archiveDate(s) ? `<div class="small muted archive-on">${T(`archivage le ${shortFr(archiveDate(s))}`)}</div>` : ""}`
-    : current(s) ? `<span class="state current">${s.status === "live" ? `<span class="dot on"></span> ` : ""}En cours</span>`
+    : current(s) ? (s.status === "live" ? roomBtn(s, "current", "En cours") : `<span class="state current">En cours</span>`)
+    : s.status === "live" ? roomBtn(s, "live", STATUS.live)
     : `<span class="state ${s.status}">${STATUS[s.status]}</span>`;
   const trainerName = (id) => trainers.find((t) => t.id === id)?.name || "";
   const trOptions = (sel) => `<option value="">— Non attribuée —</option>${trainers.map((t) => `<option value="${t.id}"${t.id === sel ? " selected" : ""}>${T(t.name)}${t.login_email ? "" : " (sans compte)"}</option>`).join("")}`;
@@ -85,6 +88,18 @@ export async function viewAdmin(root, [view], { api, go, me }) {
 
   const form = $("#newForm", root);
   // Attribution d'une session (admin) : la fiche intervenant·e choisie donne accès au compte qui porte son adresse
+  // Fermer la salle depuis la liste : premier clic « Confirmer ? » (4 s), second clic ferme (status draft, minuteur du jour gardé)
+  $$("[data-room]", root).forEach((b) => (b.onclick = async () => {
+    if (!b.classList.contains("armed")) {
+      b.classList.add("armed"); clearTimeout(b._disarm);
+      b._disarm = setTimeout(() => b.classList.remove("armed"), 4000);
+      return;
+    }
+    clearTimeout(b._disarm); b.disabled = true;
+    const s = listed.find((x) => x.id === b.dataset.room);
+    const done = s && await guard(() => api.updateSession(s.id, { status: "draft", live: s.live?.started ? { started: s.live.started } : {} }), `Salle fermée : ${s.title}.`);
+    if (done) go(location.hash); else { b.disabled = false; b.classList.remove("armed"); }
+  }));
   $$("[data-assign]", root).forEach((sel) => (sel.onchange = () => guard(() => api.updateSession(sel.dataset.assign, { trainer_id: sel.value || null }), "Attribution enregistrée.")));
   if (!admin) { form.remove(); } else
   $("#newBtn", root).onclick = () => { form.hidden = false; $("#nTitle", root).focus(); };
