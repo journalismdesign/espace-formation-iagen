@@ -34,14 +34,14 @@ export async function renderTrainerEditor(box, id, { api, go, list, staff }) {
   box.innerHTML = `
     <p style="margin-top:0"><a href="${BASE}">← Toutes les fiches</a></p>
     <h2 style="margin:0 0 12px">${cur.id ? T(cur.name) : "Nouvelle fiche"}</h2>
-    <form id="tF" class="grid jour2">
+    <form id="tF" class="grid jour2 tr-edit">
       <div class="card">
         <label class="f" for="tN">Nom</label><input type="text" id="tN" required maxlength="100" value="${esc(cur.name)}">
         <label class="f" for="tLog">Adresse de connexion (compte formateur·ice)</label><input type="email" id="tLog" maxlength="200" value="${esc(cur.login_email || "")}" placeholder="prenom.nom@exemple.fr">
         <p class="small muted" style="margin:2px 0 0" id="tAcc"></p>
-        <label class="f">Photo (carrée de préférence)</label>
-        <div style="display:flex;gap:12px;align-items:center"><span id="tPh">${cur.photo ? `<img src="${esc(cur.photo)}" class="thumb lg" alt="">` : ""}</span><input type="file" id="tPf" accept="image/*">${cur.photo ? `<button type="button" class="linkbtn small" id="tPd">Retirer</button>` : ""}</div>
-        <label class="f">Fonctions (une ligne chacune : intitulé ▸ structure)</label>
+        <label class="f">Photo</label>
+        <div class="photo-row" id="tPhoto"></div>
+        <label class="f">Fonctions</label>
         <div id="tRoles"></div><button type="button" class="btn sm ghost" id="tRa">+ Ajouter une fonction</button>
         <label class="f" for="tTg">Accroche</label><input type="text" id="tTg" maxlength="300" value="${esc(cur.tagline || "")}" placeholder="Depuis **fin 2017**, je travaille sur **les médias synthétiques**">
         <p class="small muted" style="margin:2px 0 0">${T("Entourez de doubles astérisques les mots à mettre en bleu : **comme ceci**.")}</p>
@@ -65,13 +65,16 @@ export async function renderTrainerEditor(box, id, { api, go, list, staff }) {
   const read = () => {
     cur.name = $("#tN", box).value.trim(); cur.login_email = $("#tLog", box).value.trim().toLowerCase(); cur.tagline = $("#tTg", box).value.trim(); cur.tagline_sub = $("#tTs", box).value.trim();
     cur.email = $("#tEm", box).value.trim(); cur.website = $("#tWs", box).value.trim();
-    cur.roles = $$("#tRoles .row3", box).map((r) => ({ label: $(".rl", r).value.trim(), value: $(".rv", r).value.trim(), url: $(".ru", r).value.trim() }));
-    cur.socials = $$("#tSoc .row3", box).map((r) => ({ label: $(".sl", r).value.trim(), url: $(".su", r).value.trim() }));
+    cur.roles = $$("#tRoles .row3:not(.row3-head)", box).map((r) => ({ label: $(".rl", r).value.trim(), value: $(".rv", r).value.trim(), url: $(".ru", r).value.trim() }));
+    cur.socials = $$("#tSoc .row3:not(.row3-head)", box).map((r) => ({ label: $(".sl", r).value.trim(), url: $(".su", r).value.trim() }));
   };
   const preview = () => { read(); $("#tPrev", box).innerHTML = trainerSlideHtml(demoSession, { ...cur, roles: cur.roles.filter((r) => r.label), socials: cur.socials.filter((x) => x.label) }, "compact"); };
   const drawRows = () => {
-    $("#tRoles", box).innerHTML = cur.roles.map((r, i) => `<div class="row3"><input class="rl" placeholder="Fondateur de" value="${esc(r.label)}"><input class="rv" placeholder="Synth" value="${esc(r.value)}"><input class="ru" placeholder="https:// (facultatif)" value="${esc(r.url || "")}"><button type="button" class="iconbtn danger" data-rr="${i}" aria-label="Retirer">✕</button></div>`).join("");
-    $("#tSoc", box).innerHTML = cur.socials.map((x, i) => `<div class="row3 two"><input class="sl" placeholder="@identifiant" value="${esc(x.label)}"><input class="su" placeholder="https://bsky.app/… (facultatif)" value="${esc(x.url || "")}"><button type="button" class="iconbtn danger" data-rs="${i}" aria-label="Retirer">✕</button></div>`).join("");
+    // Une ligne par fonction ou par réseau, sous des intitulés de colonnes ; champs alignés sur ceux du reste de la fiche
+    $("#tRoles", box).innerHTML = (cur.roles.length ? `<div class="row3 row3-head" aria-hidden="true"><span>Intitulé</span><span>Structure</span><span>Lien (facultatif)</span><span></span></div>` : "")
+      + cur.roles.map((r, i) => `<div class="row3"><input type="text" class="rl" placeholder="Fondateur de" value="${esc(r.label)}" aria-label="Intitulé de la fonction ${i + 1}"><input type="text" class="rv" placeholder="Synth" value="${esc(r.value)}" aria-label="Structure de la fonction ${i + 1}"><input type="url" class="ru" placeholder="https://" value="${esc(r.url || "")}" aria-label="Lien de la fonction ${i + 1} (facultatif)"><button type="button" class="iconbtn danger" data-rr="${i}" title="Retirer cette fonction" aria-label="Retirer la fonction ${i + 1}">✕</button></div>`).join("");
+    $("#tSoc", box).innerHTML = (cur.socials.length ? `<div class="row3 two row3-head" aria-hidden="true"><span>Identifiant</span><span>Lien (facultatif)</span><span></span></div>` : "")
+      + cur.socials.map((x, i) => `<div class="row3 two"><input type="text" class="sl" placeholder="@identifiant" value="${esc(x.label)}" aria-label="Identifiant du réseau ${i + 1}"><input type="url" class="su" placeholder="https://bsky.app/…" value="${esc(x.url || "")}" aria-label="Lien du réseau ${i + 1} (facultatif)"><button type="button" class="iconbtn danger" data-rs="${i}" title="Retirer ce réseau" aria-label="Retirer le réseau ${i + 1}">✕</button></div>`).join("");
     $$("[data-rr]", box).forEach((b) => (b.onclick = () => { read(); cur.roles.splice(+b.dataset.rr, 1); drawRows(); }));
     $$("[data-rs]", box).forEach((b) => (b.onclick = () => { read(); cur.socials.splice(+b.dataset.rs, 1); drawRows(); }));
     $$("#tF input", box).forEach((i) => i.type !== "file" && (i.oninput = preview));
@@ -80,8 +83,17 @@ export async function renderTrainerEditor(box, id, { api, go, list, staff }) {
   };
   $("#tRa", box).onclick = () => { read(); cur.roles.push({ label: "", value: "", url: "" }); drawRows(); };
   $("#tSa", box).onclick = () => { read(); cur.socials.push({ label: "", url: "" }); drawRows(); };
-  $("#tPf", box).onchange = async (e) => { const f = e.target.files[0]; if (!f) return; const url = await guard(() => fileToDataUrl(f, 500)); if (url) { cur.photo = url; $("#tPh", box).innerHTML = `<img src="${url}" class="thumb lg" alt="">`; preview(); } };
-  $("#tPd", box)?.addEventListener("click", () => { cur.photo = null; $("#tPh", box).innerHTML = ""; preview(); });
+  // Photo : vignette carrée, « Choisir » ou « Changer la photo » (sélecteur de fichier caché), « Retirer »
+  const drawPhoto = () => {
+    const ph = $("#tPhoto", box);
+    ph.innerHTML = `<span class="photo-box">${cur.photo ? `<img src="${esc(cur.photo)}" alt="Photo de ${esc(cur.name || "l'intervenant·e")}">` : `<span class="small muted">Aucune photo</span>`}</span>
+      <div class="photo-actions"><div class="chips"><label class="btn sm ghost">${cur.photo ? "Changer la photo" : "Choisir une photo"}<input type="file" id="tPf" accept="image/*" hidden></label>
+        ${cur.photo ? `<button type="button" class="btn sm ghost danger-btn" id="tPd">Retirer</button>` : ""}</div>
+        <span class="small muted">${T("Carrée de préférence : elle est réduite à 500 px au plus.")}</span></div>`;
+    $("#tPf", ph).onchange = async (e) => { const file = e.target.files[0]; if (!file) return; const url = await guard(() => fileToDataUrl(file, 500)); if (url) { cur.photo = url; drawPhoto(); preview(); } };
+    $("#tPd", ph)?.addEventListener("click", () => { cur.photo = null; drawPhoto(); preview(); });
+  };
+  drawPhoto();
   $("#tDel", box)?.addEventListener("click", async () => { if (confirm("Supprimer cette fiche ? Les sessions qui l'utilisent n'auront plus d'intervenant.")) { await guard(() => api.deleteTrainer(cur.id)); go(BASE); } });
   $("#tF", box).onsubmit = async (e) => {
     e.preventDefault(); read();

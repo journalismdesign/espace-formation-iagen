@@ -1330,3 +1330,25 @@ body.trv-on{overflow:hidden}
 .clock.big .clk-lbl{grid-area:lbl}
 .clock.big .clk-btns{grid-area:btns;flex-direction:row;align-self:start;margin:-6px -12px 0 0}
 .clock.big .t{grid-area:t;justify-self:center;font-size:clamp(40px,17cqw,112px);line-height:1.05}
+
+/* Fiche intervenant·e : lignes de fonctions et de réseaux contenues dans la carte, photo et ses boutons */
+.row3{align-items:stretch}
+.row3>input{min-width:0;width:100%}
+.row3>.iconbtn{margin:0;width:auto;height:auto;min-height:38px}
+.row3-head{margin:0 0 2px;font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.row3-head>span{padding-left:2px}
+.photo-row{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.photo-box{display:grid;place-items:center;width:120px;height:120px;flex:none;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--light)}
+.photo-box img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-actions{display:flex;flex-direction:column;gap:8px;min-width:0;flex:1}
+.photo-actions .chips{margin:0}
+.jour2.tr-edit{grid-template-columns:minmax(0,1.3fr) minmax(300px,1fr)}
+@media (max-width:980px){.jour2.tr-edit{grid-template-columns:1fr}}
+#tRoles{container-type:inline-size}
+@container (max-width:520px){
+  #tRoles .row3{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 38px}
+  #tRoles .row3>.ru{grid-column:1 / 3}
+  #tRoles .row3>.iconbtn{grid-column:3;grid-row:1 / 3}
+  #tRoles .row3-head>span:nth-child(3){display:none}
+  #tRoles .row3:not(.row3-head){margin-bottom:12px}
+}
