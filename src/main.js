@@ -28,9 +28,11 @@ import { viewTrames } from "./views/trames.js";
 import { viewParticipants } from "./views/participants.js";
 import { MAIN_TABS, mainTabOf, ICON } from "./lib/adminNav.js";
 import { initMotion, placeIndicator, enterView } from "./lib/motion.js";
+import { morph } from "./lib/morph.js";
 import { skinFooter, skinForRoute, applySkin, currentSkin } from "./lib/skin.js";
 
 const app = $("#app");
+const LOADING = `<div class="tab-loading" role="status">Chargement<span class="dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></div>`;
 let cleanup = null, me = null, booted = false, renderTok = 0, currentRoute = null;
 
 export const go = (h) => { if (location.hash === h) render(); else location.hash = h; };
@@ -129,19 +131,29 @@ async function render() {
   if (tok !== renderTok) return;
   applySkin(skin);
   document.body.classList.toggle("bare", !!route.bare);
-  app.innerHTML = header(route) + `<main id="view"></main>`;
+  /* En-tête et barre des onglets gardés en place d'une page à l'autre : morph() ne touche qu'à ce qui change (onglet
+     actif, nom, bandeaux), sans rien redessiner ni faire clignoter. Seule la zone utile (#view) est remplacée, par un
+     élément neuf : les écouteurs posés par la vue précédente partent avec elle. */
+  if (!$("#hdr")) app.innerHTML = `<div id="hdr"></div><main id="view"></main>`;
+  morph($("#hdr"), header(route));
+  const view = document.createElement("main");
+  view.id = "view";
+  $("#view").replaceWith(view);
   placeIndicator($(".maintabs")); // le trait glisse de l'onglet précédent au nouveau
-  $("#logout")?.addEventListener("click", async () => { await api.signOut(); me = null; booted = false; go("#/login"); });
-  $("#demoReset")?.addEventListener("click", () => confirm("Effacer toutes les données de démonstration ?") && api.reset());
+  const logout = $("#logout"), demoReset = $("#demoReset"); // onclick (et non addEventListener) : l'en-tête reste, un seul écouteur
+  if (logout) logout.onclick = async () => { await api.signOut(); me = null; booted = false; go("#/login"); };
+  if (demoReset) demoReset.onclick = () => confirm("Effacer toutes les données de démonstration ?") && api.reset();
   const ctx = { api, me, go, refreshMe: async () => (me = await api.me(true)) };
   ctx.me = me || {};
+  // Page lente (plus de 150 ms) : « Chargement » dans la zone utile, la navigation ne bouge pas
+  const slow = setTimeout(() => { if (!view.childElementCount) view.innerHTML = LOADING; }, 150);
   try {
-    cleanup = (await route.view($("#view"), m.slice(1), ctx)) || null;
-    if (tok === renderTok && !route.bare && (/^#\/admin\b/.test(h) || h === "#/" || h === "")) enterView($("#view"));
+    cleanup = (await route.view(view, m.slice(1), ctx)) || null;
+    if (tok === renderTok && !route.bare && (/^#\/admin\b/.test(h) || h === "#/" || h === "")) enterView(view);
   } catch (e) {
     console.error(e);
-    $("#view").innerHTML = `<div class="card"><h2>Impossible d'afficher cette page</h2><p class="muted">${esc(e.message)}</p><a class="btn" href="#/">Retour à mon espace</a></div>`;
-  }
+    view.innerHTML = `<div class="card"><h2>Impossible d'afficher cette page</h2><p class="muted">${esc(e.message)}</p><a class="btn" href="#/">Retour à mon espace</a></div>`;
+  } finally { clearTimeout(slow); }
   window.scrollTo(0, 0);
 }
 
