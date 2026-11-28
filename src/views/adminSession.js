@@ -22,6 +22,8 @@ import { loadSkins, skinFor, applySkin, currentSkin } from "../lib/skin.js";
 import { samsaHtml } from "../lib/brand.js";
 import { isAdmin } from "../lib/roles.js";
 import { sessionNo } from "../lib/presence.js";
+import { ICON } from "../lib/adminNav.js";
+import { popIn } from "../lib/motion.js";
 import { dateOfDay, MAX_DAYS } from "../lib/archive.js";
 import { morph } from "../lib/morph.js";
 import { parsePages, formatPages, slideEmbedUrl, deckId, deckKind } from "../deck.js";
@@ -162,6 +164,10 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
   if (!PHASES.some(([k]) => k === phase)) phase = "avant";
   const qrUrl = await qr(joinUrl(session.code), 480);
 
+  // Bouton de la salle : « Ouvrir la salle », pastille rouge « En direct » (ferme en deux clics) ou « Rouvrir »
+  const roomBtnHtml = () => session.status === "draft" ? `<button class="btn sm" data-status="live">Ouvrir la salle</button>`
+    : session.status === "live" ? `<button type="button" class="state live room-btn room-head" data-status="draft" title="${esc(fr("Salle ouverte : cliquer pour fermer la salle"))}" aria-label="Salle ouverte : fermer la salle"><span class="rb-l"><span class="rb-txt">En direct</span><span class="rb-hint">Fermer la salle</span><span class="rb-arm">${T("Confirmer ?")}</span></span></button>`
+    : `<button class="btn sm ghost" data-status="live">Rouvrir</button>`;
   root.innerHTML = `
     <p><a href="#/admin">← Sessions</a></p>
     <div class="pagehead sess-head"><div>
@@ -169,13 +175,21 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       <p class="muted" style="margin:4px 0">${sessionNo(session) ? `N° <b class="mono">${esc(sessionNo(session))}</b> · ` : ""}${T(session.formation)} · ${T(datesFr(session))} · code <b class="mono">${esc(session.code)}</b></p>
     </div>
     <div class="head-actions">${session.status !== "closed" ? `<button class="btn ghost sm" id="addBtn" title="Faire entrer une personne qui ne reçoit pas l'e-mail : accès direct ou code à transmettre">Ajouter un·e stagiaire</button>` : ""}<a class="btn ghost sm" href="#/s/${sid}" title="Voir l'espace tel que le voient les stagiaires">Voir côté stagiaire</a>
-      ${session.status === "draft" ? `<button class="btn sm" data-status="live">Ouvrir la salle</button>` : session.status === "live" ? `<button type="button" class="state live room-btn room-head" data-status="draft" title="${esc(fr("Salle ouverte : cliquer pour fermer la salle"))}" aria-label="Salle ouverte : fermer la salle"><span class="rb-l"><span class="rb-txt">En direct</span><span class="rb-hint">Fermer la salle</span><span class="rb-arm">${T("Confirmer ?")}</span></span></button>` : `<button class="btn sm ghost" data-status="live">Rouvrir</button>`}</div></div>
+      <span class="room-box" id="roomBox">${roomBtnHtml()}</span></div></div>
     <div class="phases">${PHASES.map(([k, l]) => `<a href="#/admin/s/${sid}/${k}"${k === phase ? ' aria-current="page"' : ""}>${phaseLabel(k, l, session)}</a>`).join("")}</div>
     ${phase === "jour" ? `<div class="head-live"><div class="clock" id="clock" aria-live="off"></div>
         <div class="joinbox"><img src="${qrUrl}" alt="QR code de la session"><span class="jb-txt"><span class="small">Rejoindre la session</span><b class="mono">${esc(session.code)}</b></span><button class="btn sm ghost" id="pjQ" title="Afficher le QR code sur l'écran projeté (salle ouverte ou non)">Projeter le QR code</button></div>
         <label class="onlinebox${session.online ? " on" : ""}" id="onlineLbl" title="${esc(fr("Formation à distance : les stagiaires voient dans leur espace ce que montre l'écran projeté (pages du support, présentations, séquences, émargement) et peuvent écrire dans la discussion. En salle, la discussion leur reste fermée."))}"><input type="checkbox" role="switch" id="onlineMode"${session.online ? " checked" : ""}><span class="ob-txt"><b>Formation en ligne</b><span class="small" id="onlineSub">${onlineSub(session.online)}</span></span></label></div>` : ""}
     <div id="phase"></div>`;
-  $$("[data-status]", root).forEach((b) => (b.onclick = async () => {
+  /* Ouvrir ou fermer la salle sans redessiner la page : seul le bouton change (syncRoom, aussi appelé par tick quand
+     le statut change ailleurs : lancement d'une séquence, écran projeté, autre onglet), puis l'horloge et le pilotage
+     suivent. Rouvrir une session close redessine tout (l'écran change de nature). */
+  const roomBox = $("#roomBox", root);
+  roomBox._html = roomBtnHtml();
+  const syncRoom = () => { const h = roomBtnHtml(); if (roomBox._html !== h) { roomBox.innerHTML = h; roomBox._html = h; } };
+  roomBox.onclick = async (e) => {
+    const b = e.target.closest("[data-status]");
+    if (!b || b.disabled) return;
     // « En direct » : fermer la salle en deux clics (« Confirmer ? » pendant 4 s), comme dans la liste des sessions
     if (b.classList.contains("room-btn") && !b.classList.contains("armed")) {
       b.classList.add("armed"); clearTimeout(b._disarm);
@@ -183,10 +197,14 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
       return;
     }
     clearTimeout(b._disarm); b.disabled = true;
-    const st = b.dataset.status;
-    await guard(() => api.updateSession(sid, { status: st, live: st === "live" ? { ...(session.live || {}), ...(!session.live?.view && !session.live?.act ? { view: "title", started_at: new Date().toISOString() } : {}), started: stamp(session.live) } : (session.live?.started ? { started: session.live.started } : {}) }), st === "live" ? "Salle ouverte : les stagiaires peuvent répondre." : "Salle fermée.");
-    go(location.hash);
-  }));
+    const st = b.dataset.status, was = session.status;
+    const s2 = await guard(() => api.updateSession(sid, { status: st, live: st === "live" ? { ...(session.live || {}), ...(!session.live?.view && !session.live?.act ? { view: "title", started_at: new Date().toISOString() } : {}), started: stamp(session.live) } : (session.live?.started ? { started: session.live.started } : {}) }), st === "live" ? "Salle ouverte : les stagiaires peuvent répondre." : "Salle fermée.");
+    if (!s2) { b.disabled = false; b.classList.remove("armed"); return; }
+    session = s2;
+    if (was === "closed") return go(location.hash);
+    syncRoom(); tick(); afterLive();
+    popIn(roomBox.firstElementChild);
+  };
   $("#addBtn", root)?.addEventListener("click", () => openAccessSheet(api, session));
 
   const box = $("#phase", root);
@@ -208,7 +226,28 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     return null;
   };
   const plannedTxt = () => { const [h, m] = String(session.start_time || "09:30").split(":").map(Number); return hm2(h || 0, m || 0); };
+  /* Minuteur agrandi (icône ⤢ du pavé) : il passe en tête de la colonne Pilotage, sur toute sa largeur, chiffres en
+     grand, et reste collé au bord supérieur de la fenêtre quand on fait défiler la page (sticky). Choix gardé dans ce
+     navigateur. Réduit, il revient dans le bandeau du Jour J. */
+  const CLOCK_BIG = "iagen-clock-big";
+  let clockBig = false; try { clockBig = localStorage.getItem(CLOCK_BIG) === "1"; } catch {}
+  const unplaceClock = () => { const el = $("#clock", root), bar = $(".head-live", root); if (el && bar && el.parentNode !== bar) bar.prepend(el); };
+  const placeClock = () => {
+    const el = $("#clock", root), bar = $(".head-live", root), slot = $("#clockSlot", root);
+    if (!el || !bar) return;
+    const big = clockBig && !!slot;
+    if (big && el.parentNode !== slot) slot.appendChild(el);
+    if (!big) unplaceClock();
+    el.classList.toggle("big", big);
+    // Collé en haut : coins du haut carrés et ombre légère (IntersectionObserver, une seule fois par emplacement)
+    if (big && !slot._io && typeof IntersectionObserver === "function") {
+      slot._io = new IntersectionObserver(([en]) => slot.classList.toggle("stuck", en.intersectionRatio < 1), { threshold: [1], rootMargin: "-1px 0px 0px 0px" });
+      slot._io.observe(slot);
+      cleanups.push(() => slot._io?.disconnect());
+    }
+  };
   const tick = () => {
+    syncRoom();
     const el = $("#clock", root); if (!el) return;
     const dur = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m} min`);
     const nowMin = parisMin(new Date()), ref = clockRef(), on = session.status === "live";
@@ -218,12 +257,18 @@ export async function viewAdminSession(root, [sid, phase = "avant"], ctx) {
     const sub = session.status === "closed" ? "" : ref === null ? `début prévu à ${plannedTxt()}`
       : on ? `écoulé ${dur(Math.max(0, nowMin - ref))} · depuis ${hmMin(ref)}` : `journée commencée à ${hmMin(ref)}`;
     const html = `<span class="clk-lbl">${state}<span class="clk-sub">${sub ? fr(sub) : "&nbsp;"}</span></span><b class="t">${hm2(Math.floor(nowMin / 60), nowMin % 60)}</b>`
-      + `<button type="button" class="clk-reset" data-clk-reset title="Remettre le minuteur à zéro : le temps écoulé repart de maintenant" aria-label="Remettre le minuteur à zéro">↺</button>`;
-    if (el.innerHTML !== html) el.innerHTML = html;
+      + `<span class="clk-btns"><button type="button" class="clk-size" data-clk-size aria-pressed="${clockBig}" title="${clockBig ? "Réduire le minuteur" : "Agrandir le minuteur : toute la largeur de la colonne Pilotage, toujours visible en haut de la fenêtre"}" aria-label="${clockBig ? "Réduire le minuteur" : "Agrandir le minuteur"}">${clockBig ? ICON.shrink : ICON.expand}</button>`
+      + `<button type="button" class="clk-reset" data-clk-reset title="Remettre le minuteur à zéro : le temps écoulé repart de maintenant" aria-label="Remettre le minuteur à zéro">↺</button></span>`;
+    if (el._html !== html) { el.innerHTML = html; el._html = html; } // comparaison au dernier rendu (le SVG ne se relit pas à l'identique)
     qrBtn(); // l'écran a pu changer depuis le pilotage ou l'écran projeté
   };
   // ↺ du minuteur (délégation : le contenu du pavé est réécrit à chaque minute)
   if ($("#clock", root)) $("#clock", root).onclick = async (e) => { // pavé présent dans l'onglet Jour J seulement
+    if (e.target.closest("[data-clk-size]")) { // agrandir ou réduire
+      clockBig = !clockBig; try { localStorage.setItem(CLOCK_BIG, clockBig ? "1" : "0"); } catch {}
+      placeClock(); tick(); popIn($("#clock", root)); $("#clock [data-clk-size]", root)?.focus();
+      return;
+    }
     if (!e.target.closest("[data-clk-reset]")) return;
     const live = { ...(session.live || {}), clock: { day: parisDay(), at: new Date().toISOString() } };
     session = await guard(() => api.updateSession(sid, { live }), "Minuteur remis à zéro : le temps écoulé repart de maintenant.") || session;
@@ -628,9 +673,11 @@ $("#condSaveTrame", box)?.addEventListener("click", async () => {
   async function phaseJour() {
     let dragPause = null; // pause en cours de glisser-déposer : le redessin temps réel attend
     let bank = { ready: false, items: [] }; // bibliothèque « Quiz et sondages » (chargée après l'affichage)
+    unplaceClock(); // le minuteur agrandi vit dans la colonne : il revient au bandeau avant le redessin
     box.innerHTML = `
       <div class="grid jour2">
         <div>
+          <div class="clock-slot" id="clockSlot"></div>
           <div class="card">
             <h3>Pilotage</h3>
             <p class="small muted" id="hint" style="margin-top:0"></p>
@@ -658,6 +705,7 @@ $("#condSaveTrame", box)?.addEventListener("click", async () => {
           <div class="card chat-card" style="margin-top:14px"><h3>Discussion des stagiaires</h3><p class="small muted chat-note" id="chatOff" hidden></p><div id="chatAdm"></div></div>
         </aside>
       </div>`;
+    placeClock();
     /* Discussion : ouverte aux stagiaires en formation en ligne seulement (chat_open côté base). En salle, le widget
        laisse la place à une ligne d'explication ; il se monte quand on active « Formation en ligne ». */
     let chatStop = null;
@@ -678,7 +726,7 @@ $("#condSaveTrame", box)?.addEventListener("click", async () => {
     $("#resetLive", box).onclick = async () => {
       if (!confirm("Remettre le direct à zéro ?\n\nLa salle sera fermée. La séquence lancée, les outils d'exercice débloqués, les émargements déjà projetés et l'heure d'ouverture du jour seront effacés. Les inscrit·es, les réponses et la discussion sont conservés.")) return;
       session = await guard(() => api.updateSession(sid, { status: "draft", live: {} }), "Direct remis à zéro : salle fermée.") || session;
-      go(location.hash); // l'en-tête (horloge, bouton de la salle) suit
+      draw(); // l'en-tête suit : draw appelle tick, qui met à jour l'horloge et le bouton de la salle
     };
     $("#closeDay", box).onchange = async (e) => { session = await guard(() => api.updateSession(sid, e.target.checked ? { status: "closed", live: {} } : { status: "live", live: { ...(session.live || {}), started: stamp(session.live) } }), e.target.checked ? "Journée close." : "Session rouverte.") || session; draw(); drawChat(); };
 

@@ -8,6 +8,7 @@ import { STATUS } from "./home.js";
 import { skinDark } from "../lib/skin.js";
 import { isAdmin, isGuest } from "../lib/roles.js";
 import { sessionNo } from "../lib/presence.js";
+import { pop } from "../lib/motion.js";
 import { isArchived, archiveDate, sessionEnded, dayCount, trainingDates, parisToday, addDays } from "../lib/archive.js";
 
 // Lien court de la session : <site>/CODE (redirigé vers #/join/CODE par 404.html ou au démarrage).
@@ -98,7 +99,9 @@ export async function viewAdmin(root, [view], { api, go, me }) {
     clearTimeout(b._disarm); b.disabled = true;
     const s = listed.find((x) => x.id === b.dataset.room);
     const done = s && await guard(() => api.updateSession(s.id, { status: "draft", live: s.live?.started ? { started: s.live.started } : {} }), `Salle fermée : ${s.title}.`);
-    if (done) go(location.hash); else { b.disabled = false; b.classList.remove("armed"); }
+    if (!done) { b.disabled = false; b.classList.remove("armed"); return; }
+    Object.assign(s, done); // la cellule seule change, la liste ne se redessine pas
+    const cell = b.closest("td"); cell.innerHTML = stateHtml(s); pop(cell.firstElementChild);
   }));
   $$("[data-assign]", root).forEach((sel) => (sel.onchange = () => guard(() => api.updateSession(sel.dataset.assign, { trainer_id: sel.value || null }), "Attribution enregistrée.")));
   if (!admin) { form.remove(); } else

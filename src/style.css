@@ -1302,3 +1302,31 @@ body.trv-on{overflow:hidden}
 /* Cartes de discussion (sans marge intérieure, pour que la messagerie remplisse la carte) : la ligne d'explication garde la sienne */
 .chat-card>.chat-note{margin:0;padding:12px 16px 14px;line-height:1.5}
 .chat-card>.chat-note:not([hidden])+div:not(:empty){border-top:1px solid var(--line)}
+
+/* Bouton de la salle de l'en-tête de session : mis à jour sur place, l'enveloppe ne compte pas dans la mise en page */
+.room-box{display:contents}
+
+/* Minuteur du Jour J : boutons agrandir et remise à zéro ; agrandi, toute la largeur de la colonne Pilotage, chiffres en
+   grand, collé au bord supérieur de la fenêtre quand on fait défiler (sticky) */
+.clock .clk-btns{display:flex;flex-direction:column;align-self:stretch;justify-content:space-between;align-items:center;gap:2px;margin:-4px -8px -4px -4px}
+.clock .clk-btns .clk-reset{margin:0;align-self:auto}
+.clock .clk-size{display:inline-grid;place-items:center;padding:3px;background:none;border:0;border-radius:4px;color:rgba(255,255,255,.45);cursor:pointer}
+.clock .clk-size:hover,.clock .clk-size:focus-visible{color:#fff;background:rgba(255,255,255,.14)}
+.clock .clk-size:active{background:rgba(255,255,255,.3)}
+.clock-slot:empty{display:none}
+.clock-slot{position:sticky;top:0;z-index:25;margin-bottom:14px}
+.clock.big{width:100%;box-sizing:border-box;padding:16px 22px;gap:20px;min-height:0;transition:border-radius .15s,box-shadow .15s}
+.clock.big .clk-lbl{flex:1;font-size:14px;gap:7px}
+.clock.big .state{font-size:13px;padding:3px 10px}
+.clock.big .t{font-size:clamp(44px,5.2vw,76px);font-weight:600;letter-spacing:-.01em}
+.clock.big .clk-btns{margin:-8px -12px -8px 0}
+.clock.big .clk-size svg{width:18px;height:18px}
+.clock.big .clk-reset{font-size:15px}
+.clock-slot.stuck .clock.big{border-radius:0 0 12px 12px;box-shadow:0 8px 20px rgba(0,0,0,.22)}
+@media (prefers-reduced-motion:reduce){.clock.big{transition:none}}
+/* Minuteur agrandi : libellé et boutons en haut, l'heure dessous sur toute la largeur, taille calée sur la colonne */
+.clock-slot{container-type:inline-size}
+.clock.big{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"lbl btns" "t t";align-items:start;row-gap:4px;padding:14px 20px 16px}
+.clock.big .clk-lbl{grid-area:lbl}
+.clock.big .clk-btns{grid-area:btns;flex-direction:row;align-self:start;margin:-6px -12px 0 0}
+.clock.big .t{grid-area:t;justify-self:center;font-size:clamp(40px,17cqw,112px);line-height:1.05}
