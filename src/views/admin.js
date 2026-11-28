@@ -7,7 +7,7 @@ import { modulesFor } from "../lib/content.js";
 import { STATUS } from "./home.js";
 import { skinDark } from "../lib/skin.js";
 import { isAdmin, isGuest } from "../lib/roles.js";
-import { sessionNo } from "../lib/presence.js";
+import { sessionNo } from "../lib/stagiaires.js";
 import { pop } from "../lib/motion.js";
 import { isArchived, archiveDate, sessionEnded, dayCount, trainingDates, parisToday, addDays } from "../lib/archive.js";
 

@@ -1,9 +1,9 @@
 /* Navigation du back-office : trois onglets principaux, dans une barre sous le bandeau du haut (header de main.js) :
    - « Studio » : les outils de création, en deux onglets (Création de programmes, Quiz et sondages) ;
    - « Sessions » : sessions à venir et archivées, et chaque session (réglages, pilotage, suivi) ;
-   - « Participants et formateurs » : émargements, adresses des stagiaires, comptes et accès, fiches intervenant·es.
+   - « Participants et formateurs » (administration) : adresses des stagiaires, comptes et accès, fiches intervenant·es.
    L'engrenage, à droite des onglets, ouvre les réglages généraux (organisme, habillages, entreprises, e-mail).
-   Formateur·ices : Sessions et Émargements (leurs sessions) seulement. Invité·es : leurs sessions de démo. */
+   Formateur·ices : Sessions seulement. Invité·es : leurs sessions de démo. */
 export const MAIN_TABS = [
   ["studio", "Studio", "#/admin/trames"],
   ["sessions", "Sessions", "#/admin"],
@@ -21,7 +21,7 @@ export function mainTabOf(h) {
 export const STUDIO_TABS = [["trames", "Création de programmes", "#/admin/trames"], ["quiz", "Quiz et sondages", "#/admin/quiz"]];
 export const SETTINGS_TABS = [["organisme", "Organisme", "#/admin/reglages/organisme"], ["habillages", "Habillages", "#/admin/reglages/habillages"],
   ["entreprises", "Entreprises clientes", "#/admin/reglages/entreprises"], ["mail", "E-mail stagiaires", "#/admin/reglages/mail"]];
-export const PARTICIPANTS_TABS = [["emargements", "Émargements", "#/admin/participants"], ["stagiaires", "Stagiaires", "#/admin/participants/stagiaires"],
+export const PARTICIPANTS_TABS = [["stagiaires", "Stagiaires", "#/admin/participants"],
   ["comptes", "Comptes et accès", "#/admin/equipe"], ["fiches", "Fiches intervenant·es", "#/admin/equipe/fiches"]];
 
 const flagHtml = (n) => (n ? ` <span class="tab-flag" title="${n} point${n > 1 ? "s" : ""} à régler">${n}</span>` : "");
@@ -31,10 +31,10 @@ const head = (title, sub) => `<div class="pagehead"><div><div class="kicker-d">B
 export const studioHead = (cur) => `${head("Studio", "Les outils de création, réutilisables d'une session à l'autre : programmes de 1 à 5 journées, quiz, sondages et nuages de mots.")}
   ${tabs(STUDIO_TABS, cur)}`;
 export const settingsHead = (cur) => `${head("Réglages généraux")}${tabs(SETTINGS_TABS, cur)}`;
-// admin : tous les onglets ; formateur·ice : les émargements de ses sessions. flags : points à régler par onglet.
-export const participantsHead = (cur, { admin = true, flags = {} } = {}) => `${head("Participants et formateurs",
-  admin ? "Émargements des sessions, adresses des stagiaires, comptes de l'équipe et fiches des intervenant·es." : "Émargements de vos sessions.")}
-  ${tabs(admin ? PARTICIPANTS_TABS : PARTICIPANTS_TABS.slice(0, 1), cur, flags)}`;
+// Administration seule. flags : points à régler par onglet.
+export const participantsHead = (cur, { flags = {} } = {}) => `${head("Participants et formateurs",
+  "Adresses des stagiaires, comptes de l'équipe et fiches des intervenant·es.")}
+  ${tabs(PARTICIPANTS_TABS, cur, flags)}`;
 
 // Icônes fines (trait), en couleur du texte
 export const ICON = {

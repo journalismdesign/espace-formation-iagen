@@ -7,7 +7,6 @@ import { checkFirstName } from "../lib/accessRules.js";
 import { DIRECT_PASS_HOURS } from "../lib/accessRules.js";
 import { isArchived, lastDate, addDays, dayCount, sessionEnded } from "../lib/archive.js";
 import { bankFromData, ID_RE } from "../lib/quizzes.js";
-import { SLOT_RE } from "../lib/presence.js";
 
 const KEY = "iagen-demo-db-v9";
 const USER_KEY = "iagen-demo-user";
@@ -453,28 +452,6 @@ if (pass) {
       });
     },
     async setAttended(sid, u, v) { needTrainer(); const m = db.members.find((x) => x.session_id === sid && x.user_id === u); if (m) { m.attended = v; commit(); } },
-    // Émargement par demi-journée (comme sign_presence, set_presence, session_presence)
-    async signPresence(sid, slot) {
-      const u = need(); if (!SLOT_RE.test(slot)) throw new Error("Créneau inconnu.");
-      const m = db.members.find((x) => x.session_id === sid && x.user_id === u.id);
-      if (!m || isGuest()) throw new Error("Réservé aux participant·es de la session.");
-      const s = db.sessions.find((x) => x.id === sid);
-      if (!s || s.status === "closed" || isArchived(s)) throw new Error("La session est terminée.");
-      m.presence ||= {}; m.presence[slot] = { ...(m.presence[slot] || {}), self: m.presence[slot]?.self || now() };
-      commit(); return m.presence;
-    },
-    async setPresence(sid, userId, slot, v) {
-      needTrainer(); if (!manages(sid)) throw new Error("Réservé à l'équipe de la session.");
-      if (!SLOT_RE.test(slot)) throw new Error("Créneau inconnu.");
-      const m = db.members.find((x) => x.session_id === sid && x.user_id === userId); if (!m) throw new Error("Participant·e introuvable.");
-      const cur = { ...((m.presence ||= {})[slot] || {}) };
-      if (v == null) { delete cur.staff; delete cur.by; delete cur.at; } else Object.assign(cur, { staff: !!v, by: user().id, at: now() });
-      m.presence[slot] = cur; commit(); return m.presence;
-    },
-    async presence(sid) {
-      if (!manages(sid)) throw new Error("Réservé à l'équipe de la session.");
-      return db.members.filter((m) => m.session_id === sid).map((m) => ({ user_id: m.user_id, presence: m.presence || {} }));
-    },
     // Adresses des stagiaires (comme list_trainees) : inscrit·es et invité·es, hors sessions de démo
     async listTrainees() {
       needAdmin();

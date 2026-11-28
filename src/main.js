@@ -51,7 +51,7 @@ const ROUTES = [
   [/^#\/admin\/quiz(?:\/([\w-]+))?$/, viewQuizBank, { trainer: true, admin: true }],
   [/^#\/admin\/trames(?:\/([\w-]+))?$/, viewTrames, { trainer: true, admin: true }], // trames de conducteur (éditeur)
   [/^#\/admin\/equipe(?:\/(comptes|fiches))?(?:\/([\w-]+))?$/, viewStaff, { trainer: true, admin: true }],
-  [/^#\/admin\/participants(?:\/(emargements|stagiaires))?(?:\/([\w-]+))?$/, viewParticipants, { trainer: true }], // émargements, adresses des stagiaires
+  [/^#\/admin\/participants(?:\/[\w-]+)*$/, viewParticipants, { trainer: true, admin: true }], // adresses des stagiaires
   [/^#\/admin\/s\/([\w-]+)(?:\/(\w+))?$/, viewAdminSession, { trainer: true }],
   [/^#\/ecran\/([\w-]+)$/, viewScreen, { trainer: true, bare: true }],
   [/^#?\/?$/, viewHome],
@@ -66,7 +66,7 @@ function header(route) {
   const inSession = h.match(/^#\/s\/([\w-]+)/)?.[1];
   // Équipe (pas les invité·es) : trois onglets principaux sous le bandeau, et l'engrenage des réglages généraux
   const staffNav = trainer && !isGuest(me), mt = staffNav ? mainTabOf(h) : "";
-  const mainbar = staffNav ? `<div class="mainbar"><div class="hwrap"><nav class="maintabs" aria-label="Back-office">${MAIN_TABS.filter(([k]) => k !== "studio" || isAdmin(me))
+  const mainbar = staffNav ? `<div class="mainbar"><div class="hwrap"><nav class="maintabs" aria-label="Back-office">${MAIN_TABS.filter(([k]) => k === "sessions" || isAdmin(me))
     .map(([k, l, href]) => `<a class="maintab" href="${k === "sessions" && inSession ? `#/admin/s/${inSession}/jour` : href}"${k === mt ? ' aria-current="page"' : ""}>${l}</a>`).join("")}<span class="mt-ind" aria-hidden="true"></span></nav>
     ${isAdmin(me) ? `<a class="iconbtn gear-btn" href="#/admin/reglages" title="Réglages généraux : organisme, habillages, entreprises clientes, e-mail des stagiaires" aria-label="Réglages généraux"${mt === "reglages" ? ' aria-current="page"' : ""}>${ICON.gear}</a>` : ""}</div></div>` : "";
   return `<header class="top"><div class="hwrap">
